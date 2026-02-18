@@ -8,7 +8,7 @@ A monorepo of MCP (Model Context Protocol) servers that give AI assistants acces
 |--------|-------------|--------|
 | [coops-mcp](servers/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data | Ready |
 | [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers | Ready |
-| [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Planned |
+| [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Ready |
 | schism-mcp | SCHISM model config/namelist tools | Planned |
 | stofs-mcp | STOFS operational forecast products | Planned |
 
@@ -18,7 +18,7 @@ A monorepo of MCP (Model Context Protocol) servers that give AI assistants acces
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp
 uv sync
 ```
 
@@ -36,6 +36,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "erddap": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
+    },
+    "nhc": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
     }
   }
 }
@@ -56,6 +60,12 @@ With both servers configured, you can ask your AI assistant naturally:
 - "Get chlorophyll data off the California coast for January 2024"
 - "What ERDDAP servers cover the US East Coast?"
 - "List all glider datasets on IOOS Gliders ERDDAP"
+
+**NHC queries:**
+- "Are there any active tropical cyclones right now?"
+- "Show me Hurricane Katrina's track"
+- "Search for Category 5 hurricanes in the Atlantic"
+- "What is the forecast track for the active storm?"
 
 **Cross-server queries:**
 - "Find CO-OPS stations near this ERDDAP buoy location"
