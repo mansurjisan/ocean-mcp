@@ -2,25 +2,25 @@
 
 MCP server providing AI assistants with access to National Hurricane Center (NHC) storm tracks, advisories, and best track data.
 
-**Status: Coming Soon**
+**Status: Ready**
 
-## Planned Tools
+## Tools
 
 | Tool | Description | Status |
 |------|-------------|--------|
-| `nhc_get_active_storms` | Get currently active tropical cyclones | Coming Soon |
-| `nhc_get_forecast_track` | Get official NHC forecast track and cone | Coming Soon |
-| `nhc_get_best_track` | Get HURDAT2 best track data for historical storms | Coming Soon |
-| `nhc_search_storms` | Search historical storms by name, year, basin | Coming Soon |
-| `nhc_get_storm_surge_watch` | Get storm surge watch/warning areas | Coming Soon |
-| `nhc_generate_parametric_wind` | Generate parametric wind field for a storm | Coming Soon |
+| `nhc_get_active_storms` | Get currently active tropical cyclones | Ready |
+| `nhc_get_forecast_track` | Get official NHC 5-day forecast track positions | Ready |
+| `nhc_get_best_track` | Get best track data for historical or recent storms | Ready |
+| `nhc_search_storms` | Search historical storms by name, year, basin, intensity | Ready |
+| `nhc_get_storm_watches_warnings` | Get active watches and warnings for a storm | Ready |
+| `nhc_generate_parametric_wind` | Generate parametric wind field for a storm | Planned |
 
 ## Data Sources
 
-- **NHC ATCF Feeds** — Automated Tropical Cyclone Forecasting system real-time data
-- **HURDAT2** — Atlantic and East Pacific hurricane database (best track archive)
-- **IBTrACS** — International Best Track Archive for Climate Stewardship
-- **NHC RSS Feeds** — Public advisories, forecast discussions, wind speed probabilities
+- **CurrentStorms.json** — Real-time active storm information from NHC
+- **ATCF B-deck** — Current-season best track data (Automated Tropical Cyclone Forecasting)
+- **HURDAT2** — Atlantic (1851–2024) and East Pacific (1949–2024) hurricane database
+- **NHC ArcGIS MapServer** — Forecast tracks, cones, and watch/warning polygons
 
 ## Quick Start
 
@@ -41,6 +41,24 @@ uv sync
     }
   }
 }
+```
+
+## Example Queries
+
+- "Are there any active tropical cyclones right now?"
+- "Show me Hurricane Katrina's track"
+- "Search for Category 5 hurricanes in the Atlantic since 2000"
+- "What is the forecast track for the active storm AL052024?"
+- "Find all storms named Maria"
+
+## Running Tests
+
+```bash
+# Unit tests (fast, no network)
+uv run pytest tests/test_utils.py tests/test_client.py -v
+
+# Live integration tests (requires internet)
+uv run pytest tests/test_live.py -v -s
 ```
 
 ## License
