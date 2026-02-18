@@ -146,16 +146,14 @@ async def erddap_get_griddap_data(
             dim_map = new_dim_map
 
         # Build ordered dimensions dict preserving dataset dimension order
+        # ERDDAP requires ALL dimensions in bracket notation — default unmatched ones to last value
         ordered_dims: OrderedDict[str, tuple] = OrderedDict()
         for dim in dim_names:
             if dim in dim_map and dim_map[dim] is not None:
                 ordered_dims[dim] = dim_map[dim]
-
-        if not ordered_dims:
-            return (
-                f"No dimension constraints could be applied. The dataset dimensions are: {dim_names}. "
-                f"Provide at least time_range, latitude_range, or longitude_range."
-            )
+            else:
+                # Default unmatched dimensions to last available value
+                ordered_dims[dim] = ("last", "last")
 
         # Warn about potentially large requests
         warnings: list[str] = []

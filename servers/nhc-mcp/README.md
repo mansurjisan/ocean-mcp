@@ -25,7 +25,7 @@ MCP server providing AI assistants with access to National Hurricane Center (NHC
 ## Quick Start
 
 ```bash
-git clone https://github.com/MansurAI-Jisan/ocean-mcp.git
+git clone https://github.com/mansurjisan/ocean-mcp.git
 cd ocean-mcp/servers/nhc-mcp
 uv sync
 ```

@@ -17,7 +17,7 @@ A monorepo of MCP (Model Context Protocol) servers that give AI assistants acces
 ### Install a single server
 
 ```bash
-git clone https://github.com/MansurAI-Jisan/ocean-mcp.git
+git clone https://github.com/mansurjisan/ocean-mcp.git
 cd ocean-mcp/servers/coops-mcp  # or erddap-mcp
 uv sync
 ```

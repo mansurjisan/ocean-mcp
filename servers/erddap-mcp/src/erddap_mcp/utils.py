@@ -105,20 +105,24 @@ def build_tabledap_query(
     # Constraints
     if constraints:
         for key, value in constraints.items():
-            if isinstance(value, str):
-                # String values need quoting if they don't contain operators
-                if not any(op in key for op in [">=", "<=", ">", "<", "!=", "=~"]):
-                    parts.append(f'{key}="{value}"')
-                else:
-                    # Check if value looks like a string that needs quoting
-                    try:
-                        float(value)
-                        parts.append(f"{key}{value}")
-                    except ValueError:
-                        # It's a string value (date, station name, etc.)
-                        parts.append(f'{key}"{value}"')
-            else:
+            if isinstance(value, (int, float)):
+                # Numeric values never need quoting
                 parts.append(f"{key}{value}")
+            else:
+                # String values: determine if quoting is needed
+                str_value = str(value)
+                has_range_op = any(op in key for op in [">=", "<=", ">", "<", "!=", "=~"])
+
+                if not has_range_op:
+                    # Equality (key ends with "=" or has no operator) — always quote
+                    parts.append(f'{key}"{str_value}"')
+                else:
+                    # Range operator — quote non-numeric values (dates, strings)
+                    try:
+                        float(str_value)
+                        parts.append(f"{key}{str_value}")
+                    except ValueError:
+                        parts.append(f'{key}"{str_value}"')
 
     # Limit via orderByLimit
     if limit:

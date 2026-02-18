@@ -104,7 +104,6 @@ async def erddap_search_datasets(
 
         # Filter by protocol if specified
         if protocol:
-            rows = [r for r in rows if r.get("griddap", "") != "" or r.get("tabledap", "") != ""]
             if protocol == "griddap":
                 rows = [r for r in rows if r.get("griddap", "") != ""]
             elif protocol == "tabledap":

@@ -271,17 +271,21 @@ async def coops_get_peak_storm_events(
         if not events:
             return f"No peak storm event data available for station {station_id}."
 
+        unit_label = "m" if units == Units.METRIC else "ft"
         columns = [
             ("name", "Event Name"),
             ("eventType", "Type"),
+            ("peakValue", f"Peak Level ({unit_label})"),
             ("startDate", "Start Date"),
         ]
 
         records = []
         for ev in events:
+            peak = ev.get("peakValue", ev.get("peak", ev.get("value", "")))
             records.append({
                 "name": ev.get("name", ""),
                 "eventType": ev.get("eventType", ""),
+                "peakValue": str(peak) if peak is not None else "",
                 "startDate": ev.get("startDate", ""),
             })
 

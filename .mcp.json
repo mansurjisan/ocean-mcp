@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "coops": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/coops-mcp", "python", "-m", "coops_mcp"]
+    },
+    "erddap": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
+    }
+  }
+}
