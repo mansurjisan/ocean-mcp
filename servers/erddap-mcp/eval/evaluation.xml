@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation>
+  <description>
+    Evaluation questions for the ERDDAP MCP Server.
+    Each question tests multi-tool usage against real ERDDAP data.
+  </description>
+
+  <question id="1">
+    <text>How many griddap datasets are available on CoastWatch West Coast?</text>
+    <tools_required>erddap_get_all_datasets</tools_required>
+    <hint>List all datasets on CoastWatch with protocol=griddap and count the results.</hint>
+  </question>
+
+  <question id="2">
+    <text>What variables are in the MUR SST dataset (jplMURSST41) on CoastWatch?</text>
+    <tools_required>erddap_get_dataset_info</tools_required>
+    <hint>Get dataset info for jplMURSST41 on https://coastwatch.pfeg.noaa.gov/erddap.</hint>
+  </question>
+
+  <question id="3">
+    <text>Find chlorophyll datasets on the NCEI ERDDAP server</text>
+    <tools_required>erddap_search_datasets</tools_required>
+    <hint>Search for "chlorophyll" on https://www.ncei.noaa.gov/erddap.</hint>
+  </question>
+
+  <question id="4">
+    <text>What is the time range for NDBC met buoy data on CoastWatch?</text>
+    <tools_required>erddap_get_dataset_info</tools_required>
+    <hint>Get dataset info for cwwcNDBCMet on CoastWatch and look at time_coverage_start/end.</hint>
+  </question>
+
+  <question id="5">
+    <text>List all ERDDAP servers focused on the US East Coast</text>
+    <tools_required>erddap_list_servers</tools_required>
+    <hint>List servers with region="East Coast".</hint>
+  </question>
+
+  <question id="6">
+    <text>What institution provides the most datasets on IOOS Gliders ERDDAP?</text>
+    <tools_required>erddap_get_all_datasets</tools_required>
+    <hint>List all datasets on https://gliders.ioos.us/erddap and count by institution.</hint>
+  </question>
+
+  <question id="7">
+    <text>Get latest SST from MUR SST at lat 37, lon -122</text>
+    <tools_required>erddap_get_griddap_data</tools_required>
+    <hint>Use griddap on jplMURSST41 with time_range=["last","last"], latitude_range=[37,37], longitude_range=[-122,-122].</hint>
+  </question>
+
+  <question id="8">
+    <text>What is the spatial coverage of HYCOM on NCEI ERDDAP?</text>
+    <tools_required>erddap_search_datasets, erddap_get_dataset_info</tools_required>
+    <hint>Search for HYCOM on NCEI, then get dataset info for the result to see lat/lon ranges.</hint>
+  </question>
+
+  <question id="9">
+    <text>Search for wind speed datasets on OSMC</text>
+    <tools_required>erddap_search_datasets</tools_required>
+    <hint>Search for "wind speed" on https://osmc.noaa.gov/erddap.</hint>
+  </question>
+
+  <question id="10">
+    <text>How many tabledap vs griddap datasets are on PacIOOS?</text>
+    <tools_required>erddap_get_all_datasets</tools_required>
+    <hint>List all datasets on PacIOOS with protocol=tabledap, then again with protocol=griddap, and compare counts.</hint>
+  </question>
+</evaluation>

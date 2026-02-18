@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation>
+  <description>
+    Evaluation questions for the CO-OPS MCP Server.
+    Each question tests tool usage against real NOAA CO-OPS data.
+  </description>
+
+  <question id="1">
+    <text>What is the tidal range (MHHW minus MLLW) at station 9414290 (San Francisco) in meters?</text>
+    <tools_required>coops_get_datums</tools_required>
+    <hint>Retrieve datums for station 9414290 in metric units and compute MHHW - MLLW.</hint>
+  </question>
+
+  <question id="2">
+    <text>Which CO-OPS water level station in Florida has the highest recorded extreme water level?</text>
+    <tools_required>coops_list_stations, coops_get_extreme_water_levels</tools_required>
+    <hint>List water level stations filtered by state FL, then query extreme water levels for each.</hint>
+  </question>
+
+  <question id="3">
+    <text>How many active water level stations are there in the state of New York?</text>
+    <tools_required>coops_list_stations</tools_required>
+    <hint>List stations with type=waterlevels and state=NY, using a high limit to get all results.</hint>
+  </question>
+
+  <question id="4">
+    <text>What is the sea level trend at The Battery, NY (8518750)?</text>
+    <tools_required>coops_get_sea_level_trends</tools_required>
+    <hint>Query sea level trends for station 8518750.</hint>
+  </question>
+
+  <question id="5">
+    <text>What are the names of the 3 closest CO-OPS water level stations to latitude 25.77, longitude -80.13 (Miami Beach)?</text>
+    <tools_required>coops_find_nearest_stations</tools_required>
+    <hint>Search for nearest waterlevels stations to (25.77, -80.13) with limit=3.</hint>
+  </question>
+
+  <question id="6">
+    <text>What is the mean tidal range at Honolulu (1612340) in feet?</text>
+    <tools_required>coops_get_datums</tools_required>
+    <hint>Retrieve datums for station 1612340 in english units, compute MHW - MLW.</hint>
+  </question>
+
+  <question id="7">
+    <text>What is the station name and state for CO-OPS station 8443970?</text>
+    <tools_required>coops_get_station</tools_required>
+    <hint>Get station details for 8443970.</hint>
+  </question>
+
+  <question id="8">
+    <text>How many annual minor flood days were recorded at 8518750 (The Battery) in 2023?</text>
+    <tools_required>coops_get_flood_stats</tools_required>
+    <hint>Query flood stats for station 8518750 with year=2023.</hint>
+  </question>
+
+  <question id="9">
+    <text>What datums are available at station 9414290 (San Francisco)?</text>
+    <tools_required>coops_get_datums</tools_required>
+    <hint>Get datums for station 9414290 and list all datum names.</hint>
+  </question>
+
+  <question id="10">
+    <text>What sensors are installed at station 8724580 (Key West)?</text>
+    <tools_required>coops_get_station</tools_required>
+    <hint>Get station 8724580 with expand=sensors.</hint>
+  </question>
+</evaluation>
