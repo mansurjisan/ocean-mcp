@@ -93,18 +93,6 @@ Each server is fully self-contained with its own `pyproject.toml`, dependencies,
 - Dual markdown/JSON output formats
 - Actionable error messages with suggestions
 
-## Development
-
-```bash
-# Work on a specific server
-cd servers/coops-mcp
-uv sync
-uv run pytest tests/ -v
-
-# Run live integration tests
-uv run pytest tests/test_live.py -v -s
-```
-
 ## Citation
 
 If you use this project in your research or work, please cite:
@@ -121,4 +109,4 @@ If you use this project in your research or work, please cite:
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+Licensed under the MIT License. See [LICENSE](LICENSE) for details.
