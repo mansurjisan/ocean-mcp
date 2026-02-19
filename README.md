@@ -4,13 +4,13 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 
 ## Servers
 
-| Server | Description | Status |
-|--------|-------------|--------|
-| [coops-mcp](servers/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data | Ready |
-| [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers | Ready |
-| [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Ready |
-| [stofs-mcp](servers/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation | Ready |
-| [ofs-mcp](servers/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) | Ready |
+| Server | Description |
+|--------|-------------|
+| [coops-mcp](servers/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data |
+| [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers |
+| [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data |
+| [stofs-mcp](servers/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation |
+| [ofs-mcp](servers/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
 
 ## Quick Start
 
@@ -119,4 +119,4 @@ If you use this project in your research or work, please cite:
 
 ## License
 
-Licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Licensed under the MIT License. You may use, modify, and distribute this software under the MIT terms. See [LICENSE](LICENSE) for details.
