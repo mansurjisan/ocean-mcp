@@ -10,7 +10,6 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers | Ready |
 | [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Ready |
 | [stofs-mcp](servers/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation | Ready |
-| schism-mcp | SCHISM model config/namelist tools | Planned |
 
 ## Quick Start
 
