@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ofs-mcp"
+version = "0.1.0"
+description = "MCP server for NOAA Operational Forecast System (OFS) regional ocean model access"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "netCDF4>=1.7.0",
+    "numpy>=1.26.0",
+]
+
+[project.scripts]
+ofs-mcp = "ofs_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ofs_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.22.0",
+]

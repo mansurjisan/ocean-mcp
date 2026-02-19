@@ -15,6 +15,10 @@
     "stofs": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/stofs-mcp", "python", "-m", "stofs_mcp"]
+    },
+    "ofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
     }
   }
 }

@@ -10,6 +10,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers | Ready |
 | [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Ready |
 | [stofs-mcp](servers/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation | Ready |
+| [ofs-mcp](servers/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) | Ready |
 
 ## Quick Start
 
@@ -17,7 +18,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, stofs-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, stofs-mcp, ofs-mcp
 uv sync
 ```
 
@@ -43,6 +44,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "stofs": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/stofs-mcp", "python", "-m", "stofs_mcp"]
+    },
+    "ofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
     }
   }
 }
@@ -76,6 +81,12 @@ With both servers configured, you can ask your AI assistant naturally:
 - "What are the top stations with highest predicted water levels?"
 - "Find STOFS stations within 50 km of New Orleans"
 
+**OFS queries:**
+- "What OFS models cover the Chesapeake Bay?"
+- "Get the water level forecast at lat 38.98, lon -76.48 from CBOFS"
+- "Compare CBOFS water level with CO-OPS observations at station 8571892"
+- "List available NGOFS2 forecast cycles for today"
+
 **Cross-server queries:**
 - "Find CO-OPS stations near this ERDDAP buoy location"
 - "Compare tide station data with nearby ERDDAP satellite SST"
@@ -102,7 +113,7 @@ If you use this project in your research or work, please cite:
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
   url       = {https://github.com/mansurjisan/ocean-mcp},
-  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, and STOFS data}
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, STOFS, and OFS data}
 }
 ```
 
