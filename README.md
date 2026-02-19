@@ -105,7 +105,7 @@ uv run pytest tests/test_live.py -v -s
 
 ## Author
 
-**Mansur Ali Jisan** — NOAA NOS CO-OPS
+**Mansur Ali Jisan** — NOAA/NOS
 
 ## License
 
