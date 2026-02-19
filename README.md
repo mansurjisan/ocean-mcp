@@ -90,6 +90,11 @@ With both servers configured, you can ask your AI assistant naturally:
 **Cross-server queries:**
 - "Find CO-OPS stations near this ERDDAP buoy location"
 - "Compare tide station data with nearby ERDDAP satellite SST"
+- "Is there an active hurricane threatening the Gulf Coast? If so, show me the STOFS surge forecast for New Orleans"
+- "Get the CBOFS water level forecast at Chesapeake Bay and compare it with the CO-OPS tide prediction for the same station"
+- "Show me sea surface temperature from ERDDAP near The Battery and the current water level from CO-OPS"
+- "Which NHC storms have hit the Gulf Coast historically? Show the CO-OPS flood statistics for impacted stations"
+- "Get the STOFS gridded forecast and the OFS water level forecast at the same location and compare them"
 
 ## Architecture
 
