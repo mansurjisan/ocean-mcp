@@ -1,746 +1,614 @@
-# CLAUDE.md — STOFS MCP Server Implementation Guide
+# CLAUDE.md — Add OPeNDAP Gridded Point Extraction to stofs-mcp
 
 ## Overview
 
-Build `stofs-mcp` — an MCP server providing AI assistants with access to NOAA's Storm Tide Operational Forecast System (STOFS) operational forecasts and model-vs-observation validation. This server lives in the existing `ocean-mcp` monorepo at `servers/stofs-mcp/`.
+Add a new tool `stofs_get_gridded_forecast` and supporting OPeNDAP client code to the existing `stofs-mcp` server. This enables forecast queries at **any arbitrary lat/lon** by remotely slicing STOFS regular-grid data via NOMADS OPeNDAP — no file download required.
 
-**Key constraint**: STOFS does NOT have a JSON REST API like CO-OPS. Data is distributed as NetCDF files on AWS S3 (HTTPS, no auth) and NOMADS. The strategy is to target the **small station-level NetCDF files** (a few MB each) rather than the massive gridded field files (GB+). Download the station file, parse it with `netCDF4`, extract the relevant station(s), and return structured results.
+This complements the existing station-based tools. The station tools use pre-extracted point files (~385 fixed locations); this new tool uses the interpolated regular grids served via OPeNDAP to reach any coastal point.
 
-**This server has two audiences**:
-1. External users (researchers, forecasters, public) — accessing STOFS forecast guidance
-2. Internal modelers — validating STOFS against CO-OPS observations
+**Do NOT modify existing tools.** This is purely additive.
 
 ---
 
-## Monorepo Location
+## Background: How OPeNDAP Works Here
+
+STOFS produces two kinds of gridded output:
+1. **Native unstructured mesh** (ADCIRC triangles, 12.8M nodes) — huge files, OPeNDAP cannot do spatial queries on these
+2. **Regular-grid GRIB2 regional subsets** — interpolated to structured lat/lon grids, served via NOMADS OPeNDAP
+
+NOMADS OPeNDAP endpoints expose the regular-grid products as remote datasets that xarray can open. When you do `ds.sel(lat=40.7, lon=-74.0, method="nearest")`, only the requested slice is transferred over the network — not the entire grid. This is the key advantage.
+
+### OPeNDAP URL Pattern
 
 ```
-ocean-mcp/
-├── servers/
-│   ├── coops-mcp/          # Existing — tides & water levels
-│   ├── erddap-mcp/         # Existing — ERDDAP data access
-│   ├── nhc-mcp/            # Existing — scaffold
-│   └── stofs-mcp/          # ← BUILD THIS
-│       ├── README.md
-│       ├── pyproject.toml
-│       ├── src/stofs_mcp/
-│       │   ├── __init__.py
-│       │   ├── __main__.py
-│       │   ├── server.py
-│       │   ├── client.py        # HTTP client for AWS S3 / NOMADS
-│       │   ├── models.py        # Enums, dataclasses
-│       │   ├── utils.py         # NetCDF parsing, formatters, error handling
-│       │   ├── stations.py      # Station registry (hardcoded station list with CO-OPS IDs)
-│       │   └── tools/
-│       │       ├── __init__.py
-│       │       ├── forecast.py      # Station forecast, point forecast
-│       │       ├── discovery.py     # List cycles, system info
-│       │       └── validation.py    # Compare with CO-OPS observations
-│       ├── tests/
-│       │   ├── __init__.py
-│       │   ├── test_utils.py
-│       │   └── test_live.py
-│       └── eval/
-│           └── evaluation.xml
+https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/stofs_2d_glo{YYYYMMDD}/stofs_2d_glo_{CC}z
 ```
 
----
+Where `CC` is the cycle hour (00, 06, 12, 18).
 
-## STOFS System Reference
+Example: `https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/stofs_2d_glo20260219/stofs_2d_glo_00z`
 
-### Two operational components
+For STOFS-3D-Atlantic:
+```
+https://nomads.ncep.noaa.gov/dods/stofs_3d_atl/stofs_3d_atl{YYYYMMDD}/stofs_3d_atl_12z
+```
 
-**STOFS-2D-Global** (ADCIRC v55+):
-- Global unstructured mesh, ~12.8M nodes
-- Runs 4x daily: 00, 06, 12, 18 UTC
-- 6-hour nowcast + 180-hour (7.5 day) forecast
-- ~385 station output points (6-minute resolution)
-- Atmospheric forcing: GFS
-- Datum: station files use **Local MSL (LMSL)**, SHEF files use **MLLW**
+### What the OPeNDAP Dataset Contains
 
-**STOFS-3D-Atlantic** (SCHISM):
-- US East Coast + Gulf + Puerto Rico, ~2.9M nodes
-- Runs 1x daily at 12 UTC
-- 24-hour nowcast + 96-hour (4 day) forecast
-- ~108 station output points (6-minute resolution)
-- Atmospheric forcing: GFS + HRRR, tidal: FES2014, hydrology: NWM
-- Datum: station files use **NAVD88**
-
-### Data access endpoints (all public, no auth)
-
-**AWS S3 (primary — use this)**:
-- STOFS-2D-Global: `https://noaa-gestofs-pds.s3.amazonaws.com/stofs_2d_glo.YYYYMMDD/`
-- STOFS-3D-Atlantic: `https://noaa-nos-stofs3d-pds.s3.amazonaws.com/stofs_3d_atl.YYYYMMDD/`
-
-**NOMADS (backup, rolling ~2-day window)**:
-- STOFS-2D-Global: `https://nomads.ncep.noaa.gov/pub/data/nccf/com/stofs/prod/stofs_2d_glo.YYYYMMDD/`
-- STOFS-3D-Atlantic: `https://nomads.ncep.noaa.gov/pub/data/nccf/com/stofs/prod/stofs_3d_atl.YYYYMMDD/`
-
-### Station file naming conventions
-
-**STOFS-2D-Global station NetCDF files** (key files for this MCP server):
-- `stofs_2d_glo.tCCz.points.cwl.nc` — Combined Water Level (tide + surge) at stations
-- `stofs_2d_glo.tCCz.points.htp.nc` — Harmonic Tidal Prediction only
-- `stofs_2d_glo.tCCz.points.swl.nc` — Surge Water Level only (non-tidal residual)
-
-Where CC = cycle hour (00, 06, 12, 18). These files are typically 2-10 MB each.
-
-**STOFS-3D-Atlantic station NetCDF files**:
-- `stofs_3d_atl.t12z.points.cwl.nc` — Combined Water Level at stations
-- `stofs_3d_atl.t12z.points.cwl.temp.salt.vel.nc` — Water level + temp + salinity + velocity
-
-Only one cycle per day (12z).
-
-### NetCDF variable structure (STOFS-2D-Global station files)
+The OPeNDAP endpoint serves the data that was interpolated from the native mesh onto regular grids. The dataset has structured dimensions:
 
 ```
 Dimensions:
-  time: UNLIMITED (variable, typically ~1860 for 186 hours at 6-min)
-  station: ~385
+  time: ~181 (hourly, 0-180 hours for 2D-Global)
+  lat: varies by region
+  lon: varies by region
 
-Variables:
-  time(time)              — seconds since reference time (or datetime64)
-  station_name(station)   — station identifier strings (e.g., "8518750" for CO-OPS stations)
-  x(station)              — longitude
-  y(station)              — latitude
-  zeta(time, station)     — water surface elevation (meters, relative to LMSL for 2D, NAVD88 for 3D)
+Coordinates:
+  time (time)        — datetime or hours since reference
+  lat  (lat)         — regularly spaced latitude values
+  lon  (lon)         — regularly spaced longitude values
+
+Data variables:
+  etsurgetsrg        — storm surge (m)
+  etwlswlc           — combined water level (m)  
+  etrtpcrlc          — tidal prediction (m)
 ```
 
-The exact variable names may vary slightly between 2D and 3D files. The implementation MUST inspect the NetCDF file to determine actual variable names. Common patterns:
-- Water level: `zeta`, `elevation`, `water_level`, `ssh`
-- Station name: `station_name`, `station`, `stationid`
-- Time: `time`, `ocean_time`
-- Coordinates: `x`/`y`, `lon`/`lat`, `longitude`/`latitude`
+**IMPORTANT:** The variable names on OPeNDAP are different from the native NetCDF files. They use abbreviated GRIB2-style names, not `zeta`. You MUST inspect the actual dataset to confirm the variable names. The names above are based on documented NOMADS conventions for STOFS but may vary. The implementation must handle this discovery dynamically.
 
-### Max water level files
+### Regional Grid Coverage
 
-- `stofs_2d_glo.tCCz.fields.cwl.maxele.nc` — maximum water level over the full forecast cycle
-- This is a single-timestep gridded field (still on the unstructured mesh, but only one time step, so smaller)
-- Contains: `zeta_max(node)` — max elevation at each mesh node
-- Size: ~100-200 MB (12.8M nodes × 1 float). Too large to fully parse in MCP, but can report metadata.
+The OPeNDAP dataset covers multiple regions at different resolutions. The data is served as one combined dataset — use lat/lon subsetting to query specific points.
+
+| Region | Approx Resolution | Lat Range | Lon Range |
+|--------|------------------|-----------|-----------|
+| conus.east | 2.5 km (~0.025°) | ~5°N to ~47°N | ~-100°W to ~-50°W |
+| conus.west | 2.5 km (~0.025°) | ~20°N to ~55°N | ~-135°W to ~-110°W |
+| alaska | 6 km (~0.06°) | ~45°N to ~75°N | ~180°W to ~-120°W |
+| hawaii | 2.5 km (~0.025°) | ~15°N to ~25°N | ~-165°W to ~-150°W |
+| puertori | 1.25 km (~0.0125°) | ~15°N to ~21°N | ~-70°W to ~-60°W |
+| guam | 2.5 km (~0.025°) | ~10°N to ~18°N | ~140°E to ~150°E |
 
 ---
 
-## Tools to Implement (7 tools)
+## What to Implement
 
-### Tool 1: `stofs_list_cycles`
+### 1. Add `xarray` dependency
 
-List available STOFS forecast cycles on AWS S3 for a given date range.
-
-**Inputs**:
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `date`: str | None — specific date in YYYY-MM-DD format (default: today UTC)
-- `num_days`: int — number of past days to check (default: 2, max: 7)
-
-**Implementation**:
-- For each date in range, construct the S3 directory URL
-- Use HTTP HEAD or GET on the directory listing to check which cycle folders exist
-- For STOFS-2D-Global, check cycles 00, 06, 12, 18
-- For STOFS-3D-Atlantic, only cycle 12 exists
-- Verify existence by checking if the station `points.cwl.nc` file exists (HTTP HEAD request)
-- Return list of available cycles with their UTC timestamps and data URLs
-
-**Output**: Markdown table of available cycles with model, date, cycle, status, and download URLs.
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
-### Tool 2: `stofs_get_station_forecast`
-
-Get STOFS water level forecast time series at a specific station.
-
-**Inputs**:
-- `station_id`: str — CO-OPS station ID (e.g., "8518750" for The Battery, NY)
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `product`: str — `"cwl"` (combined water level), `"htp"` (tidal prediction), or `"swl"` (surge only). Default: `"cwl"`.
-- `cycle_date`: str | None — date in YYYY-MM-DD format (default: latest available)
-- `cycle_hour`: str | None — cycle hour "00", "06", "12", "18" (default: latest available)
-- `response_format`: str — `"markdown"` or `"json"` (default: `"markdown"`)
-
-**Implementation**:
-1. Construct the AWS S3 URL for the station NetCDF file:
-   - 2D: `https://noaa-gestofs-pds.s3.amazonaws.com/stofs_2d_glo.{date}/stofs_2d_glo.t{CC}z.points.{product}.nc`
-   - 3D: `https://noaa-nos-stofs3d-pds.s3.amazonaws.com/stofs_3d_atl.{date}/stofs_3d_atl.t12z.points.cwl.nc`
-2. Download the file to a temporary location using httpx (streaming download, ~2-10 MB)
-3. Open with `netCDF4.Dataset`
-4. Find the station index by matching `station_name` variable against `station_id`
-5. Extract the full time series: `zeta[:, station_idx]`
-6. Convert time variable to ISO 8601 datetime strings using `netCDF4.num2date`
-7. Filter out NaN/fill values
-8. Return time series with metadata (model, cycle, datum, station info)
-
-**Output (markdown)**: Header with station info, model, cycle, datum. Table with columns: Time (UTC), Water Level (m), with key statistics (min, max, mean, current). Truncate to first/last N rows if >100 rows, noting total count.
-
-**Output (json)**: Full time series array with metadata.
-
-**Error handling**:
-- Station not found in file → list available station IDs, suggest using `stofs_get_system_info`
-- File not found on S3 → suggest checking `stofs_list_cycles` for available cycles
-- NetCDF read error → provide specific error, suggest trying a different cycle
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
-### Tool 3: `stofs_get_point_forecast`
-
-Get STOFS forecast at an arbitrary lat/lon point by finding the nearest station.
-
-**Inputs**:
-- `latitude`: float — target latitude
-- `longitude`: float — target longitude
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `product`: str — `"cwl"`, `"htp"`, `"swl"` (default: `"cwl"`)
-- `cycle_date`: str | None — date (default: latest)
-- `cycle_hour`: str | None — cycle hour (default: latest)
-- `max_distance_km`: float — maximum distance to nearest station (default: 50.0)
-- `response_format`: str — `"markdown"` or `"json"`
-
-**Implementation**:
-1. Download the station NetCDF file (same as Tool 2)
-2. Read all station coordinates (x, y variables)
-3. Compute haversine distance from target lat/lon to all stations
-4. Find the nearest station within `max_distance_km`
-5. If no station within range, return error with suggestion to try `3d_atlantic` or adjust distance
-6. Extract and return time series for that station (same as Tool 2)
-7. Include distance to nearest station in the response
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
-### Tool 4: `stofs_compare_with_observations`
-
-Compare STOFS forecast against CO-OPS observed water levels at a station. This is the validation tool.
-
-**Inputs**:
-- `station_id`: str — CO-OPS station ID
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `cycle_date`: str | None — date (default: latest)
-- `cycle_hour`: str | None — cycle hour (default: latest)
-- `hours_to_compare`: int — number of hours to compare (default: 24, max: 96). This uses the nowcast + early forecast period where observations exist.
-- `response_format`: str — `"markdown"` or `"json"`
-
-**Implementation**:
-1. Download the STOFS station file and extract forecast time series (same as Tool 2)
-2. Determine the time range for comparison:
-   - Use the nowcast period (first 6 hours for 2D, first 24 hours for 3D) plus early forecast hours
-   - Clip to `hours_to_compare`
-3. Fetch CO-OPS observed water levels for the same time period:
-   - Use the CO-OPS Data API: `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter`
-   - Parameters: `station={id}&product=water_level&datum=MSL&units=metric&time_zone=gmt&format=json&begin_date={start}&end_date={end}&application=stofs_mcp`
-   - NOTE: STOFS-2D uses LMSL, CO-OPS uses station-local MSL — these should be comparable but not identical. Include a datum note in output.
-   - STOFS-3D uses NAVD88. CO-OPS can provide `datum=NAVD` for NAVD88 comparison.
-4. Align the two time series to matching timestamps (nearest 6-minute interval)
-5. Compute statistics:
-   - **Bias** (mean error): mean(forecast - observed)
-   - **RMSE**: sqrt(mean((forecast - observed)²))
-   - **MAE**: mean(|forecast - observed|)
-   - **Peak error**: max(|forecast - observed|)
-   - **Correlation coefficient** (R)
-   - **Number of comparison points**
-6. Return side-by-side comparison table (subsampled if too many rows) and summary statistics
-
-**Output (markdown)**:
-```
-## STOFS vs Observations — Station 8518750 (The Battery, NY)
-**Model**: STOFS-2D-Global | **Cycle**: 2026-02-18 00z | **Period**: 24 hours
-**STOFS Datum**: LMSL | **Obs Datum**: MSL | ⚠️ Small datum offsets may exist
-
-### Summary Statistics
-| Metric | Value |
-| --- | --- |
-| Bias (mean error) | +0.03 m |
-| RMSE | 0.08 m |
-| MAE | 0.06 m |
-| Peak Error | 0.15 m |
-| Correlation (R) | 0.97 |
-| Comparison Points | 240 |
-
-### Time Series Comparison (hourly sample)
-| Time (UTC) | STOFS (m) | Observed (m) | Error (m) |
-| --- | --- | --- | --- |
-| 2026-02-18 00:00 | 0.45 | 0.42 | +0.03 |
-...
-```
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
-### Tool 5: `stofs_get_max_water_level`
-
-Get the maximum water level from a STOFS forecast cycle. Reports metadata and station-level max values (from the station file), NOT the full gridded maxele field.
-
-**Inputs**:
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `cycle_date`: str | None
-- `cycle_hour`: str | None
-- `top_n`: int — return top N stations by max water level (default: 20)
-- `region`: str | None — optional filter: "east_coast", "gulf", "west_coast", "alaska", "hawaii", "puerto_rico"
-- `response_format`: str — `"markdown"` or `"json"`
-
-**Implementation**:
-1. Download the station NetCDF file
-2. Compute max water level across all timesteps for each station: `max(zeta[:, i])` for each station i
-3. Optionally filter by region using station coordinates (rough bounding boxes)
-4. Sort by max water level descending
-5. Return top N stations with their max values, coordinates, and times of maximum
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
-### Tool 6: `stofs_get_system_info`
-
-Get STOFS system metadata — model specifications, station lists, datum references, cycle schedule.
-
-**Inputs**:
-- `model`: str | None — `"2d_global"`, `"3d_atlantic"`, or None for both (default: None)
-- `include_stations`: bool — whether to include the full station list (default: False)
-
-**Implementation**:
-- Return hardcoded system information (model specs, datums, cycle schedule)
-- If `include_stations=True`, download the latest station file and extract station names, coordinates
-- Or use a hardcoded station registry (see stations.py below)
-
-**Output**: Model description, mesh size, forcing, cycle schedule, datum reference, station count. If stations requested, include table of station IDs, names, coordinates.
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=False
-
-### Tool 7: `stofs_list_stations`
-
-List STOFS output stations, optionally filtered by region or proximity to a point.
-
-**Inputs**:
-- `model`: str — `"2d_global"` or `"3d_atlantic"` (default: `"2d_global"`)
-- `near_lat`: float | None — filter to stations near this latitude
-- `near_lon`: float | None — filter to stations near this longitude
-- `radius_km`: float — search radius (default: 100)
-- `state`: str | None — filter by US state abbreviation (e.g., "NY", "FL")
-- `limit`: int — max stations to return (default: 20)
-
-**Implementation**:
-1. Download the latest station file (or use cached/hardcoded station registry)
-2. Extract station IDs, coordinates, and names
-3. Apply filters (region bounding box, haversine distance, state lookup)
-4. Return filtered station list
-
-**Annotations**: readOnly=True, destructive=False, idempotent=True, openWorld=True
-
----
-
-## Client Implementation (client.py)
-
-```python
-"""Async HTTP client for STOFS data on AWS S3 and NOMADS."""
-
-import tempfile
-from pathlib import Path
-import httpx
-
-S3_BASE_2D = "https://noaa-gestofs-pds.s3.amazonaws.com"
-S3_BASE_3D = "https://noaa-nos-stofs3d-pds.s3.amazonaws.com"
-NOMADS_BASE = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/stofs/prod"
-COOPS_API_BASE = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-
-
-class STOFSClient:
-    """Async client for downloading STOFS data and CO-OPS observations."""
-
-    def __init__(self) -> None:
-        self._client: httpx.AsyncClient | None = None
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                timeout=120.0,  # NetCDF downloads can be slow
-                follow_redirects=True,
-            )
-        return self._client
-
-    async def check_file_exists(self, url: str) -> bool:
-        """Check if a file exists on S3/NOMADS using HTTP HEAD."""
-        client = await self._get_client()
-        try:
-            response = await client.head(url)
-            return response.status_code == 200
-        except Exception:
-            return False
-
-    async def download_netcdf(self, url: str) -> Path:
-        """Download a NetCDF file to a temporary location. Returns the file path."""
-        client = await self._get_client()
-        response = await client.get(url)
-        response.raise_for_status()
-
-        # Write to temp file
-        tmp = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
-        tmp.write(response.content)
-        tmp.close()
-        return Path(tmp.name)
-
-    async def fetch_coops_observations(
-        self,
-        station_id: str,
-        begin_date: str,
-        end_date: str,
-        datum: str = "MSL",
-    ) -> dict:
-        """Fetch CO-OPS observed water levels for comparison.
-
-        Args:
-            station_id: CO-OPS station ID
-            begin_date: Start date YYYYMMDD or YYYYMMDD HH:MM
-            end_date: End date YYYYMMDD or YYYYMMDD HH:MM
-            datum: Vertical datum (MSL, NAVD, MLLW)
-        """
-        client = await self._get_client()
-        params = {
-            "station": station_id,
-            "product": "water_level",
-            "datum": datum,
-            "units": "metric",
-            "time_zone": "gmt",
-            "format": "json",
-            "begin_date": begin_date,
-            "end_date": end_date,
-            "application": "stofs_mcp",
-        }
-        response = await client.get(COOPS_API_BASE, params=params)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            raise ValueError(f"CO-OPS API error: {data['error'].get('message', 'Unknown')}")
-        return data
-
-    def build_station_url(
-        self,
-        model: str,
-        date: str,
-        cycle: str,
-        product: str = "cwl",
-    ) -> str:
-        """Build the AWS S3 URL for a STOFS station NetCDF file.
-
-        Args:
-            model: "2d_global" or "3d_atlantic"
-            date: YYYYMMDD format
-            cycle: "00", "06", "12", "18"
-            product: "cwl", "htp", "swl"
-        """
-        if model == "2d_global":
-            return f"{S3_BASE_2D}/stofs_2d_glo.{date}/stofs_2d_glo.t{cycle}z.points.{product}.nc"
-        elif model == "3d_atlantic":
-            return f"{S3_BASE_3D}/stofs_3d_atl.{date}/stofs_3d_atl.t{cycle}z.points.cwl.nc"
-        else:
-            raise ValueError(f"Unknown model: {model}. Use '2d_global' or '3d_atlantic'.")
-
-    async def close(self) -> None:
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-```
-
-**Key design decisions**:
-- `timeout=120.0` because NetCDF downloads from S3 can take 10-30 seconds
-- Downloads to temp file because netCDF4 needs a file path (no streaming parse)
-- CO-OPS API integration is built directly into this client since stofs-mcp uses it for validation
-- Always clean up temp files after parsing (use try/finally in tools)
-
----
-
-## Utils Implementation (utils.py)
-
-Must include:
-
-### `parse_station_netcdf(filepath, station_id=None)`
-Open a STOFS station NetCDF file with `netCDF4.Dataset`, extract:
-- Time array → convert to ISO 8601 strings via `netCDF4.num2date`
-- Station names/IDs → decode bytes to strings if needed
-- Water level data → `zeta[:, station_idx]` or equivalent
-- Station coordinates → lat/lon arrays
-- Handle fill values / NaN masking
-
-If `station_id` is given, return only that station's data. Otherwise return metadata about all stations.
-
-### `find_nearest_station(target_lat, target_lon, station_lats, station_lons, station_names)`
-Compute haversine distance to all stations, return nearest. Reuse the haversine formula pattern from CO-OPS utils.
-
-### `compute_validation_stats(forecast, observed)`
-Given two aligned numpy arrays, compute bias, RMSE, MAE, peak error, correlation coefficient. Return as dict.
-
-### `align_timeseries(forecast_times, forecast_values, observed_times, observed_values)`
-Align two irregular time series to common timestamps (nearest 6-minute match). Return aligned arrays. Use `numpy` for efficiency.
-
-### `format_timeseries_table(times, values, title, metadata_lines, ...)`
-Markdown table formatter for time series data. Subsample if >100 rows (show every Nth row). Include min/max/mean summary.
-
-### `format_station_table(stations, title, ...)`
-Markdown table formatter for station lists.
-
-### `handle_stofs_error(e, model, url)`
-Error handler with actionable suggestions specific to STOFS. Patterns:
-- 404 → "Cycle not yet available. Use stofs_list_cycles to check available data."
-- 403 → "AWS S3 access denied. Data may have been archived. Try a more recent date."
-- Timeout → "Download timed out. The file may be large. Try again or use a different cycle."
-- NetCDF error → "Error reading STOFS NetCDF file. The file may be corrupted or format may have changed."
-
-### `resolve_latest_cycle(client, model)`
-Find the latest available cycle by checking today and yesterday, most recent cycle first. For 2D, check 18z → 12z → 06z → 00z of today, then same for yesterday. For 3D, check 12z of today then yesterday. Use `check_file_exists()`.
-
-### `cleanup_temp_file(filepath)`
-Remove a temporary NetCDF file. Called in finally blocks.
-
----
-
-## Station Registry (stations.py)
-
-Hardcode a basic station registry for quick lookups without downloading NetCDF files. This is used by `stofs_list_stations` and `stofs_get_system_info` when a NetCDF download isn't desired.
-
-Include at least the ~40 most important CO-OPS stations that are in both STOFS-2D and STOFS-3D:
-
-```python
-STOFS_STATIONS = [
-    {"id": "8518750", "name": "The Battery", "state": "NY", "lat": 40.7006, "lon": -74.0142},
-    {"id": "8461490", "name": "New London", "state": "CT", "lat": 41.3614, "lon": -72.0900},
-    {"id": "8443970", "name": "Boston", "state": "MA", "lat": 42.3539, "lon": -71.0503},
-    {"id": "8658120", "name": "Wilmington", "state": "NC", "lat": 34.2275, "lon": -77.9536},
-    {"id": "8665530", "name": "Charleston", "state": "SC", "lat": 32.7817, "lon": -79.9250},
-    {"id": "8670870", "name": "Fort Pulaski", "state": "GA", "lat": 32.0367, "lon": -80.9017},
-    {"id": "8720218", "name": "Mayport", "state": "FL", "lat": 30.3967, "lon": -81.4300},
-    {"id": "8723214", "name": "Virginia Key", "state": "FL", "lat": 25.7317, "lon": -80.1617},
-    {"id": "8724580", "name": "Key West", "state": "FL", "lat": 24.5508, "lon": -81.8075},
-    {"id": "8726520", "name": "St. Petersburg", "state": "FL", "lat": 27.7606, "lon": -82.6269},
-    {"id": "8771341", "name": "Galveston Bay Entrance", "state": "TX", "lat": 29.3572, "lon": -94.7247},
-    {"id": "8779770", "name": "Port Isabel", "state": "TX", "lat": 26.0617, "lon": -97.2150},
-    {"id": "9414290", "name": "San Francisco", "state": "CA", "lat": 37.8063, "lon": -122.4659},
-    {"id": "9447130", "name": "Seattle", "state": "WA", "lat": 47.6026, "lon": -122.3393},
-    {"id": "9457292", "name": "Cordova", "state": "AK", "lat": 60.5583, "lon": -145.7533},
-    {"id": "1611400", "name": "Nawiliwili", "state": "HI", "lat": 21.9544, "lon": -159.3561},
-    {"id": "1631428", "name": "Pago Pago", "state": "AS", "lat": -14.2767, "lon": -170.6900},
-    {"id": "9751381", "name": "Lameshur Bay", "state": "VI", "lat": 18.3183, "lon": -64.7233},
-    {"id": "9755371", "name": "San Juan", "state": "PR", "lat": 18.4597, "lon": -66.1164},
-    # ... Add ~20 more key stations. Get the full list from a downloaded station file if needed.
-]
-```
-
-Also include bounding boxes for region filtering:
-```python
-REGIONS = {
-    "east_coast": {"lat_min": 24.0, "lat_max": 47.0, "lon_min": -82.0, "lon_max": -65.0},
-    "gulf": {"lat_min": 24.0, "lat_max": 31.0, "lon_min": -98.0, "lon_max": -82.0},
-    "west_coast": {"lat_min": 32.0, "lat_max": 49.0, "lon_min": -125.0, "lon_max": -117.0},
-    "alaska": {"lat_min": 51.0, "lat_max": 72.0, "lon_min": -180.0, "lon_max": -130.0},
-    "hawaii": {"lat_min": 18.0, "lat_max": 23.0, "lon_min": -161.0, "lon_max": -154.0},
-    "puerto_rico": {"lat_min": 17.0, "lat_max": 19.0, "lon_min": -68.0, "lon_max": -64.0},
-}
-```
-
----
-
-## Models (models.py)
-
-```python
-from enum import Enum
-
-class STOFSModel(str, Enum):
-    GLOBAL_2D = "2d_global"
-    ATLANTIC_3D = "3d_atlantic"
-
-class STOFSProduct(str, Enum):
-    CWL = "cwl"   # Combined Water Level (tide + surge)
-    HTP = "htp"   # Harmonic Tidal Prediction
-    SWL = "swl"   # Surge Water Level (non-tidal residual)
-
-class Region(str, Enum):
-    EAST_COAST = "east_coast"
-    GULF = "gulf"
-    WEST_COAST = "west_coast"
-    ALASKA = "alaska"
-    HAWAII = "hawaii"
-    PUERTO_RICO = "puerto_rico"
-```
-
----
-
-## pyproject.toml
+In `pyproject.toml`, add `xarray>=2024.1.0` to the `dependencies` list:
 
 ```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "stofs-mcp"
-version = "0.1.0"
-description = "MCP server for NOAA STOFS storm surge forecast access and validation against CO-OPS observations"
-readme = "README.md"
-license = "MIT"
-requires-python = ">=3.11"
 dependencies = [
     "mcp[cli]>=1.0.0",
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     "netCDF4>=1.7.0",
     "numpy>=1.26.0",
-]
-
-[project.scripts]
-stofs-mcp = "stofs_mcp.server:main"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/stofs_mcp"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-
-[dependency-groups]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
+    "xarray>=2024.1.0",
 ]
 ```
 
-**Key difference from other servers**: `netCDF4` and `numpy` are required dependencies. These are well-established scientific Python packages available on PyPI.
+xarray uses netCDF4 as its engine for OPeNDAP access — no additional dependency needed.
 
----
+### 2. Add OPeNDAP methods to `client.py`
 
-## Server Pattern (server.py)
-
-Follow the exact same pattern as coops-mcp and erddap-mcp:
+Add these constants and methods to the existing `STOFSClient` class:
 
 ```python
-"""FastMCP server entry point for STOFS MCP."""
+OPENDAP_BASE_2D = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo"
+OPENDAP_BASE_3D = "https://nomads.ncep.noaa.gov/dods/stofs_3d_atl"
+```
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-from mcp.server.fastmcp import FastMCP
-from .client import STOFSClient
+Add a method to build the OPeNDAP URL:
 
+```python
+def build_opendap_url(self, model: str, date: str, cycle: str) -> str:
+    """Build NOMADS OPeNDAP URL for STOFS regular-grid data.
 
-@asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncIterator[dict]:
-    """Manage the shared STOFS client lifecycle."""
-    client = STOFSClient()
+    Args:
+        model: '2d_global' or '3d_atlantic'.
+        date: YYYYMMDD format.
+        cycle: '00', '06', '12', '18'.
+
+    Returns:
+        OPeNDAP URL string.
+    """
+    if model == "2d_global":
+        return f"{OPENDAP_BASE_2D}/stofs_2d_glo{date}/stofs_2d_glo_{cycle}z"
+    elif model == "3d_atlantic":
+        return f"{OPENDAP_BASE_3D}/stofs_3d_atl{date}/stofs_3d_atl_{cycle}z"
+    else:
+        raise ValueError(f"Unknown model '{model}'.")
+```
+
+Add a method to check if the OPeNDAP endpoint is reachable:
+
+```python
+async def check_opendap_available(self, url: str) -> bool:
+    """Check if a NOMADS OPeNDAP endpoint is reachable.
+
+    Tests by fetching the .das (Dataset Attribute Structure) — a small text response.
+    """
+    client = await self._get_client()
     try:
-        yield {"stofs_client": client}
+        response = await client.get(f"{url}.das", timeout=15.0)
+        return response.status_code == 200
+    except Exception:
+        return False
+```
+
+### 3. Add OPeNDAP extraction utility in `utils.py`
+
+Add a new function. This is the core logic — it opens the remote dataset, extracts a point, and returns the time series. **This function uses blocking I/O** (xarray's OPeNDAP access is synchronous) so it must be called carefully (see tool implementation below).
+
+```python
+def extract_point_from_opendap(
+    opendap_url: str,
+    latitude: float,
+    longitude: float,
+    variable: str | None = None,
+) -> dict[str, Any]:
+    """Extract a time series at a single lat/lon from a NOMADS OPeNDAP dataset.
+
+    Opens the remote dataset with xarray, selects the nearest grid point,
+    and returns the time series. Only the requested slice is downloaded.
+
+    Args:
+        opendap_url: Full OPeNDAP URL (e.g., https://nomads.ncep.noaa.gov/dods/...).
+        latitude: Target latitude in decimal degrees.
+        longitude: Target longitude in decimal degrees.
+        variable: Specific variable name to extract. If None, auto-detect
+                  the water level variable.
+
+    Returns:
+        Dict with keys:
+            - 'times': list of ISO 8601 datetime strings
+            - 'values': list of water level values (m)
+            - 'actual_lat': float — latitude of the nearest grid point
+            - 'actual_lon': float — longitude of the nearest grid point
+            - 'variable': str — the variable name used
+            - 'n_times': int — number of time steps
+            - 'grid_resolution_deg': float — approximate grid spacing
+
+    Raises:
+        RuntimeError: If the OPeNDAP endpoint is unreachable or data cannot be read.
+        ValueError: If no suitable water level variable is found.
+    """
+    import xarray as xr
+    import numpy as np
+
+    try:
+        ds = xr.open_dataset(opendap_url, engine="netcdf4")
+    except Exception as e:
+        raise RuntimeError(
+            f"Cannot open OPeNDAP dataset at {opendap_url}. "
+            f"NOMADS may be temporarily unavailable. Error: {e}"
+        )
+
+    try:
+        # --- Auto-detect water level variable if not specified ---
+        if variable is None:
+            # Known STOFS OPeNDAP variable names (check in order of preference)
+            candidates = [
+                "etwlswlc",      # combined water level
+                "etsurgetsrg",   # storm surge
+                "etrtpcrlc",     # tidal prediction
+                "zeta",          # sometimes used
+                "water_level",
+            ]
+            for name in candidates:
+                if name in ds.data_vars:
+                    variable = name
+                    break
+
+            if variable is None:
+                available = list(ds.data_vars)
+                ds.close()
+                raise ValueError(
+                    f"No known water level variable found in OPeNDAP dataset. "
+                    f"Available variables: {available}. "
+                    f"Specify the variable name explicitly."
+                )
+
+        if variable not in ds.data_vars:
+            available = list(ds.data_vars)
+            ds.close()
+            raise ValueError(
+                f"Variable '{variable}' not found. Available: {available}"
+            )
+
+        # --- Select nearest grid point ---
+        point = ds[variable].sel(lat=latitude, lon=longitude, method="nearest")
+
+        actual_lat = float(point.lat.values)
+        actual_lon = float(point.lon.values)
+
+        # --- Extract time series ---
+        values_raw = point.values  # shape: (time,)
+
+        # Handle time coordinate
+        times_raw = point.time.values if "time" in point.coords else point.coords[list(point.dims)[0]].values
+
+        # Convert numpy datetime64 to ISO strings
+        times_out = []
+        for t in times_raw:
+            if hasattr(t, "isoformat"):
+                times_out.append(t.isoformat()[:16].replace("T", " "))
+            else:
+                # numpy datetime64
+                ts = (t - np.datetime64("1970-01-01T00:00:00")) / np.timedelta64(1, "s")
+                from datetime import datetime, timezone
+                dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                times_out.append(dt.strftime("%Y-%m-%d %H:%M"))
+
+        # Filter NaN / fill values
+        values_out = []
+        times_filtered = []
+        for t_str, v in zip(times_out, values_raw.tolist()):
+            if v is not None and not np.isnan(v) and abs(v) < 1e10:
+                times_filtered.append(t_str)
+                values_out.append(round(float(v), 4))
+
+        # Estimate grid resolution
+        if len(ds.lat) > 1:
+            grid_res = abs(float(ds.lat[1] - ds.lat[0]))
+        else:
+            grid_res = 0.0
+
+        return {
+            "times": times_filtered,
+            "values": values_out,
+            "actual_lat": round(actual_lat, 4),
+            "actual_lon": round(actual_lon, 4),
+            "variable": variable,
+            "n_times": len(times_filtered),
+            "grid_resolution_deg": round(grid_res, 4),
+        }
+
     finally:
-        await client.close()
+        ds.close()
+```
 
+### 4. Add the new tool in `tools/forecast.py`
 
-mcp = FastMCP("stofs_mcp", lifespan=app_lifespan)
+Add `stofs_get_gridded_forecast` to the existing `tools/forecast.py` file. This tool wraps the OPeNDAP extraction with proper async handling.
 
-# Import tool modules to register them
-from .tools import discovery, forecast, validation  # noqa: E402, F401
+**CRITICAL: xarray OPeNDAP access is synchronous (blocking I/O).** You must wrap the call in `asyncio.to_thread()` so it doesn't block the MCP server's event loop.
 
+```python
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def stofs_get_gridded_forecast(
+    ctx: Context,
+    latitude: float,
+    longitude: float,
+    model: STOFSModel = STOFSModel.GLOBAL_2D,
+    variable: str | None = None,
+    cycle_date: str | None = None,
+    cycle_hour: str | None = None,
+    response_format: str = "markdown",
+) -> str:
+    """Get STOFS forecast at any lat/lon from the regular gridded product via OPeNDAP.
 
-def main() -> None:
-    mcp.run()
+    Unlike stofs_get_station_forecast (limited to ~385 fixed stations), this tool
+    queries the STOFS regular-grid product at any coastal point. Data is fetched
+    remotely from NOMADS — only the requested grid cell is downloaded.
 
+    Coverage: US East Coast, West Coast, Gulf, Alaska, Hawaii, Puerto Rico, Guam.
+    Resolution: ~2.5 km (conus), ~1.25 km (Puerto Rico), ~6 km (Alaska).
 
-if __name__ == "__main__":
-    main()
+    Note: Uses NOMADS OPeNDAP which has a ~2-day rolling window and can be
+    intermittently slow or unavailable. If this fails, use stofs_get_point_forecast
+    (station-based) as a fallback.
+
+    Args:
+        latitude: Target latitude in decimal degrees.
+        longitude: Target longitude in decimal degrees.
+        model: '2d_global' or '3d_atlantic'.
+        variable: OPeNDAP variable name (auto-detected if None).
+                  Common: 'etwlswlc' (combined WL), 'etsurgetsrg' (surge).
+        cycle_date: Date in YYYY-MM-DD format. Default: latest available.
+        cycle_hour: Cycle hour '00', '06', '12', '18'. Default: latest.
+        response_format: 'markdown' or 'json'.
+    """
+    import asyncio
+
+    try:
+        client = _get_client(ctx)
+
+        # Resolve cycle
+        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        if not cycle:
+            return (
+                "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            )
+        date_str, hour_str = cycle
+
+        # Build OPeNDAP URL
+        opendap_url = client.build_opendap_url(model.value, date_str, hour_str)
+
+        # Check availability first (fast HTTP check)
+        available = await client.check_opendap_available(opendap_url)
+        if not available:
+            return (
+                f"NOMADS OPeNDAP endpoint is not available for cycle "
+                f"{date_str} {hour_str}z.\n\n"
+                "NOMADS keeps only a ~2-day rolling window and can be intermittently "
+                "down. Alternatives:\n"
+                "- Try a different cycle with stofs_list_cycles\n"
+                "- Use stofs_get_point_forecast (station-based, uses AWS S3 which "
+                "is more reliable)"
+            )
+
+        # Run the blocking xarray OPeNDAP call in a thread
+        from ..utils import extract_point_from_opendap
+
+        data = await asyncio.to_thread(
+            extract_point_from_opendap,
+            opendap_url,
+            latitude,
+            longitude,
+            variable,
+        )
+
+        if not data["times"]:
+            return (
+                f"No valid data at ({latitude:.4f}, {longitude:.4f}). "
+                "The point may be over land or outside the model domain. "
+                "Try a location closer to the coast."
+            )
+
+        datum = MODEL_DATUMS.get(model.value, "unknown")
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global"
+            else "STOFS-3D-Atlantic"
+        )
+
+        dist_note = ""
+        # Approximate distance from requested point to actual grid cell center
+        from ..utils import _haversine
+        snap_dist = _haversine(
+            latitude, longitude, data["actual_lat"], data["actual_lon"]
+        )
+        if snap_dist > 0.1:
+            dist_note = f"Grid snap distance: {snap_dist:.1f} km"
+
+        if response_format == "json":
+            return json.dumps({
+                "query_lat": latitude,
+                "query_lon": longitude,
+                "actual_lat": data["actual_lat"],
+                "actual_lon": data["actual_lon"],
+                "grid_resolution_deg": data["grid_resolution_deg"],
+                "snap_distance_km": round(snap_dist, 2),
+                "model": model.value,
+                "variable": data["variable"],
+                "cycle_date": date_str,
+                "cycle_hour": hour_str,
+                "datum": datum,
+                "source": "NOMADS OPeNDAP (regular grid)",
+                "n_points": data["n_times"],
+                "times": data["times"],
+                "values": data["values"],
+            }, indent=2)
+
+        metadata = [
+            f"Model: {model_label} (regular grid via OPeNDAP)",
+            f"Variable: {data['variable']}",
+            f"Cycle: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z",
+            f"Datum: {datum}",
+            f"Grid point: ({data['actual_lat']}, {data['actual_lon']})",
+            f"Grid resolution: ~{data['grid_resolution_deg']}°",
+        ]
+        if dist_note:
+            metadata.append(dist_note)
+
+        return format_timeseries_table(
+            times=data["times"],
+            values=data["values"],
+            title=f"{model_label} Gridded Forecast — ({latitude:.4f}°, {longitude:.4f}°)",
+            metadata_lines=metadata,
+            source="NOAA STOFS via NOMADS OPeNDAP",
+        )
+
+    except Exception as e:
+        return handle_stofs_error(e, model.value)
+```
+
+### 5. Update `stofs_get_point_forecast` to mention the gridded alternative
+
+In the existing `stofs_get_point_forecast` tool, update the "no station found" error message to mention the gridded tool as an alternative. Find the block that returns the "No STOFS station found" message and add a line:
+
+```python
+"- Use stofs_get_gridded_forecast for any lat/lon (uses OPeNDAP regular grid)\n"
+```
+
+### 6. Update `stofs_get_system_info` 
+
+In the `SPECS` dict for each model, add a line about OPeNDAP availability:
+
+```python
+"opendap": "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/ (regular grid, ~2-day window)",
+```
+
+And for 3D:
+```python
+"opendap": "https://nomads.ncep.noaa.gov/dods/stofs_3d_atl/ (regular grid, ~2-day window)",
 ```
 
 ---
 
-## Tests
+## What NOT to Change
 
-### Unit tests (test_utils.py)
-- `test_haversine_distance` — known distance between two points
-- `test_compute_validation_stats` — bias, RMSE, MAE with known arrays
-- `test_align_timeseries` — alignment of two time series with different timestamps
-- `test_build_station_url_2d` — correct URL construction for 2D model
-- `test_build_station_url_3d` — correct URL construction for 3D model
-- `test_resolve_region_filter` — bounding box filtering
-
-### Live integration tests (test_live.py)
-1. `test_check_latest_2d_cycle_exists` — HEAD request to verify today's or yesterday's 2D station file exists on S3
-2. `test_download_and_parse_station_file` — download a 2D station file, open with netCDF4, verify dimensions and variables exist
-3. `test_extract_single_station` — download file, extract The Battery (8518750), verify non-empty time series
-4. `test_coops_observation_fetch` — fetch 24 hours of CO-OPS water level data, verify JSON structure
-5. `test_3d_atlantic_station_file` — download 3D-Atlantic station file, verify structure
+- Do NOT modify `stofs_get_station_forecast` — it stays S3 + NetCDF based
+- Do NOT modify `stofs_compare_with_observations` — it uses station files for validation
+- Do NOT modify `stofs_get_max_water_level` — station-based is correct for this
+- Do NOT remove any existing tools or change their behavior
+- Do NOT add xarray to any of the station-based code paths
 
 ---
 
-## Evaluation (eval/evaluation.xml)
+## Add Tests
 
-10 questions testing multi-tool workflows:
+### Unit test in `tests/test_utils.py`
 
-1. "What is the latest available STOFS-2D-Global forecast cycle?"
-   - Tools: `stofs_list_cycles`
+Add a test for the OPeNDAP URL builder:
 
-2. "Get the STOFS water level forecast for The Battery, NY (station 8518750) for the most recent cycle"
-   - Tools: `stofs_get_station_forecast`
+```python
+class TestBuildOpendapUrl:
+    def setup_method(self):
+        self.client = STOFSClient()
 
-3. "What are the top 10 stations with highest predicted water levels in the latest STOFS-2D-Global forecast?"
-   - Tools: `stofs_get_max_water_level`
+    def test_2d_global(self):
+        url = self.client.build_opendap_url("2d_global", "20260219", "12")
+        assert "nomads.ncep.noaa.gov/dods/stofs_2d_glo" in url
+        assert "stofs_2d_glo20260219" in url
+        assert "stofs_2d_glo_12z" in url
 
-4. "Compare STOFS-2D-Global forecast against CO-OPS observations at Boston (8443970) for the past 24 hours"
-   - Tools: `stofs_compare_with_observations`
+    def test_3d_atlantic(self):
+        url = self.client.build_opendap_url("3d_atlantic", "20260219", "12")
+        assert "stofs_3d_atl" in url
+        assert "stofs_3d_atl_12z" in url
 
-5. "Find STOFS output stations within 50 km of Miami Beach (lat 25.79, lon -80.13)"
-   - Tools: `stofs_list_stations` or `stofs_get_point_forecast`
+    def test_invalid_model(self):
+        with pytest.raises(ValueError):
+            self.client.build_opendap_url("invalid", "20260219", "12")
+```
 
-6. "What is the surge-only (non-tidal) forecast at Charleston, SC (8665530)?"
-   - Tools: `stofs_get_station_forecast` with product="swl"
+### Live integration test in `tests/test_live.py`
 
-7. "How does STOFS-3D-Atlantic forecast compare to STOFS-2D-Global at The Battery for the latest cycle?"
-   - Tools: `stofs_get_station_forecast` (called twice, once per model)
+Add a test that tries to open the OPeNDAP endpoint (skip if NOMADS is down):
 
-8. "What are the differences between STOFS-2D-Global and STOFS-3D-Atlantic in terms of coverage and resolution?"
-   - Tools: `stofs_get_system_info`
+```python
+@pytest.mark.asyncio
+async def test_opendap_endpoint_reachable(client):
+    """Check that the NOMADS OPeNDAP endpoint is reachable."""
+    from stofs_mcp.utils import resolve_latest_cycle
 
-9. "Get the STOFS forecast at lat 29.95, lon -90.07 (near New Orleans) and compare it with observations"
-   - Tools: `stofs_get_point_forecast`, `stofs_compare_with_observations`
+    cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
+    if cycle is None:
+        pytest.skip("No STOFS cycle found")
 
-10. "List all STOFS stations in Texas and show the latest forecast for the station with the highest surge"
-    - Tools: `stofs_list_stations`, `stofs_get_station_forecast`
+    date_str, hour_str = cycle
+    url = client.build_opendap_url("2d_global", date_str, hour_str)
+    available = await client.check_opendap_available(url)
+
+    if not available:
+        pytest.skip("NOMADS OPeNDAP not reachable (may be temporarily down)")
+
+    print(f"\nOPeNDAP reachable: {url}")
+
+
+@pytest.mark.asyncio
+async def test_opendap_point_extraction(client):
+    """Extract a single point from STOFS via OPeNDAP."""
+    from stofs_mcp.utils import resolve_latest_cycle, extract_point_from_opendap
+
+    cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
+    if cycle is None:
+        pytest.skip("No STOFS cycle found")
+
+    date_str, hour_str = cycle
+    url = client.build_opendap_url("2d_global", date_str, hour_str)
+
+    available = await client.check_opendap_available(url)
+    if not available:
+        pytest.skip("NOMADS OPeNDAP not reachable")
+
+    # The Battery, NY — well within the conus.east grid
+    data = extract_point_from_opendap(url, 40.7, -74.0)
+
+    print(f"\nVariable: {data['variable']}")
+    print(f"Grid point: ({data['actual_lat']}, {data['actual_lon']})")
+    print(f"Resolution: {data['grid_resolution_deg']}°")
+    print(f"Time steps: {data['n_times']}")
+
+    assert data["n_times"] > 0, "Expected at least some data points"
+    assert len(data["values"]) == len(data["times"])
+    # Grid point should be near the requested location
+    assert abs(data["actual_lat"] - 40.7) < 0.1
+    assert abs(data["actual_lon"] - (-74.0)) < 0.1
+```
 
 ---
 
-## README.md for stofs-mcp
+## Update Evaluation
 
-Include:
-- Title: "STOFS MCP Server"
-- Description: Access NOAA's Storm Tide Operational Forecast System (STOFS) forecasts and validate against CO-OPS observations
-- Status: "Ready"
-- Features list: station forecasts, point queries, observation validation, max water levels, system info
-- Quick start (clone, uv sync, configure MCP client)
-- Tool reference table
-- Example queries
-- Data sources: AWS S3 (noaa-gestofs-pds, noaa-nos-stofs3d-pds), NOMADS, CO-OPS API
-- Note about vertical datums (LMSL, NAVD88, MLLW differences)
-- License: MIT
+Add two questions to `eval/evaluation.xml`:
 
----
+```xml
+<question id="11">
+    <prompt>Get the STOFS water level forecast at lat 36.85, lon -75.98 (Virginia Beach) using the gridded product.</prompt>
+    <expected_tools>stofs_get_gridded_forecast</expected_tools>
+    <expected_info>time series from OPeNDAP regular grid, grid snap distance, resolution</expected_info>
+</question>
 
-## Important Implementation Notes
-
-1. **Always clean up temp NetCDF files.** Every tool that downloads a NetCDF file must use try/finally to delete the temp file. Otherwise the server will leak disk space.
-
-2. **netCDF4 station name encoding.** Station names in ADCIRC NetCDF files may be stored as byte arrays or character arrays. Always handle decoding: `station_name.tobytes().decode().strip()` or `"".join(s.decode() for s in station_name).strip()`.
-
-3. **Time variable handling.** STOFS time variables use `seconds since YYYY-MM-DD HH:MM:SS`. Use `netCDF4.num2date(times, units=time_var.units, calendar=time_var.calendar)` to convert. Some files may lack a `calendar` attribute — default to `"standard"`.
-
-4. **Fill values.** STOFS NetCDF files use fill values (typically -99999 or 1e37) for dry nodes or missing data. Always check `numpy.ma.is_masked()` or compare against `_FillValue` attribute. Filter these out before computing statistics or returning to users.
-
-5. **S3 file availability timing.** STOFS-2D-Global products arrive ~2-3.5 hours after cycle time. STOFS-3D-Atlantic products arrive ~4-5 hours after 12z. If the latest cycle isn't available yet, fall back to the previous cycle automatically.
-
-6. **Datum differences matter.** When comparing STOFS with CO-OPS:
-   - STOFS-2D station files: LMSL (Local Mean Sea Level)
-   - STOFS-3D station files: NAVD88
-   - CO-OPS API: request `datum=MSL` for 2D comparison, `datum=NAVD` for 3D comparison
-   - Always note the datum in output. Small systematic offsets (1-5 cm) are expected.
-
-7. **Don't try to parse the full gridded field files.** Files like `stofs_2d_glo.t00z.fields.cwl.nc` contain 12.8M nodes per timestep × many timesteps = gigabytes. Only use the `points` (station) files.
-
-8. **3D-Atlantic has fewer stations and fewer products.** Only ~108 stations vs ~385 for 2D. Only CWL product (no separate HTP/SWL files). Only 12z cycle. Handle gracefully when users request unavailable combinations.
-
-9. **Follow existing monorepo patterns exactly.** Same server.py lifespan pattern, same `_get_client(ctx)` helper in tools, same annotation style, same markdown/json dual output.
+<question id="12">
+    <prompt>Compare the gridded forecast vs the station forecast near The Battery, NY. How different are they?</prompt>
+    <expected_tools>stofs_get_gridded_forecast, stofs_get_station_forecast</expected_tools>
+    <expected_info>two time series from different data sources, user can compare values</expected_info>
+</question>
+```
 
 ---
 
-## Post-Build Tasks
+## Update README.md
 
-After Claude Code builds the server:
+Add `stofs_get_gridded_forecast` to the tools table:
 
-1. Update the root `ocean-mcp/README.md` server table to show stofs-mcp as "Ready"
-2. Update `ocean-mcp/docs/architecture.md` to mention stofs-mcp and its unique NetCDF-based access pattern
-3. Add stofs-mcp to the MCP client config example in the root README
-4. Run `cd servers/stofs-mcp && uv sync` to verify dependencies install
-5. Run `uv run pytest tests/test_utils.py -v` for unit tests
-6. Run `uv run pytest tests/test_live.py -v -s` for live integration tests (requires internet)
-7. Test the server: `uv run python -m stofs_mcp.server`
+```
+| `stofs_get_gridded_forecast` | Forecast at any lat/lon via OPeNDAP (regular grid, no download) |
+```
+
+Add an example query:
+```
+- "Get the STOFS forecast at lat 36.85, lon -75.98 using the gridded product"
+```
+
+Add a note under "Data Sources":
+```
+- **NOMADS OPeNDAP**: `nomads.ncep.noaa.gov/dods/stofs_2d_glo/` (remote slice of regular-grid data, ~2-day window)
+```
+
+---
+
+## Key Implementation Notes
+
+1. **`asyncio.to_thread()` is mandatory.** xarray's netCDF4 engine for OPeNDAP is synchronous. Without `to_thread()`, the MCP server event loop blocks during the remote data fetch (5-30 seconds), preventing other tool calls from being processed.
+
+2. **NOMADS is unreliable.** OPeNDAP endpoints go down frequently — during maintenance windows, heavy load, or system updates. Every code path must handle connection failures gracefully and suggest the station-based fallback. Never let a NOMADS failure crash the server.
+
+3. **The variable names are not guaranteed.** NOMADS OPeNDAP variable names can change between STOFS versions. The implementation must auto-detect variable names by inspecting `ds.data_vars`, not hardcode them. The candidate list is a starting hint, not a contract.
+
+4. **Land points return NaN.** When the requested lat/lon falls over land, the nearest grid cell will have NaN values. Filter these out and return a clear message suggesting the user try a point closer to the coast.
+
+5. **The OPeNDAP grid is coarser than the native mesh.** The regular grid is ~2.5 km resolution — much coarser than the native ADCIRC mesh which has 80-120 m coastal resolution. Station point files sample the native mesh. So for locations near CO-OPS stations, the station-based tools will give more accurate results. The gridded tool is for locations far from any station.
+
+6. **Do not cache xarray datasets across tool calls.** Each `xr.open_dataset()` opens a network connection. Holding it open between tool calls risks stale connections, timeouts, and resource leaks. Open fresh each time — the OPeNDAP server handles caching on its side.
+
+7. **Longitude convention.** NOMADS OPeNDAP may use 0-360 longitude instead of -180 to 180. If the user provides negative longitude (Western hemisphere), you may need to convert: `lon_360 = longitude % 360`. Check the actual `ds.lon` values to determine which convention is in use, and convert if needed.
+
+8. **Timeout handling.** NOMADS OPeNDAP can be very slow (30+ seconds) during peak hours. The xarray call inside `to_thread()` does not respect the httpx timeout. Consider wrapping the `to_thread()` call in `asyncio.wait_for(coro, timeout=60)` and catching `asyncio.TimeoutError`.
+
+---
+
+## Summary: Two Data Access Strategies
+
+After this implementation, stofs-mcp has two complementary strategies:
+
+| | Station Files (existing) | OPeNDAP Grid (new) |
+|---|---|---|
+| **Source** | AWS S3 (.nc download) | NOMADS OPeNDAP (remote slice) |
+| **Coverage** | ~385 fixed CO-OPS stations | Any lat/lon in grid domain |
+| **Resolution** | Native mesh (80-120m coastal) | Regular grid (~2.5 km) |
+| **Reliability** | High (S3 rarely down) | Medium (NOMADS can be flaky) |
+| **Speed** | ~5-10 sec (download + parse) | ~5-30 sec (network dependent) |
+| **Retention** | Days-weeks on S3 | ~2 days on NOMADS |
+| **Best for** | Known stations, validation | Arbitrary points, exploration |
+| **Tools** | stofs_get_station_forecast, stofs_get_point_forecast, stofs_compare_with_observations | stofs_get_gridded_forecast |

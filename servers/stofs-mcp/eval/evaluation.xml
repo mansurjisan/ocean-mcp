@@ -62,4 +62,16 @@
     <expected_tools>stofs_list_stations, stofs_get_station_forecast</expected_tools>
     <expected_info>Texas station list, then forecast time series for the Galveston area station</expected_info>
   </question>
+
+  <question id="11">
+    <prompt>Get the STOFS water level forecast at lat 36.85, lon -75.98 (Virginia Beach) using the gridded product.</prompt>
+    <expected_tools>stofs_get_gridded_forecast</expected_tools>
+    <expected_info>time series from OPeNDAP regular grid, grid snap distance, resolution</expected_info>
+  </question>
+
+  <question id="12">
+    <prompt>Compare the gridded forecast vs the station forecast near The Battery, NY. How different are they?</prompt>
+    <expected_tools>stofs_get_gridded_forecast, stofs_get_station_forecast</expected_tools>
+    <expected_info>two time series from different data sources, user can compare values</expected_info>
+  </question>
 </evaluation>

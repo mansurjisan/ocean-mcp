@@ -111,6 +111,55 @@ async def test_coops_observation_fetch(client):
 
 
 @pytest.mark.asyncio
+async def test_opendap_endpoint_reachable(client):
+    """Check that the NOMADS OPeNDAP endpoint is reachable for the latest cycle."""
+    cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
+    if cycle is None:
+        pytest.skip("No STOFS cycle found")
+
+    date_str, hour_str = cycle
+    url = client.build_opendap_url("2d_global", date_str, hour_str)
+    available = await client.check_opendap_available(url)
+
+    if not available:
+        pytest.skip("NOMADS OPeNDAP not reachable (may be temporarily down or outside 2-day window)")
+
+    print(f"\nOPeNDAP reachable: {url}")
+
+
+@pytest.mark.asyncio
+async def test_opendap_point_extraction(client):
+    """Extract a single point from STOFS via OPeNDAP at The Battery, NY."""
+    from stofs_mcp.utils import extract_point_from_opendap
+
+    cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
+    if cycle is None:
+        pytest.skip("No STOFS cycle found")
+
+    date_str, hour_str = cycle
+    url = client.build_opendap_url("2d_global", date_str, hour_str)
+    available = await client.check_opendap_available(url)
+    if not available:
+        pytest.skip("NOMADS OPeNDAP not reachable")
+
+    # The Battery, NY — well within the conus.east regular grid
+    data = extract_point_from_opendap(url, 40.7, -74.0)
+
+    print(f"\nVariable: {data['variable']}")
+    print(f"Grid point: ({data['actual_lat']}, {data['actual_lon']})")
+    print(f"Resolution: {data['grid_resolution_deg']}°")
+    print(f"Time steps: {data['n_times']}")
+    if data["times"]:
+        print(f"First: {data['times'][0]}, Last: {data['times'][-1]}")
+
+    assert data["n_times"] > 0, "Expected at least some data points"
+    assert len(data["values"]) == len(data["times"])
+    # Grid point should be near the requested location
+    assert abs(data["actual_lat"] - 40.7) < 0.5
+    assert abs(data["actual_lon"] - (-74.0)) < 0.5
+
+
+@pytest.mark.asyncio
 async def test_3d_atlantic_station_file(client):
     """Download STOFS-3D-Atlantic station file and verify structure."""
     cycle = await resolve_latest_cycle(client, "3d_atlantic", num_days=3)

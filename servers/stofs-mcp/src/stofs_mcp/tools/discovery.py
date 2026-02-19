@@ -156,6 +156,7 @@ async def stofs_get_system_info(
                 "products": "cwl (combined), htp (tidal), swl (surge)",
                 "data_url": "s3://noaa-gestofs-pds/",
                 "availability_lag": "~2–3.5 hours after cycle time",
+                "opendap": "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/ (regular grid, ~2-day window)",
             },
             "3d_atlantic": {
                 "full_name": "STOFS-3D-Atlantic",
@@ -174,6 +175,7 @@ async def stofs_get_system_info(
                 "products": "cwl only",
                 "data_url": "s3://noaa-nos-stofs3d-pds/",
                 "availability_lag": "~4–5 hours after 12z",
+                "opendap": "https://nomads.ncep.noaa.gov/dods/stofs_3d_atl/ (regular grid, ~2-day window)",
             },
         }
 

@@ -11,6 +11,8 @@ import httpx
 S3_BASE_2D = "https://noaa-gestofs-pds.s3.amazonaws.com"
 S3_BASE_3D = "https://noaa-nos-stofs3d-pds.s3.amazonaws.com"
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/stofs/prod"
+OPENDAP_BASE_2D = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo"
+OPENDAP_BASE_3D = "https://nomads.ncep.noaa.gov/dods/stofs_3d_atl"
 COOPS_API_BASE = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 
@@ -137,6 +139,50 @@ class STOFSClient:
             raise ValueError(
                 f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'."
             )
+
+    def build_opendap_url(self, model: str, date: str, cycle: str) -> str:
+        """Build the NOMADS OPeNDAP URL for STOFS regular-grid data.
+
+        The regular-grid product is interpolated from the native unstructured
+        mesh onto structured lat/lon grids and served via NOMADS OPeNDAP.
+        Only a ~2-day rolling window is retained.
+
+        Args:
+            model: '2d_global' or '3d_atlantic'.
+            date: Date in YYYYMMDD format.
+            cycle: Cycle hour '00', '06', '12', '18'.
+
+        Returns:
+            OPeNDAP URL string.
+
+        Raises:
+            ValueError: If model is not '2d_global' or '3d_atlantic'.
+        """
+        if model == "2d_global":
+            return f"{OPENDAP_BASE_2D}/stofs_2d_glo{date}/stofs_2d_glo_{cycle}z"
+        elif model == "3d_atlantic":
+            return f"{OPENDAP_BASE_3D}/stofs_3d_atl{date}/stofs_3d_atl_{cycle}z"
+        else:
+            raise ValueError(f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'.")
+
+    async def check_opendap_available(self, url: str) -> bool:
+        """Check if a NOMADS OPeNDAP endpoint is reachable.
+
+        Tests by fetching the .das (Dataset Attribute Structure) — a small
+        text response that NOMADS returns when the dataset is live.
+
+        Args:
+            url: Base OPeNDAP URL (without .das extension).
+
+        Returns:
+            True if the endpoint responds with HTTP 200, False otherwise.
+        """
+        client = await self._get_client()
+        try:
+            response = await client.get(f"{url}.das", timeout=15.0)
+            return response.status_code == 200
+        except Exception:
+            return False
 
     async def close(self) -> None:
         """Close the HTTP client."""

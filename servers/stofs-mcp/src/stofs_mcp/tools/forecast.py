@@ -12,7 +12,9 @@ from ..client import STOFSClient
 from ..models import MODEL_DATUMS, Region, STOFSModel, STOFSProduct
 from ..server import mcp
 from ..utils import (
+    _haversine,
     cleanup_temp_file,
+    extract_point_from_opendap,
     find_nearest_station,
     format_timeseries_table,
     handle_stofs_error,
@@ -229,6 +231,7 @@ async def stofs_get_point_forecast(
                 "Suggestions:\n"
                 "- Increase max_distance_km\n"
                 "- Try model='2d_global' which has ~385 stations (vs ~108 for 3D)\n"
+                "- Use stofs_get_gridded_forecast for any lat/lon (uses OPeNDAP regular grid)\n"
                 "- Verify the coordinates are in a coastal area"
             )
 
@@ -418,3 +421,146 @@ async def stofs_get_max_water_level(
         return handle_stofs_error(e, model.value)
     finally:
         cleanup_temp_file(tmp_path)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def stofs_get_gridded_forecast(
+    ctx: Context,
+    latitude: float,
+    longitude: float,
+    model: STOFSModel = STOFSModel.GLOBAL_2D,
+    variable: str | None = None,
+    cycle_date: str | None = None,
+    cycle_hour: str | None = None,
+    response_format: str = "markdown",
+) -> str:
+    """Get STOFS forecast at any lat/lon from the regular gridded product via OPeNDAP.
+
+    Unlike stofs_get_station_forecast (limited to ~385 fixed CO-OPS stations),
+    this tool queries the STOFS regular-grid product interpolated onto structured
+    lat/lon grids and served via NOMADS OPeNDAP. Only the requested grid cell
+    is downloaded — no large file transfer required.
+
+    Coverage: US East Coast, Gulf, West Coast, Alaska, Hawaii, Puerto Rico, Guam.
+    Resolution: ~2.5 km (conus/hawaii/guam), ~1.25 km (Puerto Rico), ~6 km (Alaska).
+
+    Note: Uses NOMADS OPeNDAP which retains only a ~2-day rolling window and can
+    be intermittently slow or unavailable. If this tool fails, use
+    stofs_get_point_forecast (station-based, uses reliable AWS S3) as a fallback.
+
+    Args:
+        latitude: Target latitude in decimal degrees.
+        longitude: Target longitude in decimal degrees.
+        model: '2d_global' or '3d_atlantic'.
+        variable: OPeNDAP variable name. Auto-detected if None.
+                  Common names: 'etwlswlc' (combined WL), 'etsurgetsrg' (surge only).
+        cycle_date: Date in YYYY-MM-DD format. Default: latest available.
+        cycle_hour: Cycle hour '00', '06', '12', '18'. Default: latest.
+        response_format: 'markdown' or 'json'.
+    """
+    import asyncio
+
+    try:
+        client = _get_client(ctx)
+
+        # Resolve cycle
+        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        if not cycle:
+            return (
+                "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            )
+        date_str, hour_str = cycle
+
+        # Build OPeNDAP URL
+        opendap_url = client.build_opendap_url(model.value, date_str, hour_str)
+
+        # Check NOMADS availability (fast .das request)
+        available = await client.check_opendap_available(opendap_url)
+        if not available:
+            return (
+                f"NOMADS OPeNDAP endpoint not available for cycle "
+                f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z.\n\n"
+                "NOMADS keeps only a ~2-day rolling window and can be intermittently down. "
+                "Alternatives:\n"
+                "- Try a different cycle with stofs_list_cycles\n"
+                "- Use stofs_get_point_forecast (station-based, uses reliable AWS S3)"
+            )
+
+        # Run blocking xarray OPeNDAP call in a thread — avoids blocking the event loop
+        data = await asyncio.wait_for(
+            asyncio.to_thread(
+                extract_point_from_opendap,
+                opendap_url,
+                latitude,
+                longitude,
+                variable,
+            ),
+            timeout=60.0,
+        )
+
+        if not data["times"]:
+            return (
+                f"No valid data at ({latitude:.4f}°, {longitude:.4f}°). "
+                "The point may be over land or outside the model's grid domain. "
+                "Try a location closer to the coast."
+            )
+
+        datum = MODEL_DATUMS.get(model.value, "unknown")
+        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+
+        # Distance from requested point to actual grid cell center
+        snap_dist = _haversine(latitude, longitude, data["actual_lat"], data["actual_lon"])
+
+        if response_format == "json":
+            return json.dumps({
+                "query_lat": latitude,
+                "query_lon": longitude,
+                "actual_lat": data["actual_lat"],
+                "actual_lon": data["actual_lon"],
+                "grid_resolution_deg": data["grid_resolution_deg"],
+                "snap_distance_km": round(snap_dist, 2),
+                "model": model.value,
+                "variable": data["variable"],
+                "cycle_date": date_str,
+                "cycle_hour": hour_str,
+                "datum": datum,
+                "source": "NOMADS OPeNDAP (regular grid)",
+                "n_points": data["n_times"],
+                "times": data["times"],
+                "values": data["values"],
+            }, indent=2)
+
+        metadata = [
+            f"Model: {model_label} (regular grid via NOMADS OPeNDAP)",
+            f"Variable: {data['variable']}",
+            f"Cycle: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z",
+            f"Datum: {datum}",
+            f"Grid point: ({data['actual_lat']}°, {data['actual_lon']}°)",
+            f"Grid resolution: ~{data['grid_resolution_deg']}°",
+        ]
+        if snap_dist > 0.1:
+            metadata.append(f"Grid snap distance: {snap_dist:.1f} km")
+
+        return format_timeseries_table(
+            times=data["times"],
+            values=data["values"],
+            title=f"{model_label} Gridded Forecast — ({latitude:.4f}°, {longitude:.4f}°)",
+            metadata_lines=metadata,
+            source="NOAA STOFS via NOMADS OPeNDAP (regular grid)",
+        )
+
+    except asyncio.TimeoutError:
+        return (
+            "NOMADS OPeNDAP request timed out (>60 s). "
+            "NOMADS can be slow during peak hours. Try again later, or use "
+            "stofs_get_point_forecast (station-based, AWS S3) as a faster alternative."
+        )
+    except Exception as e:
+        return handle_stofs_error(e, model.value)

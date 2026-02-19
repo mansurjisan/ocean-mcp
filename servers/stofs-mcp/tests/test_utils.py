@@ -158,6 +158,41 @@ class TestBuildStationUrl:
 
 
 # ---------------------------------------------------------------------------
+# OPeNDAP URL construction
+# ---------------------------------------------------------------------------
+
+class TestBuildOpendapUrl:
+    def setup_method(self):
+        self.client = STOFSClient()
+
+    def test_2d_global(self):
+        url = self.client.build_opendap_url("2d_global", "20260219", "12")
+        assert "nomads.ncep.noaa.gov/dods/stofs_2d_glo" in url
+        assert "stofs_2d_glo20260219" in url
+        assert "stofs_2d_glo_12z" in url
+
+    def test_2d_global_all_cycles(self):
+        for cycle in ("00", "06", "12", "18"):
+            url = self.client.build_opendap_url("2d_global", "20260219", cycle)
+            assert f"stofs_2d_glo_{cycle}z" in url
+
+    def test_3d_atlantic(self):
+        url = self.client.build_opendap_url("3d_atlantic", "20260219", "12")
+        assert "nomads.ncep.noaa.gov/dods/stofs_3d_atl" in url
+        assert "stofs_3d_atl20260219" in url
+        assert "stofs_3d_atl_12z" in url
+
+    def test_invalid_model_raises(self):
+        with pytest.raises(ValueError):
+            self.client.build_opendap_url("invalid", "20260219", "12")
+
+    def test_url_is_string(self):
+        url = self.client.build_opendap_url("2d_global", "20260219", "06")
+        assert isinstance(url, str)
+        assert url.startswith("https://")
+
+
+# ---------------------------------------------------------------------------
 # Station registry
 # ---------------------------------------------------------------------------
 

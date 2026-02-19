@@ -11,6 +11,7 @@ MCP server providing AI assistants with access to NOAA's Storm Tide Operational 
 | `stofs_list_cycles` | List available STOFS forecast cycles on AWS S3 |
 | `stofs_get_station_forecast` | Get water level forecast time series at a CO-OPS station |
 | `stofs_get_point_forecast` | Get forecast at arbitrary lat/lon (nearest STOFS station) |
+| `stofs_get_gridded_forecast` | Forecast at any lat/lon via OPeNDAP (regular grid, no download) |
 | `stofs_compare_with_observations` | Compare STOFS forecast vs CO-OPS observations (bias, RMSE, correlation) |
 | `stofs_get_max_water_level` | Get top stations by peak predicted water level in a cycle |
 | `stofs_get_system_info` | STOFS model specifications, datums, cycle schedule |
@@ -72,6 +73,7 @@ uv sync
 - "What are the top 10 stations with highest predicted water levels?"
 - "Get the surge-only forecast at Charleston, SC"
 - "Show me the STOFS forecast near lat 29.95, lon -90.07"
+- "Get the STOFS forecast at lat 36.85, lon -75.98 (Virginia Beach) using the gridded product"
 
 ## Running Tests
 
@@ -86,7 +88,7 @@ uv run pytest tests/test_live.py -v -s
 ## Data Sources
 
 - **AWS S3** (primary): `noaa-gestofs-pds` (2D-Global), `noaa-nos-stofs3d-pds` (3D-Atlantic)
-- **NOMADS** (backup, 2-day rolling window): `nomads.ncep.noaa.gov`
+- **NOMADS OPeNDAP**: `nomads.ncep.noaa.gov/dods/stofs_2d_glo/` (remote slice of regular-grid data, ~2-day window)
 - **CO-OPS API**: `api.tidesandcurrents.noaa.gov` (for observation validation)
 
 ## License

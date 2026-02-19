@@ -569,6 +569,165 @@ def handle_stofs_error(e: Exception, model: str = "", url: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# OPeNDAP point extraction (regular-grid NOMADS datasets)
+# ---------------------------------------------------------------------------
+
+def extract_point_from_opendap(
+    opendap_url: str,
+    latitude: float,
+    longitude: float,
+    variable: str | None = None,
+) -> dict[str, Any]:
+    """Extract a time series at a single lat/lon from a NOMADS OPeNDAP dataset.
+
+    Opens the remote dataset with xarray and selects the nearest grid point.
+    Only the requested slice is transferred over the network via OPeNDAP —
+    the full gridded field is never downloaded.
+
+    **Important**: This function uses blocking I/O (xarray's netCDF4 engine
+    for OPeNDAP is synchronous). Always call it via ``asyncio.to_thread()``
+    from async tool handlers to avoid blocking the MCP event loop.
+
+    Args:
+        opendap_url: Full NOMADS OPeNDAP URL
+            (e.g., ``https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/...``).
+        latitude: Target latitude in decimal degrees.
+        longitude: Target longitude in decimal degrees.
+        variable: Specific variable name to extract. If None, auto-detects
+            the combined water level variable.
+
+    Returns:
+        Dict with keys:
+            - ``times``: list of 'YYYY-MM-DD HH:MM' strings
+            - ``values``: list of water level values (m), NaN filtered
+            - ``actual_lat``: float — latitude of nearest grid point
+            - ``actual_lon``: float — longitude of nearest grid point
+            - ``variable``: str — variable name used
+            - ``n_times``: int — number of valid time steps
+            - ``grid_resolution_deg``: float — approximate grid spacing (°)
+
+    Raises:
+        RuntimeError: If the OPeNDAP endpoint is unreachable.
+        ValueError: If no suitable water level variable is found.
+    """
+    import numpy as np
+    import xarray as xr
+
+    try:
+        ds = xr.open_dataset(opendap_url, engine="netcdf4")
+    except Exception as e:
+        raise RuntimeError(
+            f"Cannot open OPeNDAP dataset at {opendap_url}. "
+            f"NOMADS may be temporarily unavailable. Error: {e}"
+        )
+
+    try:
+        # --- Auto-detect water level variable if not specified ---
+        if variable is None:
+            candidates = [
+                "etwlswlc",    # combined water level (GRIB2 name in STOFS OPeNDAP)
+                "etsurgetsrg", # storm surge
+                "etrtpcrlc",   # tidal prediction
+                "zeta",        # fallback
+                "water_level",
+            ]
+            for name in candidates:
+                if name in ds.data_vars:
+                    variable = name
+                    break
+
+            if variable is None:
+                available = list(ds.data_vars)
+                ds.close()
+                raise ValueError(
+                    f"No known water level variable found in OPeNDAP dataset. "
+                    f"Available variables: {available}. "
+                    "Specify the variable name explicitly using the 'variable' parameter."
+                )
+
+        if variable not in ds.data_vars:
+            available = list(ds.data_vars)
+            ds.close()
+            raise ValueError(
+                f"Variable '{variable}' not found in OPeNDAP dataset. "
+                f"Available: {available}"
+            )
+
+        # --- Resolve longitude convention (NOMADS may use 0-360 instead of -180-180) ---
+        lon_vals = ds["lon"].values if "lon" in ds.coords else ds["longitude"].values
+        lon_name = "lon" if "lon" in ds.coords else "longitude"
+        lat_name = "lat" if "lat" in ds.coords else "latitude"
+
+        query_lon = longitude
+        if float(lon_vals.min()) >= 0 and longitude < 0:
+            # Dataset uses 0-360, convert target
+            query_lon = longitude % 360
+
+        # --- Select nearest grid point ---
+        point = ds[variable].sel(
+            {lat_name: latitude, lon_name: query_lon},
+            method="nearest",
+        )
+
+        actual_lat = float(point[lat_name].values)
+        actual_lon_raw = float(point[lon_name].values)
+        # Convert back to -180-180 if needed
+        actual_lon = actual_lon_raw if actual_lon_raw <= 180 else actual_lon_raw - 360
+
+        # --- Extract time series ---
+        # Identify time dimension (first dim of the data variable)
+        time_dim = list(point.dims)[0] if point.dims else "time"
+        times_raw = point[time_dim].values if time_dim in point.coords else None
+
+        values_raw = point.values  # shape: (time,)
+
+        # Convert numpy datetime64 to strings
+        times_out: list[str] = []
+        if times_raw is not None:
+            for t in times_raw:
+                try:
+                    if hasattr(t, "isoformat"):
+                        times_out.append(t.isoformat()[:16].replace("T", " "))
+                    else:
+                        # numpy datetime64
+                        ts = (t - np.datetime64("1970-01-01T00:00:00")) / np.timedelta64(1, "s")
+                        from datetime import datetime, timezone
+                        dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                        times_out.append(dt.strftime("%Y-%m-%d %H:%M"))
+                except Exception:
+                    times_out.append("")
+
+        # Filter NaN / fill values
+        times_filtered: list[str] = []
+        values_filtered: list[float] = []
+        for t_str, v in zip(times_out, values_raw.tolist()):
+            try:
+                fv = float(v)
+                if not (fv is None or (fv != fv) or abs(fv) > 1e10):  # NaN check
+                    times_filtered.append(t_str)
+                    values_filtered.append(round(fv, 4))
+            except (TypeError, ValueError):
+                continue
+
+        # Estimate grid resolution
+        lat_arr = ds[lat_name].values
+        grid_res = abs(float(lat_arr[1] - lat_arr[0])) if len(lat_arr) > 1 else 0.0
+
+        return {
+            "times": times_filtered,
+            "values": values_filtered,
+            "actual_lat": round(actual_lat, 4),
+            "actual_lon": round(actual_lon, 4),
+            "variable": variable,
+            "n_times": len(times_filtered),
+            "grid_resolution_deg": round(grid_res, 4),
+        }
+
+    finally:
+        ds.close()
+
+
+# ---------------------------------------------------------------------------
 # Temp file cleanup
 # ---------------------------------------------------------------------------
 
