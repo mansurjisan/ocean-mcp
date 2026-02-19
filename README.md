@@ -1,4 +1,4 @@
-# Ocean MCP — AI Tools for Ocean Science
+# Ocean MCP — Real-Time Ocean Data for LLMs
 
 A monorepo of MCP (Model Context Protocol) servers that give AI assistants access to ocean science data. Each server is independently installable and focuses on a specific data source.
 
