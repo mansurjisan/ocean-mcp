@@ -1,4 +1,4 @@
-# Ocean MCP — Real-Time Marine Data, MCP-Native
+# OceanMCP 
 
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
