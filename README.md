@@ -1,6 +1,6 @@
-# Ocean MCP — Real-Time Ocean Data for LLMs
+# Ocean MCP — Real-Time Marine Data, MCP-Native
 
-A monorepo of MCP (Model Context Protocol) servers that give AI assistants access to ocean science data. Each server is independently installable and focuses on a specific data source.
+A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 ## Servers
 
