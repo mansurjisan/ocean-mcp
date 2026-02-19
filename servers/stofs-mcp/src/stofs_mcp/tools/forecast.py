@@ -17,6 +17,7 @@ from ..utils import (
     extract_point_from_opendap,
     find_nearest_station,
     format_timeseries_table,
+    get_opendap_region,
     handle_stofs_error,
     parse_station_netcdf,
     resolve_latest_cycle,
@@ -460,7 +461,7 @@ async def stofs_get_gridded_forecast(
         longitude: Target longitude in decimal degrees.
         model: '2d_global' or '3d_atlantic'.
         variable: OPeNDAP variable name. Auto-detected if None.
-                  Common names: 'etwlswlc' (combined WL), 'etsurgetsrg' (surge only).
+                  Common names: 'etcwlsfc' (combined WL), 'etsrgsfc' (surge only).
         cycle_date: Date in YYYY-MM-DD format. Default: latest available.
         cycle_hour: Cycle hour '00', '06', '12', '18'. Default: latest.
         response_format: 'markdown' or 'json'.
@@ -478,8 +479,11 @@ async def stofs_get_gridded_forecast(
             )
         date_str, hour_str = cycle
 
-        # Build OPeNDAP URL
-        opendap_url = client.build_opendap_url(model.value, date_str, hour_str)
+        # Determine the NOMADS region for this lat/lon
+        region = get_opendap_region(latitude, longitude)
+
+        # Build OPeNDAP URL (per-region, per-cycle)
+        opendap_url = client.build_opendap_url(model.value, date_str, hour_str, region)
 
         # Check NOMADS availability (fast .das request)
         available = await client.check_opendap_available(opendap_url)
@@ -527,6 +531,7 @@ async def stofs_get_gridded_forecast(
                 "grid_resolution_deg": data["grid_resolution_deg"],
                 "snap_distance_km": round(snap_dist, 2),
                 "model": model.value,
+                "region": region,
                 "variable": data["variable"],
                 "cycle_date": date_str,
                 "cycle_hour": hour_str,
@@ -539,6 +544,7 @@ async def stofs_get_gridded_forecast(
 
         metadata = [
             f"Model: {model_label} (regular grid via NOMADS OPeNDAP)",
+            f"Region: {region}",
             f"Variable: {data['variable']}",
             f"Cycle: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z",
             f"Datum: {datum}",

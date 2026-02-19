@@ -569,6 +569,55 @@ def handle_stofs_error(e: Exception, model: str = "", url: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
+# OPeNDAP region selection
+# ---------------------------------------------------------------------------
+
+def get_opendap_region(latitude: float, longitude: float) -> str:
+    """Return the NOMADS STOFS-2D regional product name for a lat/lon.
+
+    NOMADS serves STOFS as separate per-region datasets. This helper maps
+    any lat/lon to the correct region name to use in the OPeNDAP URL.
+
+    Region boundaries are approximate; they are checked in priority order
+    (small/specific regions first, broad CONUS regions last).
+
+    Args:
+        latitude: Latitude in decimal degrees.
+        longitude: Longitude in decimal degrees (-180 to 180).
+
+    Returns:
+        NOMADS region string: one of 'conus.east', 'conus.west', 'alaska',
+        'hawaii', 'puertori', 'guam', 'northpacific'.
+    """
+    # Guam (positive longitude, western Pacific)
+    if 12.0 <= latitude <= 17.0 and 143.0 <= longitude <= 149.0:
+        return "guam"
+
+    # Hawaii (~-163W to -153W)
+    if 17.5 <= latitude <= 23.5 and -163.0 <= longitude <= -153.0:
+        return "hawaii"
+
+    # Puerto Rico / USVI (~-69W to -63W)
+    if 16.5 <= latitude <= 20.5 and -69.0 <= longitude <= -63.0:
+        return "puertori"
+
+    # Alaska: high latitudes, western hemisphere (west of -130W) or far east Pacific
+    if latitude >= 50.0 and (longitude <= -130.0 or longitude >= 150.0):
+        return "alaska"
+
+    # CONUS West coast (Pacific): roughly west of -115W
+    if 20.0 <= latitude <= 53.0 and -131.0 <= longitude <= -115.0:
+        return "conus.west"
+
+    # CONUS East + Gulf: roughly east of -100W (Atlantic + Gulf of Mexico)
+    if 20.0 <= latitude <= 53.0 and -100.0 <= longitude <= -60.0:
+        return "conus.east"
+
+    # North Pacific / global fallback
+    return "northpacific"
+
+
+# ---------------------------------------------------------------------------
 # OPeNDAP point extraction (regular-grid NOMADS datasets)
 # ---------------------------------------------------------------------------
 
@@ -625,10 +674,11 @@ def extract_point_from_opendap(
         # --- Auto-detect water level variable if not specified ---
         if variable is None:
             candidates = [
-                "etwlswlc",    # combined water level (GRIB2 name in STOFS OPeNDAP)
-                "etsurgetsrg", # storm surge
-                "etrtpcrlc",   # tidal prediction
-                "zeta",        # fallback
+                "etcwlsfc",    # combined water level (NOMADS STOFS OPeNDAP name)
+                "etsrgsfc",    # storm surge (NOMADS STOFS OPeNDAP name)
+                "etwlswlc",    # alternative name seen in some products
+                "etsurgetsrg", # alternative surge name
+                "zeta",        # native NetCDF name (not typical on NOMADS)
                 "water_level",
             ]
             for name in candidates:
@@ -671,12 +721,40 @@ def extract_point_from_opendap(
 
         actual_lat = float(point[lat_name].values)
         actual_lon_raw = float(point[lon_name].values)
+
+        # --- If nearest cell is all NaN (land), find nearest wet ocean cell ---
+        # The regular grid has NaN over land; coastal points often snap to a land cell.
+        # Load a ±0.5° area at the first time step to find valid ocean cells.
+        check_vals = point.values
+        time_dim = list(point.dims)[0] if point.dims else "time"
+        if np.all(np.isnan(check_vals) | (np.abs(check_vals) > 1e10)):
+            search_radius = 0.5
+            lat_slice = slice(latitude - search_radius, latitude + search_radius)
+            lon_slice = slice(query_lon - search_radius, query_lon + search_radius)
+            area = ds[variable].sel({lat_name: lat_slice, lon_name: lon_slice})
+            t0_vals = area.isel({time_dim: 0}).values  # (lat, lon)
+            lats_area = area[lat_name].values
+            lons_area = area[lon_name].values
+
+            valid_mask = ~np.isnan(t0_vals) & (np.abs(t0_vals) < 1e10)
+            if valid_mask.sum() > 0:
+                lat_grid, lon_grid = np.meshgrid(lats_area, lons_area, indexing="ij")
+                dist_grid = (lat_grid - latitude) ** 2 + (lon_grid - query_lon) ** 2
+                dist_grid[~valid_mask] = 1e9
+                idx = np.unravel_index(np.argmin(dist_grid), dist_grid.shape)
+                best_lat = float(lats_area[idx[0]])
+                best_lon = float(lons_area[idx[1]])
+                # Re-select the full time series at the nearest wet cell
+                point = ds[variable].sel(
+                    {lat_name: best_lat, lon_name: best_lon}, method="nearest"
+                )
+                actual_lat = float(point[lat_name].values)
+                actual_lon_raw = float(point[lon_name].values)
+
         # Convert back to -180-180 if needed
         actual_lon = actual_lon_raw if actual_lon_raw <= 180 else actual_lon_raw - 360
 
         # --- Extract time series ---
-        # Identify time dimension (first dim of the data variable)
-        time_dim = list(point.dims)[0] if point.dims else "time"
         times_raw = point[time_dim].values if time_dim in point.coords else None
 
         values_raw = point.values  # shape: (time,)

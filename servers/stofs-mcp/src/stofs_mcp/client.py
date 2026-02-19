@@ -140,17 +140,28 @@ class STOFSClient:
                 f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'."
             )
 
-    def build_opendap_url(self, model: str, date: str, cycle: str) -> str:
-        """Build the NOMADS OPeNDAP URL for STOFS regular-grid data.
+    def build_opendap_url(
+        self,
+        model: str,
+        date: str,
+        cycle: str,
+        region: str = "conus.east",
+    ) -> str:
+        """Build the NOMADS OPeNDAP URL for a STOFS regional-grid dataset.
 
-        The regular-grid product is interpolated from the native unstructured
-        mesh onto structured lat/lon grids and served via NOMADS OPeNDAP.
-        Only a ~2-day rolling window is retained.
+        NOMADS serves STOFS as per-region regular-grid products. Each region
+        has its own URL. The path format is:
+          /stofs_2d_glo/{YYYYMMDD}/stofs_2d_glo_{region}_{cycle}z
+
+        Available regions (2D): conus.east, conus.west, alaska, hawaii,
+        puertori, guam, northpacific.
+        Available regions (3D): conus.east only.
 
         Args:
             model: '2d_global' or '3d_atlantic'.
             date: Date in YYYYMMDD format.
             cycle: Cycle hour '00', '06', '12', '18'.
+            region: NOMADS region name (default 'conus.east').
 
         Returns:
             OPeNDAP URL string.
@@ -159,28 +170,32 @@ class STOFSClient:
             ValueError: If model is not '2d_global' or '3d_atlantic'.
         """
         if model == "2d_global":
-            return f"{OPENDAP_BASE_2D}/stofs_2d_glo{date}/stofs_2d_glo_{cycle}z"
+            return f"{OPENDAP_BASE_2D}/{date}/stofs_2d_glo_{region}_{cycle}z"
         elif model == "3d_atlantic":
-            return f"{OPENDAP_BASE_3D}/stofs_3d_atl{date}/stofs_3d_atl_{cycle}z"
+            return f"{OPENDAP_BASE_3D}/{date}/stofs_3d_atl_{region}_{cycle}z"
         else:
             raise ValueError(f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'.")
 
     async def check_opendap_available(self, url: str) -> bool:
-        """Check if a NOMADS OPeNDAP endpoint is reachable.
+        """Check if a NOMADS OPeNDAP dataset endpoint is available.
 
-        Tests by fetching the .das (Dataset Attribute Structure) — a small
-        text response that NOMADS returns when the dataset is live.
+        Fetches the .das (Dataset Attribute Structure). NOMADS returns HTTP 200
+        for both available and unavailable datasets, but unavailable ones return
+        a body starting with ``Error {``. This method checks the response content.
 
         Args:
             url: Base OPeNDAP URL (without .das extension).
 
         Returns:
-            True if the endpoint responds with HTTP 200, False otherwise.
+            True only if the dataset exists and is accessible, False otherwise.
         """
         client = await self._get_client()
         try:
             response = await client.get(f"{url}.das", timeout=15.0)
-            return response.status_code == 200
+            if response.status_code != 200:
+                return False
+            # NOMADS returns 200 with "Error { ... }" body for missing datasets
+            return not response.text.strip().startswith("Error {")
         except Exception:
             return False
 

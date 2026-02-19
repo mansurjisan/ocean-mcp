@@ -113,12 +113,16 @@ async def test_coops_observation_fetch(client):
 @pytest.mark.asyncio
 async def test_opendap_endpoint_reachable(client):
     """Check that the NOMADS OPeNDAP endpoint is reachable for the latest cycle."""
+    from stofs_mcp.utils import get_opendap_region
+
     cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
     if cycle is None:
         pytest.skip("No STOFS cycle found")
 
     date_str, hour_str = cycle
-    url = client.build_opendap_url("2d_global", date_str, hour_str)
+    # The Battery, NY → conus.east region
+    region = get_opendap_region(40.7, -74.0)
+    url = client.build_opendap_url("2d_global", date_str, hour_str, region)
     available = await client.check_opendap_available(url)
 
     if not available:
@@ -130,19 +134,20 @@ async def test_opendap_endpoint_reachable(client):
 @pytest.mark.asyncio
 async def test_opendap_point_extraction(client):
     """Extract a single point from STOFS via OPeNDAP at The Battery, NY."""
-    from stofs_mcp.utils import extract_point_from_opendap
+    from stofs_mcp.utils import extract_point_from_opendap, get_opendap_region
 
     cycle = await resolve_latest_cycle(client, "2d_global", num_days=3)
     if cycle is None:
         pytest.skip("No STOFS cycle found")
 
     date_str, hour_str = cycle
-    url = client.build_opendap_url("2d_global", date_str, hour_str)
+    # The Battery, NY — conus.east region
+    region = get_opendap_region(40.7, -74.0)
+    url = client.build_opendap_url("2d_global", date_str, hour_str, region)
     available = await client.check_opendap_available(url)
     if not available:
         pytest.skip("NOMADS OPeNDAP not reachable")
 
-    # The Battery, NY — well within the conus.east regular grid
     data = extract_point_from_opendap(url, 40.7, -74.0)
 
     print(f"\nVariable: {data['variable']}")

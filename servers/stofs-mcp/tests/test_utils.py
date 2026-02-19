@@ -17,6 +17,7 @@ from stofs_mcp.utils import (
     find_nearest_station,
     format_station_table,
     format_timeseries_table,
+    get_opendap_region,
     handle_stofs_error,
 )
 
@@ -168,19 +169,24 @@ class TestBuildOpendapUrl:
     def test_2d_global(self):
         url = self.client.build_opendap_url("2d_global", "20260219", "12")
         assert "nomads.ncep.noaa.gov/dods/stofs_2d_glo" in url
-        assert "stofs_2d_glo20260219" in url
-        assert "stofs_2d_glo_12z" in url
+        assert "/20260219/" in url
+        assert "stofs_2d_glo_conus.east_12z" in url
+
+    def test_2d_global_region(self):
+        url = self.client.build_opendap_url("2d_global", "20260219", "06", "hawaii")
+        assert "/20260219/" in url
+        assert "stofs_2d_glo_hawaii_06z" in url
 
     def test_2d_global_all_cycles(self):
         for cycle in ("00", "06", "12", "18"):
             url = self.client.build_opendap_url("2d_global", "20260219", cycle)
-            assert f"stofs_2d_glo_{cycle}z" in url
+            assert f"stofs_2d_glo_conus.east_{cycle}z" in url
 
     def test_3d_atlantic(self):
         url = self.client.build_opendap_url("3d_atlantic", "20260219", "12")
         assert "nomads.ncep.noaa.gov/dods/stofs_3d_atl" in url
-        assert "stofs_3d_atl20260219" in url
-        assert "stofs_3d_atl_12z" in url
+        assert "/20260219/" in url
+        assert "stofs_3d_atl_conus.east_12z" in url
 
     def test_invalid_model_raises(self):
         with pytest.raises(ValueError):
@@ -190,6 +196,29 @@ class TestBuildOpendapUrl:
         url = self.client.build_opendap_url("2d_global", "20260219", "06")
         assert isinstance(url, str)
         assert url.startswith("https://")
+
+
+class TestGetOpendapRegion:
+    def test_nyc_conus_east(self):
+        assert get_opendap_region(40.7, -74.0) == "conus.east"
+
+    def test_miami_conus_east(self):
+        assert get_opendap_region(25.8, -80.2) == "conus.east"
+
+    def test_san_francisco_conus_west(self):
+        assert get_opendap_region(37.8, -122.4) == "conus.west"
+
+    def test_honolulu_hawaii(self):
+        assert get_opendap_region(21.3, -157.8) == "hawaii"
+
+    def test_puerto_rico(self):
+        assert get_opendap_region(18.5, -66.1) == "puertori"
+
+    def test_guam(self):
+        assert get_opendap_region(13.5, 144.8) == "guam"
+
+    def test_anchorage_alaska(self):
+        assert get_opendap_region(61.2, -149.9) == "alaska"
 
 
 # ---------------------------------------------------------------------------
