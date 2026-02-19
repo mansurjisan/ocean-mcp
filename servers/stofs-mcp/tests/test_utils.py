@@ -1,0 +1,262 @@
+"""Unit tests for STOFS MCP utilities."""
+
+import math
+import pytest
+
+from stofs_mcp.client import STOFSClient
+from stofs_mcp.stations import (
+    STOFS_STATIONS,
+    filter_by_proximity,
+    filter_by_region,
+    filter_by_state,
+    get_station_by_id,
+)
+from stofs_mcp.utils import (
+    align_timeseries,
+    compute_validation_stats,
+    find_nearest_station,
+    format_station_table,
+    format_timeseries_table,
+    handle_stofs_error,
+)
+
+
+# ---------------------------------------------------------------------------
+# Haversine / nearest station
+# ---------------------------------------------------------------------------
+
+class TestFindNearestStation:
+    def test_finds_nearest(self):
+        lats = [40.0, 41.0, 42.0]
+        lons = [-74.0, -74.0, -74.0]
+        names = ["A", "B", "C"]
+        result = find_nearest_station(40.1, -74.0, lats, lons, names, max_distance_km=200)
+        assert result is not None
+        idx, name, dist = result
+        assert name == "A"
+        assert dist < 15
+
+    def test_returns_none_when_too_far(self):
+        lats = [40.0]
+        lons = [-74.0]
+        names = ["A"]
+        result = find_nearest_station(50.0, -74.0, lats, lons, names, max_distance_km=10)
+        assert result is None
+
+    def test_known_distance(self):
+        # NYC to Boston ≈ 307 km
+        result = find_nearest_station(42.36, -71.06, [40.71], [-74.01], ["NYC"], max_distance_km=400)
+        assert result is not None
+        _, _, dist = result
+        assert 290 < dist < 325
+
+
+# ---------------------------------------------------------------------------
+# Validation statistics
+# ---------------------------------------------------------------------------
+
+class TestComputeValidationStats:
+    def test_perfect_forecast(self):
+        f = [1.0, 2.0, 3.0]
+        o = [1.0, 2.0, 3.0]
+        stats = compute_validation_stats(f, o)
+        assert stats["bias"] == pytest.approx(0.0)
+        assert stats["rmse"] == pytest.approx(0.0)
+        assert stats["mae"] == pytest.approx(0.0)
+        assert stats["peak_error"] == pytest.approx(0.0)
+        assert stats["correlation"] == pytest.approx(1.0)
+        assert stats["n"] == 3
+
+    def test_constant_bias(self):
+        f = [1.1, 2.1, 3.1]
+        o = [1.0, 2.0, 3.0]
+        stats = compute_validation_stats(f, o)
+        assert stats["bias"] == pytest.approx(0.1, abs=1e-4)
+        assert stats["rmse"] == pytest.approx(0.1, abs=1e-4)
+        assert stats["correlation"] == pytest.approx(1.0, abs=1e-4)
+
+    def test_known_rmse(self):
+        # errors = [0, 0, 1, -1] → RMSE = sqrt(2/4) = sqrt(0.5) ≈ 0.7071
+        f = [0.0, 1.0, 2.0, 0.0]
+        o = [0.0, 1.0, 1.0, 1.0]
+        stats = compute_validation_stats(f, o)
+        assert stats["rmse"] == pytest.approx(math.sqrt(0.5), abs=1e-4)
+
+    def test_empty_returns_none(self):
+        stats = compute_validation_stats([], [])
+        assert stats["bias"] is None
+        assert stats["n"] == 0
+
+    def test_mismatched_length_returns_none(self):
+        stats = compute_validation_stats([1.0, 2.0], [1.0])
+        assert stats["n"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Time series alignment
+# ---------------------------------------------------------------------------
+
+class TestAlignTimeseries:
+    def test_exact_match(self):
+        times = ["2026-02-19 00:00", "2026-02-19 00:06", "2026-02-19 00:12"]
+        vals_f = [1.0, 2.0, 3.0]
+        vals_o = [1.1, 2.1, 3.1]
+        ct, af, ao = align_timeseries(times, vals_f, times, vals_o)
+        assert len(ct) == 3
+        assert af == vals_f
+        assert ao == vals_o
+
+    def test_offset_within_tolerance(self):
+        # Forecast at :00, observed at :02 (2-min offset, within 3-min tolerance)
+        ft = ["2026-02-19 00:00"]
+        fv = [1.0]
+        ot = ["2026-02-19 00:02"]
+        ov = [1.1]
+        ct, af, ao = align_timeseries(ft, fv, ot, ov, tolerance_minutes=3)
+        assert len(ct) == 1
+
+    def test_outside_tolerance_not_matched(self):
+        ft = ["2026-02-19 00:00"]
+        fv = [1.0]
+        ot = ["2026-02-19 00:10"]
+        ov = [1.1]
+        ct, af, ao = align_timeseries(ft, fv, ot, ov, tolerance_minutes=3)
+        assert len(ct) == 0
+
+    def test_empty_input(self):
+        ct, af, ao = align_timeseries([], [], [], [])
+        assert ct == []
+
+
+# ---------------------------------------------------------------------------
+# URL construction
+# ---------------------------------------------------------------------------
+
+class TestBuildStationUrl:
+    def setup_method(self):
+        self.client = STOFSClient()
+
+    def test_2d_global_cwl(self):
+        url = self.client.build_station_url("2d_global", "20260219", "12", "cwl")
+        assert "noaa-gestofs-pds.s3.amazonaws.com" in url
+        assert "stofs_2d_glo.20260219" in url
+        assert "t12z.points.cwl.nc" in url
+
+    def test_2d_global_swl(self):
+        url = self.client.build_station_url("2d_global", "20260219", "00", "swl")
+        assert "t00z.points.swl.nc" in url
+
+    def test_3d_atlantic(self):
+        url = self.client.build_station_url("3d_atlantic", "20260219", "12", "cwl")
+        assert "noaa-nos-stofs3d-pds.s3.amazonaws.com" in url
+        assert "stofs_3d_atl.20260219" in url
+        assert "t12z.points.cwl.nc" in url
+
+    def test_invalid_model_raises(self):
+        with pytest.raises(ValueError, match="Unknown model"):
+            self.client.build_station_url("invalid_model", "20260219", "12", "cwl")
+
+
+# ---------------------------------------------------------------------------
+# Station registry
+# ---------------------------------------------------------------------------
+
+class TestStationRegistry:
+    def test_battery_found(self):
+        s = get_station_by_id("8518750")
+        assert s is not None
+        assert s["name"] == "The Battery"
+        assert s["state"] == "NY"
+
+    def test_unknown_station_returns_none(self):
+        assert get_station_by_id("0000000") is None
+
+    def test_filter_by_state_ny(self):
+        ny = filter_by_state(STOFS_STATIONS, "NY")
+        assert len(ny) >= 1
+        assert all(s["state"] == "NY" for s in ny)
+
+    def test_filter_by_state_case_insensitive(self):
+        fl_lower = filter_by_state(STOFS_STATIONS, "fl")
+        fl_upper = filter_by_state(STOFS_STATIONS, "FL")
+        assert len(fl_lower) == len(fl_upper)
+
+    def test_filter_by_region_gulf(self):
+        gulf = filter_by_region(STOFS_STATIONS, "gulf")
+        assert len(gulf) >= 5
+        for s in gulf:
+            assert 24.0 <= s["lat"] <= 31.0
+            assert -98.0 <= s["lon"] <= -82.0
+
+    def test_filter_by_proximity(self):
+        # Near NYC
+        nearby = filter_by_proximity(STOFS_STATIONS, 40.7, -74.0, 50.0)
+        assert len(nearby) >= 1
+        names = [s["name"] for _, s in nearby]
+        assert "The Battery" in names
+
+
+# ---------------------------------------------------------------------------
+# Formatters
+# ---------------------------------------------------------------------------
+
+class TestFormatters:
+    def test_timeseries_table_basic(self):
+        times = ["2026-02-19 00:00", "2026-02-19 00:06"]
+        values = [0.5, 0.6]
+        result = format_timeseries_table(times, values, title="Test")
+        assert "## Test" in result
+        assert "| Time (UTC)" in result
+        assert "0.500" in result
+
+    def test_timeseries_table_empty(self):
+        result = format_timeseries_table([], [], title="Empty")
+        assert "No data" in result
+
+    def test_station_table_basic(self):
+        stations = [{"id": "8518750", "name": "The Battery", "state": "NY", "lat": 40.7, "lon": -74.0}]
+        result = format_station_table(stations, title="Stations")
+        assert "## Stations" in result
+        assert "8518750" in result
+        assert "The Battery" in result
+
+    def test_station_table_with_extra_col(self):
+        stations = [{"id": "8518750", "name": "The Battery", "state": "NY",
+                     "lat": 40.7, "lon": -74.0, "distance_km": 5.2}]
+        result = format_station_table(stations, extra_col=("distance_km", "Distance (km)"))
+        assert "Distance (km)" in result
+        assert "5.2" in result
+
+
+# ---------------------------------------------------------------------------
+# Error handler
+# ---------------------------------------------------------------------------
+
+class TestHandleStofsError:
+    def test_404_error(self):
+        import httpx
+        response = httpx.Response(404, request=httpx.Request("GET", "http://test"))
+        err = httpx.HTTPStatusError("not found", request=response.request, response=response)
+        result = handle_stofs_error(err, model="2d_global")
+        assert "404" in result
+        assert "stofs_list_cycles" in result
+
+    def test_403_error(self):
+        import httpx
+        response = httpx.Response(403, request=httpx.Request("GET", "http://test"))
+        err = httpx.HTTPStatusError("forbidden", request=response.request, response=response)
+        result = handle_stofs_error(err)
+        assert "403" in result
+
+    def test_timeout(self):
+        import httpx
+        result = handle_stofs_error(httpx.ReadTimeout("timeout"))
+        assert "timed out" in result.lower()
+
+    def test_value_error(self):
+        result = handle_stofs_error(ValueError("station not found"))
+        assert "station not found" in result
+
+    def test_generic_error(self):
+        result = handle_stofs_error(RuntimeError("unexpected"))
+        assert "RuntimeError" in result

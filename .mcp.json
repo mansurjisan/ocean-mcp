@@ -7,6 +7,14 @@
     "erddap": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
+    },
+    "nhc": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
+    },
+    "stofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/stofs-mcp", "python", "-m", "stofs_mcp"]
     }
   }
 }

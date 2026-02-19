@@ -9,8 +9,8 @@ A monorepo of MCP (Model Context Protocol) servers that give AI assistants acces
 | [coops-mcp](servers/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data | Ready |
 | [erddap-mcp](servers/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers | Ready |
 | [nhc-mcp](servers/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data | Ready |
+| [stofs-mcp](servers/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation | Ready |
 | schism-mcp | SCHISM model config/namelist tools | Planned |
-| stofs-mcp | STOFS operational forecast products | Planned |
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ A monorepo of MCP (Model Context Protocol) servers that give AI assistants acces
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, stofs-mcp
 uv sync
 ```
 
@@ -40,6 +40,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "nhc": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
+    },
+    "stofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/stofs-mcp", "python", "-m", "stofs_mcp"]
     }
   }
 }
@@ -66,6 +70,12 @@ With both servers configured, you can ask your AI assistant naturally:
 - "Show me Hurricane Katrina's track"
 - "Search for Category 5 hurricanes in the Atlantic"
 - "What is the forecast track for the active storm?"
+
+**STOFS queries:**
+- "Get the STOFS water level forecast for The Battery, NY"
+- "Compare STOFS forecast vs observations at Boston for the past 24 hours"
+- "What are the top stations with highest predicted water levels?"
+- "Find STOFS stations within 50 km of New Orleans"
 
 **Cross-server queries:**
 - "Find CO-OPS stations near this ERDDAP buoy location"

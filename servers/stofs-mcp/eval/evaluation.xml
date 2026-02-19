@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation name="stofs-mcp" version="1.0">
+  <description>Evaluation questions for STOFS MCP server testing multi-tool workflows.</description>
+
+  <question id="1">
+    <prompt>What is the latest available STOFS-2D-Global forecast cycle?</prompt>
+    <expected_tools>stofs_list_cycles</expected_tools>
+    <expected_info>cycle date, cycle hour (00/06/12/18z), availability status</expected_info>
+  </question>
+
+  <question id="2">
+    <prompt>Get the STOFS water level forecast for The Battery, NY (station 8518750) for the most recent cycle.</prompt>
+    <expected_tools>stofs_get_station_forecast</expected_tools>
+    <expected_info>time series table, model cycle, datum (LMSL), min/max/mean summary</expected_info>
+  </question>
+
+  <question id="3">
+    <prompt>What are the top 10 stations with the highest predicted water levels in the latest STOFS-2D-Global forecast?</prompt>
+    <expected_tools>stofs_get_max_water_level</expected_tools>
+    <expected_info>ranked table of stations with max water level values in meters</expected_info>
+  </question>
+
+  <question id="4">
+    <prompt>Compare STOFS-2D-Global forecast against CO-OPS observations at Boston (8443970) for the past 24 hours.</prompt>
+    <expected_tools>stofs_compare_with_observations</expected_tools>
+    <expected_info>bias, RMSE, MAE, correlation, datum note, time series comparison table</expected_info>
+  </question>
+
+  <question id="5">
+    <prompt>Find STOFS output stations within 50 km of Miami Beach (lat 25.79, lon -80.13).</prompt>
+    <expected_tools>stofs_list_stations</expected_tools>
+    <expected_info>list of nearby stations with distances, filtered to Miami area</expected_info>
+  </question>
+
+  <question id="6">
+    <prompt>What is the surge-only (non-tidal) forecast at Charleston, SC (8665530)?</prompt>
+    <expected_tools>stofs_get_station_forecast</expected_tools>
+    <parameters>product=swl, model=2d_global</parameters>
+    <expected_info>surge water level time series, note that this is non-tidal residual</expected_info>
+  </question>
+
+  <question id="7">
+    <prompt>How does STOFS-3D-Atlantic forecast compare to STOFS-2D-Global at The Battery for the latest cycle?</prompt>
+    <expected_tools>stofs_get_station_forecast (called twice)</expected_tools>
+    <expected_info>two time series side by side, note datum differences (NAVD88 vs LMSL)</expected_info>
+  </question>
+
+  <question id="8">
+    <prompt>What are the differences between STOFS-2D-Global and STOFS-3D-Atlantic in terms of domain, resolution, cycle schedule, and datums?</prompt>
+    <expected_tools>stofs_get_system_info</expected_tools>
+    <expected_info>full comparison of both models including mesh size, forcing, cycles, datums</expected_info>
+  </question>
+
+  <question id="9">
+    <prompt>Get the STOFS forecast at lat 29.95, lon -90.07 (near New Orleans) for the latest cycle.</prompt>
+    <expected_tools>stofs_get_point_forecast</expected_tools>
+    <expected_info>nearest station name and distance, water level forecast time series</expected_info>
+  </question>
+
+  <question id="10">
+    <prompt>List all STOFS stations in Texas and show the latest forecast for the station closest to Galveston.</prompt>
+    <expected_tools>stofs_list_stations, stofs_get_station_forecast</expected_tools>
+    <expected_info>Texas station list, then forecast time series for the Galveston area station</expected_info>
+  </question>
+</evaluation>

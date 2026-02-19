@@ -1,0 +1,420 @@
+"""Tools: stofs_get_station_forecast, stofs_get_point_forecast, stofs_get_max_water_level."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from mcp.server.fastmcp import Context
+from mcp.types import ToolAnnotations
+
+from ..client import STOFSClient
+from ..models import MODEL_DATUMS, Region, STOFSModel, STOFSProduct
+from ..server import mcp
+from ..utils import (
+    cleanup_temp_file,
+    find_nearest_station,
+    format_timeseries_table,
+    handle_stofs_error,
+    parse_station_netcdf,
+    resolve_latest_cycle,
+)
+
+
+def _get_client(ctx: Context) -> STOFSClient:
+    return ctx.request_context.lifespan_context["stofs_client"]
+
+
+async def _resolve_cycle(
+    client: STOFSClient,
+    model: str,
+    cycle_date: str | None,
+    cycle_hour: str | None,
+) -> tuple[str, str] | None:
+    """Resolve cycle date/hour, finding latest if not specified."""
+    from datetime import datetime, timezone
+
+    if cycle_date and cycle_hour:
+        # Normalize date
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
+                return date_str, cycle_hour.zfill(2)
+            except ValueError:
+                continue
+        return None
+
+    return await resolve_latest_cycle(client, model)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def stofs_get_station_forecast(
+    ctx: Context,
+    station_id: str,
+    model: STOFSModel = STOFSModel.GLOBAL_2D,
+    product: STOFSProduct = STOFSProduct.CWL,
+    cycle_date: str | None = None,
+    cycle_hour: str | None = None,
+    response_format: str = "markdown",
+) -> str:
+    """Get STOFS water level forecast time series at a specific CO-OPS station.
+
+    Downloads the station NetCDF file from AWS S3 (~2–10 MB) and extracts
+    the full forecast time series for the specified station.
+
+    Args:
+        station_id: CO-OPS station ID (e.g., '8518750' for The Battery, NY).
+        model: '2d_global' (global, 4x daily) or '3d_atlantic' (US East/Gulf, 1x daily).
+        product: 'cwl' (combined), 'htp' (tidal only), 'swl' (surge only).
+                 Note: 3D-Atlantic only supports 'cwl'.
+        cycle_date: Date in YYYY-MM-DD format. Default: latest available.
+        cycle_hour: Cycle hour '00', '06', '12', '18'. Default: latest available.
+        response_format: 'markdown' (default) or 'json'.
+    """
+    tmp_path: Path | None = None
+    try:
+        client = _get_client(ctx)
+
+        # Validate 3D product limitation
+        if model.value == "3d_atlantic" and product.value != "cwl":
+            return (
+                "STOFS-3D-Atlantic only provides the 'cwl' (combined water level) product. "
+                "For tidal ('htp') or surge ('swl') products, use model='2d_global'."
+            )
+
+        # Resolve cycle
+        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        if not cycle:
+            return (
+                f"No STOFS-{'2D-Global' if model.value == '2d_global' else '3D-Atlantic'} "
+                "cycles found for the specified date. "
+                "Use stofs_list_cycles to check available data."
+            )
+        date_str, hour_str = cycle
+
+        # Build URL and download
+        url = client.build_station_url(model.value, date_str, hour_str, product.value)
+        tmp_path = await client.download_netcdf(url)
+
+        # Parse
+        data = parse_station_netcdf(tmp_path, station_id)
+
+        times = data["times"]
+        values = data["values"]
+
+        if not times:
+            return (
+                f"No valid data found for station {station_id} in this STOFS cycle. "
+                "The station may be in a dry area or the data may have fill values."
+            )
+
+        datum = MODEL_DATUMS.get(model.value, "unknown")
+        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        product_label = {
+            "cwl": "Combined Water Level (tide + surge)",
+            "htp": "Harmonic Tidal Prediction",
+            "swl": "Surge Water Level (non-tidal residual)",
+        }.get(product.value, product.value)
+
+        if response_format == "json":
+            return json.dumps({
+                "station_id": station_id,
+                "model": model.value,
+                "product": product.value,
+                "cycle_date": date_str,
+                "cycle_hour": hour_str,
+                "datum": datum,
+                "lat": data.get("lat"),
+                "lon": data.get("lon"),
+                "n_points": len(times),
+                "model_start": data.get("model_start"),
+                "model_end": data.get("model_end"),
+                "times": times,
+                "values": values,
+            }, indent=2)
+
+        return format_timeseries_table(
+            times=times,
+            values=values,
+            title=f"{model_label} Forecast — Station {station_id}",
+            metadata_lines=[
+                f"Model: {model_label}",
+                f"Product: {product_label}",
+                f"Cycle: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z",
+                f"Datum: {datum}",
+                f"Lat/Lon: {data.get('lat', '?')}, {data.get('lon', '?')}",
+            ],
+        )
+
+    except Exception as e:
+        return handle_stofs_error(e, model.value)
+    finally:
+        cleanup_temp_file(tmp_path)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def stofs_get_point_forecast(
+    ctx: Context,
+    latitude: float,
+    longitude: float,
+    model: STOFSModel = STOFSModel.GLOBAL_2D,
+    product: STOFSProduct = STOFSProduct.CWL,
+    cycle_date: str | None = None,
+    cycle_hour: str | None = None,
+    max_distance_km: float = 50.0,
+    response_format: str = "markdown",
+) -> str:
+    """Get STOFS forecast at an arbitrary lat/lon by finding the nearest station.
+
+    Downloads the station file and finds the closest STOFS output point to
+    the requested location.
+
+    Args:
+        latitude: Target latitude in decimal degrees.
+        longitude: Target longitude in decimal degrees.
+        model: '2d_global' or '3d_atlantic'.
+        product: 'cwl', 'htp', or 'swl' (3D only supports 'cwl').
+        cycle_date: Date in YYYY-MM-DD format. Default: latest.
+        cycle_hour: Cycle hour '00', '06', '12', '18'. Default: latest.
+        max_distance_km: Maximum search radius to nearest station (default 50 km).
+        response_format: 'markdown' or 'json'.
+    """
+    tmp_path: Path | None = None
+    try:
+        client = _get_client(ctx)
+
+        if model.value == "3d_atlantic" and product.value != "cwl":
+            return "STOFS-3D-Atlantic only supports product='cwl'."
+
+        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        if not cycle:
+            return (
+                "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            )
+        date_str, hour_str = cycle
+
+        url = client.build_station_url(model.value, date_str, hour_str, product.value)
+        tmp_path = await client.download_netcdf(url)
+
+        # Get all station metadata first
+        meta = parse_station_netcdf(tmp_path)
+        station_names = meta["station_names"]
+        lats = meta["lats"]
+        lons = meta["lons"]
+
+        if not lats or not lons:
+            return "Could not read station coordinates from the STOFS file."
+
+        result = find_nearest_station(
+            latitude, longitude, lats, lons, station_names, max_distance_km
+        )
+        if result is None:
+            return (
+                f"No STOFS station found within {max_distance_km} km of "
+                f"({latitude:.4f}, {longitude:.4f}).\n\n"
+                "Suggestions:\n"
+                "- Increase max_distance_km\n"
+                "- Try model='2d_global' which has ~385 stations (vs ~108 for 3D)\n"
+                "- Verify the coordinates are in a coastal area"
+            )
+
+        nearest_idx, nearest_name, distance_km = result
+
+        # Extract data for nearest station
+        data = parse_station_netcdf(tmp_path, nearest_name.strip())
+        times = data["times"]
+        values = data["values"]
+
+        datum = MODEL_DATUMS.get(model.value, "unknown")
+        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+
+        if response_format == "json":
+            return json.dumps({
+                "query_lat": latitude,
+                "query_lon": longitude,
+                "nearest_station": nearest_name.strip(),
+                "distance_km": round(distance_km, 2),
+                "model": model.value,
+                "cycle_date": date_str,
+                "cycle_hour": hour_str,
+                "datum": datum,
+                "times": times,
+                "values": values,
+            }, indent=2)
+
+        return format_timeseries_table(
+            times=times,
+            values=values,
+            title=f"{model_label} Point Forecast — ({latitude:.4f}°, {longitude:.4f}°)",
+            metadata_lines=[
+                f"Nearest STOFS station: {nearest_name.strip()}",
+                f"Distance to nearest station: {distance_km:.1f} km",
+                f"Cycle: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z",
+                f"Datum: {datum}",
+            ],
+        )
+
+    except Exception as e:
+        return handle_stofs_error(e, model.value)
+    finally:
+        cleanup_temp_file(tmp_path)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
+async def stofs_get_max_water_level(
+    ctx: Context,
+    model: STOFSModel = STOFSModel.GLOBAL_2D,
+    cycle_date: str | None = None,
+    cycle_hour: str | None = None,
+    top_n: int = 20,
+    region: Region | None = None,
+    response_format: str = "markdown",
+) -> str:
+    """Get the stations with the highest predicted water levels in a STOFS cycle.
+
+    Computes the maximum water level across all forecast timesteps for each
+    station, then returns the top N sorted by peak value. Uses station files
+    (not the large gridded maxele file).
+
+    Args:
+        model: '2d_global' or '3d_atlantic'.
+        cycle_date: Date in YYYY-MM-DD format. Default: latest.
+        cycle_hour: Cycle hour. Default: latest.
+        top_n: Number of top stations to return (default 20).
+        region: Optional region filter ('east_coast', 'gulf', etc.).
+        response_format: 'markdown' or 'json'.
+    """
+    tmp_path: Path | None = None
+    try:
+        import numpy as np
+        import netCDF4
+
+        client = _get_client(ctx)
+
+        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        if not cycle:
+            return "No STOFS cycles found. Use stofs_list_cycles to check available data."
+        date_str, hour_str = cycle
+
+        url = client.build_station_url(model.value, date_str, hour_str, "cwl")
+        tmp_path = await client.download_netcdf(url)
+
+        from ..utils import _detect_variable, _decode_station_names
+
+        nc = netCDF4.Dataset(str(tmp_path), "r")
+        try:
+            zeta_var_name = _detect_variable(nc, ["zeta", "elevation", "water_level", "ssh"])
+            sname_var_name = _detect_variable(nc, ["station_name", "station", "stationid"])
+            lat_var_name = _detect_variable(nc, ["y", "lat", "latitude"])
+            lon_var_name = _detect_variable(nc, ["x", "lon", "longitude"])
+
+            if not zeta_var_name:
+                return "Could not find water level variable in STOFS NetCDF file."
+
+            zeta = np.array(nc.variables[zeta_var_name][:])
+            fill_value = getattr(nc.variables[zeta_var_name], "_FillValue", 1e37)
+            zeta = np.where(np.abs(zeta) > 1e10, np.nan, zeta)
+
+            station_names = _decode_station_names(nc.variables[sname_var_name]) if sname_var_name else []
+            lats = list(np.array(nc.variables[lat_var_name][:]).ravel()) if lat_var_name else []
+            lons = list(np.array(nc.variables[lon_var_name][:]).ravel()) if lon_var_name else []
+
+        finally:
+            nc.close()
+
+        n_stations = zeta.shape[1] if zeta.ndim == 2 else 0
+        if n_stations == 0:
+            return "Could not determine station count from STOFS file."
+
+        # Compute per-station max
+        with np.errstate(all="ignore"):
+            max_vals = np.nanmax(zeta, axis=0)
+
+        rows = []
+        for i in range(n_stations):
+            if np.isnan(max_vals[i]):
+                continue
+            lat = lats[i] if i < len(lats) else None
+            lon = lons[i] if i < len(lons) else None
+            name = station_names[i].strip() if i < len(station_names) else str(i)
+
+            # Region filter
+            if region and lat is not None and lon is not None:
+                from ..stations import REGIONS
+                bbox = REGIONS.get(region.value, {})
+                if bbox:
+                    if not (bbox["lat_min"] <= lat <= bbox["lat_max"] and
+                            bbox["lon_min"] <= lon <= bbox["lon_max"]):
+                        continue
+
+            rows.append({
+                "station": name,
+                "max_wl": round(float(max_vals[i]), 3),
+                "lat": round(lat, 4) if lat else "?",
+                "lon": round(lon, 4) if lon else "?",
+            })
+
+        rows.sort(key=lambda r: r["max_wl"], reverse=True)
+        rows = rows[:top_n]
+
+        datum = MODEL_DATUMS.get(model.value, "unknown")
+        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+
+        if response_format == "json":
+            return json.dumps({
+                "model": model.value,
+                "cycle_date": date_str,
+                "cycle_hour": hour_str,
+                "datum": datum,
+                "top_stations": rows,
+            }, indent=2)
+
+        lines = [
+            f"## {model_label} — Peak Water Levels",
+            f"**Cycle**: {date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z | "
+            f"**Datum**: {datum} | "
+            f"**Showing top {len(rows)} stations**",
+            "",
+        ]
+        if region:
+            lines[1] += f" | **Region**: {region.value}"
+
+        lines += [
+            "| Rank | Station | Max WL (m) | Lat | Lon |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for rank, r in enumerate(rows, 1):
+            lines.append(
+                f"| {rank} | {r['station']} | {r['max_wl']:.3f} | "
+                f"{r['lat']} | {r['lon']} |"
+            )
+
+        lines.append("")
+        lines.append(f"*Data from NOAA STOFS. Values relative to {datum}.*")
+        return "\n".join(lines)
+
+    except Exception as e:
+        return handle_stofs_error(e, model.value)
+    finally:
+        cleanup_temp_file(tmp_path)
