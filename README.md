@@ -105,17 +105,19 @@ uv run pytest tests/ -v
 uv run pytest tests/test_live.py -v -s
 ```
 
-## Contributing
+## Citation
 
-1. Each server is independent — changes to one server should not affect others
-2. Follow existing patterns (FastMCP + httpx + Pydantic)
-3. All tools must be read-only
-4. Include both unit tests and live integration tests
-5. Provide actionable error messages
+If you use this project in your research or work, please cite:
 
-## Author
-
-**Mansur Ali Jisan** — NOAA/NOS
+```bibtex
+@software{jisan2025oceanmcp,
+  author    = {Jisan, Mansur Ali},
+  title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
+  year      = {2025},
+  url       = {https://github.com/mansurjisan/ocean-mcp},
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, and STOFS data}
+}
+```
 
 ## License
 
