@@ -149,7 +149,7 @@ class TestBuildStationUrl:
     def test_3d_atlantic(self):
         url = self.client.build_station_url("3d_atlantic", "20260219", "12", "cwl")
         assert "noaa-nos-stofs3d-pds.s3.amazonaws.com" in url
-        assert "stofs_3d_atl.20260219" in url
+        assert "STOFS-3D-Atl/stofs_3d_atl.20260219" in url
         assert "t12z.points.cwl.nc" in url
 
     def test_invalid_model_raises(self):

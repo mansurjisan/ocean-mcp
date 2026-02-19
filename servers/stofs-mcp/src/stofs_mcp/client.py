@@ -130,7 +130,7 @@ class STOFSClient:
             )
         elif model == "3d_atlantic":
             return (
-                f"{S3_BASE_3D}/stofs_3d_atl.{date}/"
+                f"{S3_BASE_3D}/STOFS-3D-Atl/stofs_3d_atl.{date}/"
                 f"stofs_3d_atl.t{cycle}z.points.cwl.nc"
             )
         else:
