@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-5_servers-blue)](https://registry.modelcontextprotocol.io/v0.1/servers?search=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-5_servers-blue)](https://registry.modelcontextprotocol.io/?search=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
