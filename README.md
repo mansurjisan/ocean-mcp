@@ -16,7 +16,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [stofs-mcp](servers/stofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/stofs-mcp)](https://pypi.org/project/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation |
 | [ofs-mcp](servers/ofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ofs-mcp)](https://pypi.org/project/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
 
-**No API keys required** — all servers use free, public NOAA data.
+**No API keys required** — all servers use free, publicly available datasets.
 
 ## Quick Start
 
