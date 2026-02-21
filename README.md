@@ -20,16 +20,20 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 
 ## Quick Start
 
-### Install from PyPI (recommended)
+### Install from PyPI
 
 ```bash
-# Install any server with a single command
-uvx coops-mcp      # tides & water levels
-uvx erddap-mcp     # ocean satellite & buoy data
-uvx nhc-mcp        # hurricane tracks
-uvx stofs-mcp      # storm surge forecasts
-uvx ofs-mcp        # regional ocean models
+# uvx (recommended) — runs without permanent install, like npx for Python
+uvx coops-mcp
+
+# pip — install into current environment
+pip install coops-mcp
+
+# pipx — install in isolated environment with CLI entry point
+pipx install coops-mcp
 ```
+
+Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `stofs-mcp`, `ofs-mcp`.
 
 ### Install from source
 
