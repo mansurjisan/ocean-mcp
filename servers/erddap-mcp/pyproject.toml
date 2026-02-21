@@ -8,12 +8,47 @@ version = "0.1.0"
 description = "MCP server for accessing ocean data from ERDDAP servers worldwide"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [
+    {name = "Mansur Ali Jisan", email = "mansur.jisan@noaa.gov"},
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "noaa",
+    "erddap",
+    "ocean-data",
+    "satellite",
+    "griddap",
+    "tabledap",
+    "oceanography",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "mcp[cli]>=1.0.0",
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/mansurjisan/ocean-mcp"
+Repository = "https://github.com/mansurjisan/ocean-mcp"
+"Bug Tracker" = "https://github.com/mansurjisan/ocean-mcp/issues"
+Documentation = "https://github.com/mansurjisan/ocean-mcp/tree/main/servers/erddap-mcp"
+Changelog = "https://github.com/mansurjisan/ocean-mcp/releases"
 
 [project.scripts]
 erddap-mcp = "erddap_mcp.server:main"

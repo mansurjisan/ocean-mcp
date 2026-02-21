@@ -1,5 +1,7 @@
 # STOFS MCP Server
 
+<!-- mcp-name: io.github.mansurjisan/stofs-mcp -->
+
 MCP server providing AI assistants with access to NOAA's Storm Tide Operational Forecast System (STOFS) — operational storm surge and water level forecasts, and validation against CO-OPS observations.
 
 **Status: Ready**

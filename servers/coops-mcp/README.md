@@ -1,5 +1,7 @@
 # CO-OPS MCP Server
 
+<!-- mcp-name: io.github.mansurjisan/coops-mcp -->
+
 MCP server providing AI assistants with access to NOAA CO-OPS water levels, tides, currents, and coastal oceanographic data.
 
 **No API key required** — all CO-OPS APIs are free and public.

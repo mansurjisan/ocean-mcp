@@ -1,5 +1,7 @@
 # ERDDAP MCP Server
 
+<!-- mcp-name: io.github.mansurjisan/erddap-mcp -->
+
 MCP server providing AI assistants with access to ocean data from ERDDAP servers worldwide. ERDDAP is the backbone of ocean data distribution — NOAA CoastWatch, IOOS regional associations, and 80+ institutions run ERDDAP servers.
 
 **No API key required** — all ERDDAP data is free and public.
