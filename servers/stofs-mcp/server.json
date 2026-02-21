@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.mansurjisan/stofs-mcp",
   "title": "NOAA STOFS MCP Server",
-  "description": "MCP server for NOAA STOFS storm surge forecasts (2D-Global and 3D-Atlantic), observation validation, and OPeNDAP gridded data. No API key required.",
+  "description": "NOAA STOFS storm surge forecasts, observation validation, and OPeNDAP data",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/mansurjisan/ocean-mcp",
