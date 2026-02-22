@@ -17,6 +17,7 @@ jobs:
       erddap-mcp: ${{ steps.filter.outputs.erddap-mcp }}
       nhc-mcp: ${{ steps.filter.outputs.nhc-mcp }}
       ofs-mcp: ${{ steps.filter.outputs.ofs-mcp }}
+      recon-mcp: ${{ steps.filter.outputs.recon-mcp }}
       stofs-mcp: ${{ steps.filter.outputs.stofs-mcp }}
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +33,8 @@ jobs:
               - 'servers/nhc-mcp/**'
             ofs-mcp:
               - 'servers/ofs-mcp/**'
+            recon-mcp:
+              - 'servers/recon-mcp/**'
             stofs-mcp:
               - 'servers/stofs-mcp/**'
 
@@ -52,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, stofs-mcp]
+        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, recon-mcp, stofs-mcp]
     # On PRs, skip unchanged servers. On push to main, run all.
     if: always()
     steps:
