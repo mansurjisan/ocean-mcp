@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-5_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-6_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -13,6 +13,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [coops-mcp](servers/coops-mcp/) | [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data |
 | [erddap-mcp](servers/erddap-mcp/) | [![PyPI](https://img.shields.io/pypi/v/erddap-mcp)](https://pypi.org/project/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers |
 | [nhc-mcp](servers/nhc-mcp/) | [![PyPI](https://img.shields.io/pypi/v/nhc-mcp)](https://pypi.org/project/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data |
+| [recon-mcp](servers/recon-mcp/) | — | Hurricane reconnaissance data (HDOB, Vortex Data Messages, ATCF fixes) |
 | [stofs-mcp](servers/stofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/stofs-mcp)](https://pypi.org/project/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation |
 | [ofs-mcp](servers/ofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ofs-mcp)](https://pypi.org/project/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
 
@@ -33,13 +34,13 @@ pip install coops-mcp
 pipx install coops-mcp
 ```
 
-Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `stofs-mcp`, `ofs-mcp`.
+Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`.
 
 ### Install from source
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, stofs-mcp, ofs-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp
 uv sync
 ```
 
@@ -63,6 +64,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "nhc": {
       "command": "uvx",
       "args": ["nhc-mcp"]
+    },
+    "recon": {
+      "command": "uvx",
+      "args": ["recon-mcp"]
     },
     "stofs": {
       "command": "uvx",
@@ -93,6 +98,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "nhc": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
+    },
+    "recon": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
     },
     "stofs": {
       "command": "uv",
@@ -129,6 +138,12 @@ With servers configured, you can ask your AI assistant naturally:
 - "Show me Hurricane Katrina's track"
 - "Search for Category 5 hurricanes in the Atlantic"
 - "What is the forecast track for the active storm?"
+
+**Recon queries:**
+- "List HDOB reconnaissance flights for the 2024 Atlantic season"
+- "Get HDOB flight-level observations from October 7, 2024"
+- "Show me the Vortex Data Messages for Hurricane Milton"
+- "Get ATCF aircraft fix data for storm AL14 2024"
 
 **STOFS queries:**
 - "Get the STOFS water level forecast for The Battery, NY"
@@ -173,7 +188,7 @@ If you use this project in your research or work, please cite:
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
   url       = {https://github.com/mansurjisan/ocean-mcp},
-  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, STOFS, and OFS data}
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, and OFS data}
 }
 ```
 
