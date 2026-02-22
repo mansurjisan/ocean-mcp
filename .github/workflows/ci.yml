@@ -74,7 +74,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "servers/${{ matrix.server }}/uv.lock"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.should-run.outputs.run == 'true'
         with:
           python-version: "3.12"
