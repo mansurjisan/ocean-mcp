@@ -175,8 +175,8 @@ async def ofs_get_model_info(
             f"- **S3 prefix**: `{s3_prefix}`",
             f"- **S3 example**: `{s3_example}`",
             "",
-            f"Use `ofs_list_cycles` to check available cycles. "
-            f"Use `ofs_get_forecast_at_point` to extract forecasts at a location.",
+            "Use `ofs_list_cycles` to check available cycles. "
+            "Use `ofs_get_forecast_at_point` to extract forecasts at a location.",
         ]
 
         return "\n".join(lines)
@@ -219,7 +219,9 @@ async def ofs_list_cycles(
 
         if date:
             try:
-                end_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                end_date = datetime.strptime(date, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
             except ValueError:
                 return f"Invalid date format '{date}'. Use YYYY-MM-DD."
         else:
@@ -234,12 +236,14 @@ async def ofs_list_cycles(
             for cycle in sorted(cycles, reverse=True):
                 url = client.build_s3_url(model.value, date_str, cycle, "f", 1)
                 exists = await client.check_file_exists(url)
-                results.append({
-                    "date": date_label,
-                    "cycle": f"{cycle}z",
-                    "status": "Available" if exists else "Not available",
-                    "url": url if exists else "",
-                })
+                results.append(
+                    {
+                        "date": date_label,
+                        "cycle": f"{cycle}z",
+                        "status": "Available" if exists else "Not available",
+                        "url": url if exists else "",
+                    }
+                )
 
         available = [r for r in results if r["status"] == "Available"]
 
@@ -306,15 +310,17 @@ async def ofs_find_models_for_location(
                 domain["lat_min"] <= latitude <= domain["lat_max"]
                 and domain["lon_min"] <= longitude <= domain["lon_max"]
             ):
-                matching.append({
-                    "model_id": model_id,
-                    "name": info["name"],
-                    "grid_type": info["grid_type"],
-                    "grid_size": info["grid_size"],
-                    "cycles_per_day": len(info["cycles"]),
-                    "forecast_hours": info["forecast_hours"],
-                    "datum": info["datum"],
-                })
+                matching.append(
+                    {
+                        "model_id": model_id,
+                        "name": info["name"],
+                        "grid_type": info["grid_type"],
+                        "grid_size": info["grid_size"],
+                        "cycles_per_day": len(info["cycles"]),
+                        "forecast_hours": info["forecast_hours"],
+                        "datum": info["datum"],
+                    }
+                )
 
         if not matching:
             # Find closest model domain
@@ -325,6 +331,7 @@ async def ofs_find_models_for_location(
                 center_lat = (domain["lat_min"] + domain["lat_max"]) / 2
                 center_lon = (domain["lon_min"] + domain["lon_max"]) / 2
                 from ..utils import haversine
+
                 dist = haversine(latitude, longitude, center_lat, center_lon)
                 if dist < min_dist:
                     min_dist = dist

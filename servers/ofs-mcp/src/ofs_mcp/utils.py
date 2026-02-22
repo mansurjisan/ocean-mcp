@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,19 +13,24 @@ from typing import Any
 # Haversine distance
 # ---------------------------------------------------------------------------
 
+
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Haversine distance in km between two lat/lon points."""
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 # ---------------------------------------------------------------------------
 # NetCDF variable detection
 # ---------------------------------------------------------------------------
+
 
 def _detect_variable(nc, candidates: list[str]) -> str | None:
     """Return the first variable name found in the NetCDF dataset."""
@@ -52,10 +57,16 @@ def _parse_nc_times(nc, time_var_name: str) -> list[str]:
         result = []
         for row in raw:
             try:
-                s = "".join(
-                    c.decode("utf-8", errors="replace") if isinstance(c, bytes) else str(c)
-                    for c in row
-                ).strip("\x00").strip()
+                s = (
+                    "".join(
+                        c.decode("utf-8", errors="replace")
+                        if isinstance(c, bytes)
+                        else str(c)
+                        for c in row
+                    )
+                    .strip("\x00")
+                    .strip()
+                )
                 # Format: YYYY-MM-DDTHH:MM:SS.SS
                 result.append(s[:16].replace("T", " "))
             except Exception:
@@ -77,6 +88,7 @@ def _parse_nc_times(nc, time_var_name: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # ROMS grid nearest-point finder
 # ---------------------------------------------------------------------------
+
 
 def find_nearest_roms(
     target_lat: float,
@@ -117,6 +129,7 @@ def find_nearest_roms(
 # FVCOM grid nearest-node finder
 # ---------------------------------------------------------------------------
 
+
 def find_nearest_fvcom(
     target_lat: float,
     target_lon: float,
@@ -154,6 +167,7 @@ def find_nearest_fvcom(
 # ---------------------------------------------------------------------------
 # OFS point time series extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_point_timeseries(
     nc,
@@ -206,7 +220,12 @@ def extract_point_timeseries(
     # --- Detect variable to extract ---
     var_map = {
         "water_level": [nc_vars.get("water_level", ""), "zeta", "ssh", "water_level"],
-        "temperature": [nc_vars.get("temperature", ""), "temp", "temperature", "water_temp"],
+        "temperature": [
+            nc_vars.get("temperature", ""),
+            "temp",
+            "temperature",
+            "water_temp",
+        ],
         "salinity": [nc_vars.get("salinity", ""), "salt", "salinity", "sal"],
     }
     var_candidates = [v for v in var_map.get(variable, []) if v]
@@ -226,12 +245,16 @@ def extract_point_timeseries(
         lon_name = _detect_variable(nc, lon_candidates)
         lat_name = _detect_variable(nc, lat_candidates)
         if not lon_name or not lat_name:
-            raise RuntimeError(f"Coordinate variables not found in {model.upper()} NetCDF file.")
+            raise RuntimeError(
+                f"Coordinate variables not found in {model.upper()} NetCDF file."
+            )
 
         lon_rho = np.array(nc.variables[lon_name][:])
         lat_rho = np.array(nc.variables[lat_name][:])
 
-        result = find_nearest_roms(target_lat, target_lon, lat_rho, lon_rho, max_distance_km)
+        result = find_nearest_roms(
+            target_lat, target_lon, lat_rho, lon_rho, max_distance_km
+        )
         if result is None:
             raise ValueError(
                 f"No {model.upper()} grid point within {max_distance_km} km of "
@@ -265,7 +288,9 @@ def extract_point_timeseries(
         lon_name = _detect_variable(nc, lon_candidates)
         lat_name = _detect_variable(nc, lat_candidates)
         if not lon_name or not lat_name:
-            raise RuntimeError(f"Coordinate variables not found in {model.upper()} NetCDF file.")
+            raise RuntimeError(
+                f"Coordinate variables not found in {model.upper()} NetCDF file."
+            )
 
         lons = np.array(nc.variables[lon_name][:]).ravel()
         lats = np.array(nc.variables[lat_name][:]).ravel()
@@ -330,6 +355,7 @@ def extract_point_timeseries(
 # Validation statistics
 # ---------------------------------------------------------------------------
 
+
 def compute_validation_stats(
     forecast: list[float],
     observed: list[float],
@@ -345,11 +371,18 @@ def compute_validation_stats(
     o = np.array(observed, dtype=float)
 
     if len(f) == 0 or len(f) != len(o):
-        return {"bias": None, "rmse": None, "mae": None, "peak_error": None, "correlation": None, "n": 0}
+        return {
+            "bias": None,
+            "rmse": None,
+            "mae": None,
+            "peak_error": None,
+            "correlation": None,
+            "n": 0,
+        }
 
     diff = f - o
     bias = float(np.mean(diff))
-    rmse = float(np.sqrt(np.mean(diff ** 2)))
+    rmse = float(np.sqrt(np.mean(diff**2)))
     mae = float(np.mean(np.abs(diff)))
     peak_error = float(np.max(np.abs(diff)))
 
@@ -372,6 +405,7 @@ def compute_validation_stats(
 # Time series alignment
 # ---------------------------------------------------------------------------
 
+
 def align_timeseries(
     forecast_times: list[str],
     forecast_values: list[float],
@@ -384,6 +418,7 @@ def align_timeseries(
     Returns:
         (common_times, aligned_forecast, aligned_observed)
     """
+
     def parse_dt(s: str) -> datetime:
         for fmt in ("%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M", "%m/%d/%Y %H:%M"):
             try:
@@ -435,6 +470,7 @@ def align_timeseries(
 # ---------------------------------------------------------------------------
 # Formatters
 # ---------------------------------------------------------------------------
+
 
 def format_timeseries_table(
     times: list[str],
@@ -499,6 +535,7 @@ def format_timeseries_table(
 # Error handling
 # ---------------------------------------------------------------------------
 
+
 def handle_ofs_error(e: Exception, model: str = "") -> str:
     """Format an exception into a user-friendly OFS error message."""
     import httpx
@@ -548,6 +585,7 @@ def handle_ofs_error(e: Exception, model: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Temp file cleanup
 # ---------------------------------------------------------------------------
+
 
 def cleanup_temp_file(filepath: Path | str | None) -> None:
     """Remove a temporary NetCDF file. Safe to call with None."""

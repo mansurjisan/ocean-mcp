@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from .utils import build_arcgis_query_url
+
 # NHC data endpoints
 CURRENT_STORMS_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 ATCF_BDECK_URL = "https://ftp.nhc.noaa.gov/atcf/btk/b{basin}{number:02d}{year}.dat"
@@ -14,11 +16,10 @@ HURDAT2_URLS = {
     "ep": "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2024-031725.txt",
 }
 
-from .utils import ARCGIS_BASE_URL, build_arcgis_query_url
-
 
 class NHCAPIError(Exception):
     """Custom exception for NHC API errors."""
+
     pass
 
 

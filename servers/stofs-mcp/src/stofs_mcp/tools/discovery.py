@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from ..client import STOFSClient
-from ..models import MODEL_CYCLES, MODEL_DATUMS, Region, STOFSModel
+from ..models import MODEL_CYCLES, Region, STOFSModel
 from ..server import mcp
 from ..stations import (
-    REGIONS,
     STOFS_STATIONS,
     filter_by_proximity,
     filter_by_region,
@@ -56,14 +54,18 @@ async def stofs_list_cycles(
         # Determine date range
         if date:
             try:
-                end_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                end_date = datetime.strptime(date, "%Y-%m-%d").replace(
+                    tzinfo=timezone.utc
+                )
             except ValueError:
                 return f"Invalid date format '{date}'. Use YYYY-MM-DD."
         else:
             end_date = datetime.now(timezone.utc)
 
         cycles = MODEL_CYCLES.get(model.value, ["12"])
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
 
         results = []
         for day_offset in range(num_days):
@@ -74,12 +76,14 @@ async def stofs_list_cycles(
             for cycle in cycles:
                 url = client.build_station_url(model.value, date_str, cycle)
                 exists = await client.check_file_exists(url)
-                results.append({
-                    "date": date_label,
-                    "cycle": f"{cycle}z",
-                    "status": "Available" if exists else "Not available",
-                    "url": url if exists else "",
-                })
+                results.append(
+                    {
+                        "date": date_label,
+                        "cycle": f"{cycle}z",
+                        "status": "Available" if exists else "Not available",
+                        "url": url if exists else "",
+                    }
+                )
 
         available = [r for r in results if r["status"] == "Available"]
 
@@ -248,7 +252,9 @@ async def stofs_list_stations(
         limit: Max stations to return (default 20).
     """
     try:
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
         stations = list(STOFS_STATIONS)
 
         # Region filter
@@ -279,7 +285,9 @@ async def stofs_list_stations(
             if region:
                 filters.append(f"region={region.value}")
             if near_lat is not None:
-                filters.append(f"near ({near_lat:.3f}, {near_lon:.3f}) within {radius_km} km")
+                filters.append(
+                    f"near ({near_lat:.3f}, {near_lon:.3f}) within {radius_km} km"
+                )
             return (
                 f"No STOFS stations found in the registry matching: {', '.join(filters)}.\n\n"
                 "The built-in registry contains ~50 key CO-OPS stations. "
@@ -296,9 +304,13 @@ async def stofs_list_stations(
         if region:
             metadata.append(f"Region: {region.value}")
         if near_lat is not None:
-            metadata.append(f"Near: ({near_lat:.3f}, {near_lon:.3f}), radius {radius_km} km")
+            metadata.append(
+                f"Near: ({near_lat:.3f}, {near_lon:.3f}), radius {radius_km} km"
+            )
 
-        extra_col = ("distance_km", "Distance (km)") if "distance_km" in stations[0] else None
+        extra_col = (
+            ("distance_km", "Distance (km)") if "distance_km" in stations[0] else None
+        )
 
         return format_station_table(
             stations=stations,

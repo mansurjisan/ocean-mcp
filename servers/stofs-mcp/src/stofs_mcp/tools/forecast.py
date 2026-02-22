@@ -35,7 +35,7 @@ async def _resolve_cycle(
     cycle_hour: str | None,
 ) -> tuple[str, str] | None:
     """Resolve cycle date/hour, finding latest if not specified."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if cycle_date and cycle_hour:
         # Normalize date
@@ -119,7 +119,9 @@ async def stofs_get_station_forecast(
             )
 
         datum = MODEL_DATUMS.get(model.value, "unknown")
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
         product_label = {
             "cwl": "Combined Water Level (tide + surge)",
             "htp": "Harmonic Tidal Prediction",
@@ -127,21 +129,24 @@ async def stofs_get_station_forecast(
         }.get(product.value, product.value)
 
         if response_format == "json":
-            return json.dumps({
-                "station_id": station_id,
-                "model": model.value,
-                "product": product.value,
-                "cycle_date": date_str,
-                "cycle_hour": hour_str,
-                "datum": datum,
-                "lat": data.get("lat"),
-                "lon": data.get("lon"),
-                "n_points": len(times),
-                "model_start": data.get("model_start"),
-                "model_end": data.get("model_end"),
-                "times": times,
-                "values": values,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "station_id": station_id,
+                    "model": model.value,
+                    "product": product.value,
+                    "cycle_date": date_str,
+                    "cycle_hour": hour_str,
+                    "datum": datum,
+                    "lat": data.get("lat"),
+                    "lon": data.get("lon"),
+                    "n_points": len(times),
+                    "model_start": data.get("model_start"),
+                    "model_end": data.get("model_end"),
+                    "times": times,
+                    "values": values,
+                },
+                indent=2,
+            )
 
         return format_timeseries_table(
             times=times,
@@ -244,21 +249,26 @@ async def stofs_get_point_forecast(
         values = data["values"]
 
         datum = MODEL_DATUMS.get(model.value, "unknown")
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
 
         if response_format == "json":
-            return json.dumps({
-                "query_lat": latitude,
-                "query_lon": longitude,
-                "nearest_station": nearest_name.strip(),
-                "distance_km": round(distance_km, 2),
-                "model": model.value,
-                "cycle_date": date_str,
-                "cycle_hour": hour_str,
-                "datum": datum,
-                "times": times,
-                "values": values,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "query_lat": latitude,
+                    "query_lon": longitude,
+                    "nearest_station": nearest_name.strip(),
+                    "distance_km": round(distance_km, 2),
+                    "model": model.value,
+                    "cycle_date": date_str,
+                    "cycle_hour": hour_str,
+                    "datum": datum,
+                    "times": times,
+                    "values": values,
+                },
+                indent=2,
+            )
 
         return format_timeseries_table(
             times=times,
@@ -318,7 +328,9 @@ async def stofs_get_max_water_level(
 
         cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
-            return "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            return (
+                "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            )
         date_str, hour_str = cycle
 
         url = client.build_station_url(model.value, date_str, hour_str, "cwl")
@@ -328,8 +340,12 @@ async def stofs_get_max_water_level(
 
         nc = netCDF4.Dataset(str(tmp_path), "r")
         try:
-            zeta_var_name = _detect_variable(nc, ["zeta", "elevation", "water_level", "ssh"])
-            sname_var_name = _detect_variable(nc, ["station_name", "station", "stationid"])
+            zeta_var_name = _detect_variable(
+                nc, ["zeta", "elevation", "water_level", "ssh"]
+            )
+            sname_var_name = _detect_variable(
+                nc, ["station_name", "station", "stationid"]
+            )
             lat_var_name = _detect_variable(nc, ["y", "lat", "latitude"])
             lon_var_name = _detect_variable(nc, ["x", "lon", "longitude"])
 
@@ -337,12 +353,24 @@ async def stofs_get_max_water_level(
                 return "Could not find water level variable in STOFS NetCDF file."
 
             zeta = np.array(nc.variables[zeta_var_name][:])
-            fill_value = getattr(nc.variables[zeta_var_name], "_FillValue", 1e37)
+            getattr(nc.variables[zeta_var_name], "_FillValue", 1e37)
             zeta = np.where(np.abs(zeta) > 1e10, np.nan, zeta)
 
-            station_names = _decode_station_names(nc.variables[sname_var_name]) if sname_var_name else []
-            lats = list(np.array(nc.variables[lat_var_name][:]).ravel()) if lat_var_name else []
-            lons = list(np.array(nc.variables[lon_var_name][:]).ravel()) if lon_var_name else []
+            station_names = (
+                _decode_station_names(nc.variables[sname_var_name])
+                if sname_var_name
+                else []
+            )
+            lats = (
+                list(np.array(nc.variables[lat_var_name][:]).ravel())
+                if lat_var_name
+                else []
+            )
+            lons = (
+                list(np.array(nc.variables[lon_var_name][:]).ravel())
+                if lon_var_name
+                else []
+            )
 
         finally:
             nc.close()
@@ -366,33 +394,43 @@ async def stofs_get_max_water_level(
             # Region filter
             if region and lat is not None and lon is not None:
                 from ..stations import REGIONS
+
                 bbox = REGIONS.get(region.value, {})
                 if bbox:
-                    if not (bbox["lat_min"] <= lat <= bbox["lat_max"] and
-                            bbox["lon_min"] <= lon <= bbox["lon_max"]):
+                    if not (
+                        bbox["lat_min"] <= lat <= bbox["lat_max"]
+                        and bbox["lon_min"] <= lon <= bbox["lon_max"]
+                    ):
                         continue
 
-            rows.append({
-                "station": name,
-                "max_wl": round(float(max_vals[i]), 3),
-                "lat": round(lat, 4) if lat else "?",
-                "lon": round(lon, 4) if lon else "?",
-            })
+            rows.append(
+                {
+                    "station": name,
+                    "max_wl": round(float(max_vals[i]), 3),
+                    "lat": round(lat, 4) if lat else "?",
+                    "lon": round(lon, 4) if lon else "?",
+                }
+            )
 
         rows.sort(key=lambda r: r["max_wl"], reverse=True)
         rows = rows[:top_n]
 
         datum = MODEL_DATUMS.get(model.value, "unknown")
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
 
         if response_format == "json":
-            return json.dumps({
-                "model": model.value,
-                "cycle_date": date_str,
-                "cycle_hour": hour_str,
-                "datum": datum,
-                "top_stations": rows,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "model": model.value,
+                    "cycle_date": date_str,
+                    "cycle_hour": hour_str,
+                    "datum": datum,
+                    "top_stations": rows,
+                },
+                indent=2,
+            )
 
         lines = [
             f"## {model_label} — Peak Water Levels",
@@ -517,30 +555,37 @@ async def stofs_get_gridded_forecast(
             )
 
         datum = MODEL_DATUMS.get(model.value, "unknown")
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
 
         # Distance from requested point to actual grid cell center
-        snap_dist = _haversine(latitude, longitude, data["actual_lat"], data["actual_lon"])
+        snap_dist = _haversine(
+            latitude, longitude, data["actual_lat"], data["actual_lon"]
+        )
 
         if response_format == "json":
-            return json.dumps({
-                "query_lat": latitude,
-                "query_lon": longitude,
-                "actual_lat": data["actual_lat"],
-                "actual_lon": data["actual_lon"],
-                "grid_resolution_deg": data["grid_resolution_deg"],
-                "snap_distance_km": round(snap_dist, 2),
-                "model": model.value,
-                "region": region,
-                "variable": data["variable"],
-                "cycle_date": date_str,
-                "cycle_hour": hour_str,
-                "datum": datum,
-                "source": "NOMADS OPeNDAP (regular grid)",
-                "n_points": data["n_times"],
-                "times": data["times"],
-                "values": data["values"],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "query_lat": latitude,
+                    "query_lon": longitude,
+                    "actual_lat": data["actual_lat"],
+                    "actual_lon": data["actual_lon"],
+                    "grid_resolution_deg": data["grid_resolution_deg"],
+                    "snap_distance_km": round(snap_dist, 2),
+                    "model": model.value,
+                    "region": region,
+                    "variable": data["variable"],
+                    "cycle_date": date_str,
+                    "cycle_hour": hour_str,
+                    "datum": datum,
+                    "source": "NOMADS OPeNDAP (regular grid)",
+                    "n_points": data["n_times"],
+                    "times": data["times"],
+                    "values": data["values"],
+                },
+                indent=2,
+            )
 
         metadata = [
             f"Model: {model_label} (regular grid via NOMADS OPeNDAP)",

@@ -109,7 +109,9 @@ async def ofs_get_forecast_at_point(
             )
             d_fmt = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
             data_source = f"NOAA OFS S3 (single forecast hour, {d_fmt} {hour_str}z)"
-            cycle_info = f"{d_fmt} {hour_str}z (single forecast hour — limited time series)"
+            cycle_info = (
+                f"{d_fmt} {hour_str}z (single forecast hour — limited time series)"
+            )
 
         times = data["times"]
         values = data["values"]
@@ -197,8 +199,6 @@ async def ofs_compare_with_coops(
     tmp_path: Path | None = None
     nc = None
     try:
-        import httpx
-
         client = _get_client(ctx)
         hours_to_compare = max(1, min(96, hours_to_compare))
 
@@ -210,9 +210,7 @@ async def ofs_compare_with_coops(
         coops_datum = "NAVD" if "NAVD" in model_datum else "MSL"
 
         # --- Step 1: Get CO-OPS station metadata ---
-        station_meta_url = (
-            f"https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station_id}.json"
-        )
+        station_meta_url = f"https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station_id}.json"
         httpx_client = await client._get_client()
         meta_resp = await httpx_client.get(station_meta_url)
 
@@ -257,6 +255,7 @@ async def ofs_compare_with_coops(
                 )
             date_str, hour_str = cycle
             import netCDF4
+
             url = client.build_s3_url(model.value, date_str, hour_str, "f", 1)
             tmp_path = await client.download_netcdf(url)
             nc = netCDF4.Dataset(str(tmp_path), "r")
@@ -276,7 +275,9 @@ async def ofs_compare_with_coops(
         # --- Step 3: Determine comparison time window ---
         # Use the model's time range, clipped to hours_to_compare
         def parse_dt(s: str) -> datetime:
-            return datetime.strptime(s[:16], "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            return datetime.strptime(s[:16], "%Y-%m-%d %H:%M").replace(
+                tzinfo=timezone.utc
+            )
 
         model_start = parse_dt(model_times[0])
         model_end = parse_dt(model_times[-1])
@@ -329,8 +330,10 @@ async def ofs_compare_with_coops(
 
         # --- Step 6: Align and compute stats ---
         common_times, aligned_model, aligned_obs = align_timeseries(
-            model_clipped_times, model_clipped_values,
-            obs_times_clean, obs_values_clean,
+            model_clipped_times,
+            model_clipped_values,
+            obs_times_clean,
+            obs_values_clean,
         )
 
         stats = compute_validation_stats(aligned_model, aligned_obs)

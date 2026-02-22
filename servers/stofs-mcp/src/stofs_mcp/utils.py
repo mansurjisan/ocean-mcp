@@ -13,6 +13,7 @@ from typing import Any
 # NetCDF parsing
 # ---------------------------------------------------------------------------
 
+
 def _detect_variable(nc, candidates: list[str]):
     """Return the first variable name found in the NetCDF dataset."""
     for name in candidates:
@@ -93,7 +94,9 @@ def parse_station_netcdf(
     try:
         # --- Detect variable names ---
         time_var_name = _detect_variable(nc, ["time", "ocean_time"])
-        zeta_var_name = _detect_variable(nc, ["zeta", "elevation", "water_level", "ssh"])
+        zeta_var_name = _detect_variable(
+            nc, ["zeta", "elevation", "water_level", "ssh"]
+        )
         sname_var_name = _detect_variable(nc, ["station_name", "station", "stationid"])
         lat_var_name = _detect_variable(nc, ["y", "lat", "latitude"])
         lon_var_name = _detect_variable(nc, ["x", "lon", "longitude"])
@@ -112,9 +115,13 @@ def parse_station_netcdf(
         lats: list[float] = []
         lons: list[float] = []
         if lat_var_name:
-            lats = list(float(v) for v in np.array(nc.variables[lat_var_name][:]).ravel())
+            lats = list(
+                float(v) for v in np.array(nc.variables[lat_var_name][:]).ravel()
+            )
         if lon_var_name:
-            lons = list(float(v) for v in np.array(nc.variables[lon_var_name][:]).ravel())
+            lons = list(
+                float(v) for v in np.array(nc.variables[lon_var_name][:]).ravel()
+            )
 
         n_stations = len(station_names) or (len(lats) if lats else 0)
         n_times = len(nc.variables[time_var_name])
@@ -184,16 +191,18 @@ def parse_station_netcdf(
         station_lat = lats[station_idx] if lats else None
         station_lon = lons[station_idx] if lons else None
 
-        result.update({
-            "station_id": station_id,
-            "station_idx": station_idx,
-            "times": times_out,
-            "values": values_out,
-            "lat": station_lat,
-            "lon": station_lon,
-            "model_start": time_strings[0] if time_strings else "",
-            "model_end": time_strings[-1] if time_strings else "",
-        })
+        result.update(
+            {
+                "station_id": station_id,
+                "station_idx": station_idx,
+                "times": times_out,
+                "values": values_out,
+                "lat": station_lat,
+                "lon": station_lon,
+                "model_start": time_strings[0] if time_strings else "",
+                "model_end": time_strings[-1] if time_strings else "",
+            }
+        )
         return result
 
     finally:
@@ -203,6 +212,7 @@ def parse_station_netcdf(
 # ---------------------------------------------------------------------------
 # Nearest station finder
 # ---------------------------------------------------------------------------
+
 
 def find_nearest_station(
     target_lat: float,
@@ -238,13 +248,17 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 # ---------------------------------------------------------------------------
 # Validation statistics
 # ---------------------------------------------------------------------------
+
 
 def compute_validation_stats(
     forecast: list[float],
@@ -265,11 +279,18 @@ def compute_validation_stats(
     o = np.array(observed, dtype=float)
 
     if len(f) == 0 or len(f) != len(o):
-        return {"bias": None, "rmse": None, "mae": None, "peak_error": None, "correlation": None, "n": 0}
+        return {
+            "bias": None,
+            "rmse": None,
+            "mae": None,
+            "peak_error": None,
+            "correlation": None,
+            "n": 0,
+        }
 
     diff = f - o
     bias = float(np.mean(diff))
-    rmse = float(np.sqrt(np.mean(diff ** 2)))
+    rmse = float(np.sqrt(np.mean(diff**2)))
     mae = float(np.mean(np.abs(diff)))
     peak_error = float(np.max(np.abs(diff)))
 
@@ -293,6 +314,7 @@ def compute_validation_stats(
 # Time series alignment
 # ---------------------------------------------------------------------------
 
+
 def align_timeseries(
     forecast_times: list[str],
     forecast_values: list[float],
@@ -315,7 +337,6 @@ def align_timeseries(
     Returns:
         (common_times, aligned_forecast, aligned_observed) lists.
     """
-    from datetime import timedelta
 
     def parse_dt(s: str) -> datetime:
         for fmt in ("%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M", "%m/%d/%Y %H:%M"):
@@ -362,6 +383,7 @@ def align_timeseries(
 # Formatters
 # ---------------------------------------------------------------------------
 
+
 def format_timeseries_table(
     times: list[str],
     values: list[float],
@@ -391,6 +413,7 @@ def format_timeseries_table(
 
     # Compute summary
     import numpy as np
+
     vals = [v for v in values if v is not None]
     if vals:
         v_min = min(vals)
@@ -456,16 +479,16 @@ def format_station_table(
         lines.append("| --- | --- | --- | --- | --- | --- |")
         for s in stations:
             lines.append(
-                f"| {s.get('id','')} | {s.get('name','')} | {s.get('state','')} "
-                f"| {s.get('lat','')} | {s.get('lon','')} | {s.get(key,'')} |"
+                f"| {s.get('id', '')} | {s.get('name', '')} | {s.get('state', '')} "
+                f"| {s.get('lat', '')} | {s.get('lon', '')} | {s.get(key, '')} |"
             )
     else:
         lines.append("| Station ID | Name | State | Lat | Lon |")
         lines.append("| --- | --- | --- | --- | --- |")
         for s in stations:
             lines.append(
-                f"| {s.get('id','')} | {s.get('name','')} | {s.get('state','')} "
-                f"| {s.get('lat','')} | {s.get('lon','')} |"
+                f"| {s.get('id', '')} | {s.get('name', '')} | {s.get('state', '')} "
+                f"| {s.get('lat', '')} | {s.get('lon', '')} |"
             )
 
     lines.append("")
@@ -476,6 +499,7 @@ def format_station_table(
 # ---------------------------------------------------------------------------
 # Cycle resolution
 # ---------------------------------------------------------------------------
+
 
 async def resolve_latest_cycle(
     client,
@@ -514,6 +538,7 @@ async def resolve_latest_cycle(
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 def handle_stofs_error(e: Exception, model: str = "", url: str = "") -> str:
     """Format an exception into a user-friendly STOFS error message.
@@ -572,6 +597,7 @@ def handle_stofs_error(e: Exception, model: str = "", url: str = "") -> str:
 # OPeNDAP region selection
 # ---------------------------------------------------------------------------
 
+
 def get_opendap_region(latitude: float, longitude: float) -> str:
     """Return the NOMADS STOFS-2D regional product name for a lat/lon.
 
@@ -620,6 +646,7 @@ def get_opendap_region(latitude: float, longitude: float) -> str:
 # ---------------------------------------------------------------------------
 # OPeNDAP point extraction (regular-grid NOMADS datasets)
 # ---------------------------------------------------------------------------
+
 
 def extract_point_from_opendap(
     opendap_url: str,
@@ -674,11 +701,11 @@ def extract_point_from_opendap(
         # --- Auto-detect water level variable if not specified ---
         if variable is None:
             candidates = [
-                "etcwlsfc",    # combined water level (NOMADS STOFS OPeNDAP name)
-                "etsrgsfc",    # storm surge (NOMADS STOFS OPeNDAP name)
-                "etwlswlc",    # alternative name seen in some products
-                "etsurgetsrg", # alternative surge name
-                "zeta",        # native NetCDF name (not typical on NOMADS)
+                "etcwlsfc",  # combined water level (NOMADS STOFS OPeNDAP name)
+                "etsrgsfc",  # storm surge (NOMADS STOFS OPeNDAP name)
+                "etwlswlc",  # alternative name seen in some products
+                "etsurgetsrg",  # alternative surge name
+                "zeta",  # native NetCDF name (not typical on NOMADS)
                 "water_level",
             ]
             for name in candidates:
@@ -768,8 +795,11 @@ def extract_point_from_opendap(
                         times_out.append(t.isoformat()[:16].replace("T", " "))
                     else:
                         # numpy datetime64
-                        ts = (t - np.datetime64("1970-01-01T00:00:00")) / np.timedelta64(1, "s")
+                        ts = (
+                            t - np.datetime64("1970-01-01T00:00:00")
+                        ) / np.timedelta64(1, "s")
                         from datetime import datetime, timezone
+
                         dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
                         times_out.append(dt.strftime("%Y-%m-%d %H:%M"))
                 except Exception:
@@ -808,6 +838,7 @@ def extract_point_from_opendap(
 # ---------------------------------------------------------------------------
 # Temp file cleanup
 # ---------------------------------------------------------------------------
+
 
 def cleanup_temp_file(filepath: Path | str | None) -> None:
     """Remove a temporary NetCDF file. Safe to call with None."""

@@ -134,7 +134,9 @@ async def erddap_get_dataset_info(
                 lines.append(f"| {var_name} | {dtype} | {units} | {long_name} |")
             lines.append("")
 
-        lines.append(f"*Use erddap_get_tabledap_data or erddap_get_griddap_data to retrieve data from this dataset.*")
+        lines.append(
+            "*Use erddap_get_tabledap_data or erddap_get_griddap_data to retrieve data from this dataset.*"
+        )
 
         return "\n".join(lines)
 

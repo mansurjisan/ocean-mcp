@@ -82,7 +82,13 @@ class TestValidateDateRange:
 
 class TestFormatStationSummary:
     def test_basic_station(self):
-        station = {"id": "8518750", "name": "The Battery", "state": "NY", "lat": 40.7006, "lng": -74.0142}
+        station = {
+            "id": "8518750",
+            "name": "The Battery",
+            "state": "NY",
+            "lat": 40.7006,
+            "lng": -74.0142,
+        }
         result = format_station_summary(station)
         assert "8518750" in result
         assert "The Battery" in result
@@ -95,7 +101,12 @@ class TestFormatStationSummary:
         assert ", " not in result.split(" - ")[1].split(" (")[0]  # no trailing comma
 
     def test_station_alt_keys(self):
-        station = {"stationId": "9999", "name": "Alt", "latitude": 30.0, "longitude": -80.0}
+        station = {
+            "stationId": "9999",
+            "name": "Alt",
+            "latitude": 30.0,
+            "longitude": -80.0,
+        }
         result = format_station_summary(station)
         assert "9999" in result
 

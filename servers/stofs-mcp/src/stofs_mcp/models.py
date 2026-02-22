@@ -6,7 +6,7 @@ from enum import Enum
 class STOFSModel(str, Enum):
     """STOFS operational model components."""
 
-    GLOBAL_2D = "2d_global"      # STOFS-2D-Global (ADCIRC), 4x daily, global
+    GLOBAL_2D = "2d_global"  # STOFS-2D-Global (ADCIRC), 4x daily, global
     ATLANTIC_3D = "3d_atlantic"  # STOFS-3D-Atlantic (SCHISM), 1x daily, US East/Gulf
 
 
@@ -31,13 +31,13 @@ class Region(str, Enum):
 
 # Cycles available per model
 MODEL_CYCLES = {
-    "2d_global": ["18", "12", "06", "00"],   # Check newest first
+    "2d_global": ["18", "12", "06", "00"],  # Check newest first
     "3d_atlantic": ["12"],
 }
 
 # Datum used by each model in station files
 MODEL_DATUMS = {
-    "2d_global": "LMSL",   # Local Mean Sea Level
+    "2d_global": "LMSL",  # Local Mean Sea Level
     "3d_atlantic": "NAVD88",
 }
 

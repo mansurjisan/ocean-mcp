@@ -16,7 +16,6 @@ from ..utils import (
     align_timeseries,
     cleanup_temp_file,
     compute_validation_stats,
-    format_timeseries_table,
     handle_stofs_error,
     parse_station_netcdf,
     resolve_latest_cycle,
@@ -83,7 +82,9 @@ async def stofs_compare_with_observations(
         # Resolve cycle
         cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
-            return "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            return (
+                "No STOFS cycles found. Use stofs_list_cycles to check available data."
+            )
         date_str, hour_str = cycle
 
         # Download and parse STOFS station file
@@ -102,7 +103,6 @@ async def stofs_compare_with_observations(
 
         # Determine comparison time window
         # Use first hours_to_compare hours of the STOFS time series
-        from datetime import datetime as dt
 
         def parse_t(s: str) -> datetime:
             for fmt in ("%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M"):
@@ -192,28 +192,38 @@ async def stofs_compare_with_observations(
         stats = compute_validation_stats(aligned_stofs, aligned_obs)
 
         stofs_datum = MODEL_DATUMS.get(model.value, "unknown")
-        model_label = "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        model_label = (
+            "STOFS-2D-Global" if model.value == "2d_global" else "STOFS-3D-Atlantic"
+        )
         datum_note = (
             f"STOFS datum: **{stofs_datum}** | CO-OPS datum: **{coops_datum}** "
             "— small systematic offsets (1–5 cm) are expected"
         )
 
         if response_format == "json":
-            return json.dumps({
-                "station_id": station_id,
-                "model": model.value,
-                "cycle_date": date_str,
-                "cycle_hour": hour_str,
-                "stofs_datum": stofs_datum,
-                "coops_datum": coops_datum,
-                "comparison_start": common_times[0] if common_times else "",
-                "comparison_end": common_times[-1] if common_times else "",
-                "statistics": stats,
-                "comparison": [
-                    {"time": t, "stofs_m": f, "obs_m": o, "error_m": round(f - o, 4)}
-                    for t, f, o in zip(common_times, aligned_stofs, aligned_obs)
-                ],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "station_id": station_id,
+                    "model": model.value,
+                    "cycle_date": date_str,
+                    "cycle_hour": hour_str,
+                    "stofs_datum": stofs_datum,
+                    "coops_datum": coops_datum,
+                    "comparison_start": common_times[0] if common_times else "",
+                    "comparison_end": common_times[-1] if common_times else "",
+                    "statistics": stats,
+                    "comparison": [
+                        {
+                            "time": t,
+                            "stofs_m": f,
+                            "obs_m": o,
+                            "error_m": round(f - o, 4),
+                        }
+                        for t, f, o in zip(common_times, aligned_stofs, aligned_obs)
+                    ],
+                },
+                indent=2,
+            )
 
         # Markdown output
         lines = [
@@ -226,11 +236,21 @@ async def stofs_compare_with_observations(
             "### Summary Statistics",
             "| Metric | Value |",
             "| --- | --- |",
-            f"| Bias (mean error) | {stats['bias']:+.3f} m |" if stats["bias"] is not None else "| Bias | N/A |",
-            f"| RMSE | {stats['rmse']:.3f} m |" if stats["rmse"] is not None else "| RMSE | N/A |",
-            f"| MAE | {stats['mae']:.3f} m |" if stats["mae"] is not None else "| MAE | N/A |",
-            f"| Peak Error | {stats['peak_error']:.3f} m |" if stats["peak_error"] is not None else "| Peak Error | N/A |",
-            f"| Correlation (R) | {stats['correlation']:.3f} |" if stats["correlation"] is not None else "| Correlation | N/A |",
+            f"| Bias (mean error) | {stats['bias']:+.3f} m |"
+            if stats["bias"] is not None
+            else "| Bias | N/A |",
+            f"| RMSE | {stats['rmse']:.3f} m |"
+            if stats["rmse"] is not None
+            else "| RMSE | N/A |",
+            f"| MAE | {stats['mae']:.3f} m |"
+            if stats["mae"] is not None
+            else "| MAE | N/A |",
+            f"| Peak Error | {stats['peak_error']:.3f} m |"
+            if stats["peak_error"] is not None
+            else "| Peak Error | N/A |",
+            f"| Correlation (R) | {stats['correlation']:.3f} |"
+            if stats["correlation"] is not None
+            else "| Correlation | N/A |",
             f"| Comparison Points | {stats['n']} |",
             "",
             "### Time Series Comparison (up to 50 rows shown)",
@@ -248,7 +268,9 @@ async def stofs_compare_with_observations(
             lines.append(f"| {t} | {f_v:.3f} | {o_v:.3f} | {err:+.3f} |")
 
         lines.append("")
-        lines.append(f"*Data: {model_label} vs NOAA CO-OPS observations. Datums: {stofs_datum} vs {coops_datum}.*")
+        lines.append(
+            f"*Data: {model_label} vs NOAA CO-OPS observations. Datums: {stofs_datum} vs {coops_datum}.*"
+        )
         return "\n".join(lines)
 
     except Exception as e:

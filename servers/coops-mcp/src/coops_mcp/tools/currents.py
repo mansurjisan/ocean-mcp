@@ -83,7 +83,9 @@ async def coops_get_currents(
         if response_format == "json":
             return format_json_response(data, station_id, params)
 
-        records = data.get("data", data.get("current_predictions", data.get("predictions", [])))
+        records = data.get(
+            "data", data.get("current_predictions", data.get("predictions", []))
+        )
 
         if product == CurrentsProduct.CURRENTS:
             columns = [
@@ -104,7 +106,9 @@ async def coops_get_currents(
         title = f"{'Currents' if product == CurrentsProduct.CURRENTS else 'Current Predictions'} \u2014 Station {station_id}"
         meta = [f"Units: {units.value}", f"Timezone: {time_zone.value}"]
 
-        return format_tabular_data(records, columns, title=title, metadata_lines=meta, count_label="records")
+        return format_tabular_data(
+            records, columns, title=title, metadata_lines=meta, count_label="records"
+        )
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:

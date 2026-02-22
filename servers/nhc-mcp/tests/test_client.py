@@ -1,7 +1,5 @@
 """Mocked HTTP tests for NHCClient using respx."""
 
-import json
-
 import httpx
 import pytest
 import respx
@@ -89,9 +87,7 @@ async def test_get_best_track_atcf_404(client):
 async def test_get_hurdat2(client):
     """Test fetching HURDAT2 data with caching."""
     sample = "AL092005,            KATRINA,     1,\n20050823, 1800,  , TD, 238N,  757W,  30, 1008\n"
-    respx.get(HURDAT2_URLS["al"]).mock(
-        return_value=httpx.Response(200, text=sample)
-    )
+    respx.get(HURDAT2_URLS["al"]).mock(return_value=httpx.Response(200, text=sample))
 
     text1 = await client.get_hurdat2("al")
     assert "KATRINA" in text1
@@ -108,9 +104,7 @@ async def test_get_hurdat2(client):
 async def test_get_hurdat2_cp_falls_back_to_ep(client):
     """Test that 'cp' basin falls back to 'ep' HURDAT2 file."""
     sample = "EP042023, SOME_STORM, 1,\n20230901, 0000,  , TD, 150N, 1500W, 25, 1005\n"
-    respx.get(HURDAT2_URLS["ep"]).mock(
-        return_value=httpx.Response(200, text=sample)
-    )
+    respx.get(HURDAT2_URLS["ep"]).mock(return_value=httpx.Response(200, text=sample))
 
     text = await client.get_hurdat2("cp")
     assert "SOME_STORM" in text

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote
-
 
 def parse_erddap_json(data: dict) -> list[dict]:
     """Convert ERDDAP JSON response into a list of row dicts.
@@ -74,7 +72,9 @@ def format_erddap_table(
 
     lines.append("")
     if max_rows and total > max_rows:
-        lines.append(f"*Showing {len(rows)} of {total} {count_label}. Use limit/offset for more.*")
+        lines.append(
+            f"*Showing {len(rows)} of {total} {count_label}. Use limit/offset for more.*"
+        )
     else:
         lines.append(f"*{total} {count_label} returned.*")
 
@@ -111,7 +111,9 @@ def build_tabledap_query(
             else:
                 # String values: determine if quoting is needed
                 str_value = str(value)
-                has_range_op = any(op in key for op in [">=", "<=", ">", "<", "!=", "=~"])
+                has_range_op = any(
+                    op in key for op in [">=", "<=", ">", "<", "!=", "=~"]
+                )
 
                 if not has_range_op:
                     # Equality (key ends with "=" or has no operator) — always quote
@@ -126,7 +128,7 @@ def build_tabledap_query(
 
     # Limit via orderByLimit
     if limit:
-        parts.append(f"orderByLimit(\"{limit}\")")
+        parts.append(f'orderByLimit("{limit}")')
 
     return "&".join(parts)
 
@@ -199,13 +201,13 @@ def handle_erddap_error(e: Exception, server_url: str = "") -> str:
             return f"HTTP Error {status}: {e.response.reason_phrase}. The ERDDAP server at {server_url} may be temporarily unavailable."
 
     if isinstance(e, httpx.TimeoutException):
-        return f"Request timed out. ERDDAP servers can be slow for large queries. Try reducing your data request size or increasing stride."
+        return "Request timed out. ERDDAP servers can be slow for large queries. Try reducing your data request size or increasing stride."
 
     if isinstance(e, httpx.ConnectError):
         return f"Could not connect to ERDDAP server at {server_url}. The server may be down. Use erddap_list_servers to find alternative servers."
 
     if "json" in msg.lower() or "decode" in msg.lower():
-        return f"Error parsing ERDDAP response (server may have returned HTML error). Check that dataset_id and variable names are correct. Use erddap_get_dataset_info to verify."
+        return "Error parsing ERDDAP response (server may have returned HTML error). Check that dataset_id and variable names are correct. Use erddap_get_dataset_info to verify."
 
     return f"Unexpected error: {type(e).__name__}: {msg}"
 

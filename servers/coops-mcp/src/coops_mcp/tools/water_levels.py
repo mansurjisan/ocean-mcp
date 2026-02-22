@@ -120,7 +120,13 @@ async def coops_get_water_levels(
             f"Timezone: {time_zone.value}",
         ]
 
-        return format_tabular_data(records, columns, title=title, metadata_lines=meta, count_label="observations")
+        return format_tabular_data(
+            records,
+            columns,
+            title=title,
+            metadata_lines=meta,
+            count_label="observations",
+        )
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:
@@ -209,7 +215,13 @@ async def coops_get_tide_predictions(
             f"Units: {units.value}",
         ]
 
-        return format_tabular_data(records, columns, title=title, metadata_lines=meta, count_label="predictions")
+        return format_tabular_data(
+            records,
+            columns,
+            title=title,
+            metadata_lines=meta,
+            count_label="predictions",
+        )
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:

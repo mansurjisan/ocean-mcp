@@ -2,10 +2,9 @@
 
 import pytest
 
-from nhc_mcp.models import classify_wind_speed, StormClassification
+from nhc_mcp.models import classify_wind_speed
 from nhc_mcp.utils import (
     build_arcgis_query_url,
-    format_json_response,
     format_tabular_data,
     get_arcgis_layer_id,
     handle_nhc_error,
@@ -20,6 +19,7 @@ from nhc_mcp.utils import (
 # ---------------------------------------------------------------------------
 # ATCF coordinate parsing
 # ---------------------------------------------------------------------------
+
 
 class TestParseAtcfLatlon:
     def test_north_west(self):
@@ -52,6 +52,7 @@ class TestParseAtcfLatlon:
 # HURDAT2 coordinate parsing (decimal degrees)
 # ---------------------------------------------------------------------------
 
+
 class TestParseHurdat2Latlon:
     def test_north_west(self):
         lat, lon = parse_hurdat2_latlon("23.8N", "75.7W")
@@ -77,6 +78,7 @@ class TestParseHurdat2Latlon:
 # ---------------------------------------------------------------------------
 # Storm ID parsing
 # ---------------------------------------------------------------------------
+
 
 class TestParseStormId:
     def test_katrina(self):
@@ -118,6 +120,7 @@ class TestParseStormId:
 # ---------------------------------------------------------------------------
 # ArcGIS layer ID lookup
 # ---------------------------------------------------------------------------
+
 
 class TestGetArcgisLayerId:
     def test_at1_forecast_points(self):
@@ -162,6 +165,7 @@ class TestGetArcgisLayerId:
 # ---------------------------------------------------------------------------
 # ArcGIS query URL builder
 # ---------------------------------------------------------------------------
+
 
 class TestBuildArcgisQueryUrl:
     def test_default_where(self):
@@ -255,7 +259,9 @@ class TestParseHurdat2:
 
     def test_katrina_peak_wind(self):
         storms = parse_hurdat2(SAMPLE_HURDAT2)
-        winds = [pt["max_wind"] for pt in storms[0]["track"] if pt["max_wind"] is not None]
+        winds = [
+            pt["max_wind"] for pt in storms[0]["track"] if pt["max_wind"] is not None
+        ]
         assert max(winds) == 150  # Category 5
 
     def test_ida_id(self):
@@ -312,6 +318,7 @@ class TestParseAtcfBdeck:
 # Saffir-Simpson classification
 # ---------------------------------------------------------------------------
 
+
 class TestClassifyWindSpeed:
     def test_category_5(self):
         assert classify_wind_speed(150) == "Category 5"
@@ -348,6 +355,7 @@ class TestClassifyWindSpeed:
 # Tabular data formatter
 # ---------------------------------------------------------------------------
 
+
 class TestFormatTabularData:
     def test_basic_table(self):
         data = [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
@@ -377,6 +385,7 @@ class TestFormatTabularData:
 # Error handler
 # ---------------------------------------------------------------------------
 
+
 class TestHandleNhcError:
     def test_value_error(self):
         result = handle_nhc_error(ValueError("bad input"), "parsing")
@@ -390,13 +399,17 @@ class TestHandleNhcError:
 
     def test_timeout_error(self):
         import httpx
+
         result = handle_nhc_error(httpx.ReadTimeout("timeout"))
         assert "timed out" in result
 
     def test_http_404(self):
         import httpx
+
         response = httpx.Response(404, request=httpx.Request("GET", "http://test"))
-        err = httpx.HTTPStatusError("not found", request=response.request, response=response)
+        err = httpx.HTTPStatusError(
+            "not found", request=response.request, response=response
+        )
         result = handle_nhc_error(err, "test operation")
         assert "404" in result
         assert "nhc_get_active_storms" in result

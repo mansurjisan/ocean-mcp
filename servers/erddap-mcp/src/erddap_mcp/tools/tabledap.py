@@ -57,7 +57,7 @@ async def erddap_get_tabledap_data(
             warnings.append(
                 "No constraints specified — this may return a very large dataset. "
                 "Consider using erddap_get_dataset_info first to understand available variables and time ranges, "
-                "then add constraints like {\"time>=\": \"2024-01-01\"}."
+                'then add constraints like {"time>=": "2024-01-01"}.'
             )
 
         query = build_tabledap_query(

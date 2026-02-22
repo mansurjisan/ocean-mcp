@@ -113,7 +113,11 @@ async def nhc_get_forecast_track(
 
         if response_format == "json":
             return json.dumps(
-                {"storm_id": storm_id, "bin_number": bin_number, "forecast_points": rows},
+                {
+                    "storm_id": storm_id,
+                    "bin_number": bin_number,
+                    "forecast_points": rows,
+                },
                 indent=2,
             )
 
@@ -206,7 +210,11 @@ async def nhc_get_storm_watches_warnings(
 
         if response_format == "json":
             return json.dumps(
-                {"storm_id": storm_id, "bin_number": bin_number, "watches_warnings": rows},
+                {
+                    "storm_id": storm_id,
+                    "bin_number": bin_number,
+                    "watches_warnings": rows,
+                },
                 indent=2,
             )
 

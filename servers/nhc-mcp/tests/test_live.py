@@ -6,7 +6,7 @@ Run with: uv run pytest tests/test_live.py -v -s
 import pytest
 
 from nhc_mcp.client import NHCClient
-from nhc_mcp.utils import parse_hurdat2, parse_atcf_bdeck, get_arcgis_layer_id
+from nhc_mcp.utils import parse_hurdat2, get_arcgis_layer_id
 
 
 @pytest.fixture
@@ -52,7 +52,9 @@ async def test_hurdat2_katrina_lookup(client):
     assert katrina["id"].startswith("AL")
 
     # Verify peak wind (should be ~150 kt)
-    peak_wind = max(pt["max_wind"] for pt in katrina["track"] if pt["max_wind"] is not None)
+    peak_wind = max(
+        pt["max_wind"] for pt in katrina["track"] if pt["max_wind"] is not None
+    )
     assert peak_wind >= 140, f"Katrina peak wind {peak_wind} kt seems too low"
 
 
