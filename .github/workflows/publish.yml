@@ -1,0 +1,94 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "*-mcp-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  parse-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.parse.outputs.server }}
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          # Extract server name (everything before -v) and version (after -v)
+          SERVER="${TAG%-v*}"
+          VERSION="${TAG##*-v}"
+          echo "server=${SERVER}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Parsed tag: server=${SERVER}, version=${VERSION}"
+
+  test:
+    needs: parse-tag
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "servers/${{ needs.parse-tag.outputs.server }}/uv.lock"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Verify version matches tag
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: |
+          TOML_VERSION=$(python -c "
+          import re
+          with open('pyproject.toml') as f:
+              match = re.search(r'^version\s*=\s*\"(.+?)\"', f.read(), re.MULTILINE)
+              print(match.group(1))
+          ")
+          TAG_VERSION="${{ needs.parse-tag.outputs.version }}"
+          if [[ "${TOML_VERSION}" != "${TAG_VERSION}" ]]; then
+            echo "::error::Version mismatch: pyproject.toml has ${TOML_VERSION}, tag has ${TAG_VERSION}"
+            exit 1
+          fi
+          echo "Version verified: ${TOML_VERSION}"
+
+      - name: Install dependencies
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: uv sync --group dev
+
+      - name: Run unit tests
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: uv run pytest tests/ --ignore=tests/test_live.py -v --tb=short
+
+  publish:
+    needs: [parse-tag, test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build package
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: servers/${{ needs.parse-tag.outputs.server }}/dist/

@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      coops-mcp: ${{ steps.filter.outputs.coops-mcp }}
+      erddap-mcp: ${{ steps.filter.outputs.erddap-mcp }}
+      nhc-mcp: ${{ steps.filter.outputs.nhc-mcp }}
+      ofs-mcp: ${{ steps.filter.outputs.ofs-mcp }}
+      stofs-mcp: ${{ steps.filter.outputs.stofs-mcp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            coops-mcp:
+              - 'servers/coops-mcp/**'
+            erddap-mcp:
+              - 'servers/erddap-mcp/**'
+            nhc-mcp:
+              - 'servers/nhc-mcp/**'
+            ofs-mcp:
+              - 'servers/ofs-mcp/**'
+            stofs-mcp:
+              - 'servers/stofs-mcp/**'
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv tool install ruff
+      - name: Ruff check
+        run: ruff check servers/ --select E,F,W
+      - name: Ruff format check
+        run: ruff format --check servers/
+
+  test:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, stofs-mcp]
+    # On PRs, skip unchanged servers. On push to main, run all.
+    if: always()
+    steps:
+      - name: Check if server changed
+        id: should-run
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=${{ needs.detect-changes.outputs[matrix.server] }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.should-run.outputs.run == 'true'
+
+      - uses: astral-sh/setup-uv@v4
+        if: steps.should-run.outputs.run == 'true'
+        with:
+          enable-cache: true
+          cache-dependency-glob: "servers/${{ matrix.server }}/uv.lock"
+
+      - uses: actions/setup-python@v5
+        if: steps.should-run.outputs.run == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: steps.should-run.outputs.run == 'true'
+        working-directory: servers/${{ matrix.server }}
+        run: uv sync --group dev
+
+      - name: Run unit tests
+        if: steps.should-run.outputs.run == 'true'
+        working-directory: servers/${{ matrix.server }}
+        run: uv run pytest tests/ --ignore=tests/test_live.py -v --tb=short
+
+      - name: Verify package builds
+        if: steps.should-run.outputs.run == 'true'
+        working-directory: servers/${{ matrix.server }}
+        run: uv build

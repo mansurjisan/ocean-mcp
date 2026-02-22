@@ -1,0 +1,40 @@
+name: Live API Tests
+
+on:
+  schedule:
+    # Weekly Monday at 12:00 UTC
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-test:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, stofs-mcp]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "servers/${{ matrix.server }}/uv.lock"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: servers/${{ matrix.server }}
+        run: uv sync --group dev
+        timeout-minutes: 5
+
+      - name: Run live tests
+        working-directory: servers/${{ matrix.server }}
+        run: uv run pytest tests/test_live.py -v -s --tb=short
+        timeout-minutes: 5
