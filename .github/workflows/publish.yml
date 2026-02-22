@@ -41,7 +41,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "servers/${{ needs.parse-tag.outputs.server }}/uv.lock"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -80,7 +80,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
