@@ -22,7 +22,9 @@ async def client():
 @pytest.mark.asyncio
 async def test_search_sst(client):
     """Search CoastWatch for 'sea surface temperature' — should return results."""
-    data = await client.search(COASTWATCH_URL, "sea surface temperature", items_per_page=10)
+    data = await client.search(
+        COASTWATCH_URL, "sea surface temperature", items_per_page=10
+    )
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected search results for SST"
     # Check structure
@@ -38,7 +40,9 @@ async def test_get_info_chlorophyll(client):
     assert len(rows) > 0, "Expected info rows"
     # Should have dimension and variable rows
     row_types = {r.get("Row Type") for r in rows}
-    assert "variable" in row_types or "dimension" in row_types or "attribute" in row_types
+    assert (
+        "variable" in row_types or "dimension" in row_types or "attribute" in row_types
+    )
 
 
 @pytest.mark.asyncio

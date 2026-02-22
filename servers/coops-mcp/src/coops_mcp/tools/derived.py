@@ -53,8 +53,12 @@ async def coops_get_extreme_water_levels(
 
         station_data = extremes[0]
         unit_label = "m" if units == Units.METRIC else "ft"
-        lines = [f"## Extreme Water Levels \u2014 {station_data.get('stationName', station_id)} ({station_id})"]
-        lines.append(f"**Datum**: {datum.value} | **Units**: {units.value} | **Epoch**: {station_data.get('epoch', 'N/A')}")
+        lines = [
+            f"## Extreme Water Levels \u2014 {station_data.get('stationName', station_id)} ({station_id})"
+        ]
+        lines.append(
+            f"**Datum**: {datum.value} | **Units**: {units.value} | **Epoch**: {station_data.get('epoch', 'N/A')}"
+        )
         lines.append("")
 
         # Extract high and low events from tenYearEvents
@@ -68,7 +72,9 @@ async def coops_get_extreme_water_levels(
             lines.append("| --- | --- | --- |")
             for h in highs[:10]:
                 level = h.get("level", h.get("value", "N/A"))
-                lines.append(f"| {h.get('date', '?')} | {level} {unit_label} | {h.get('status', '?')} |")
+                lines.append(
+                    f"| {h.get('date', '?')} | {level} {unit_label} | {h.get('status', '?')} |"
+                )
 
         if lows:
             lines.append("\n### Lowest Water Level Events")
@@ -76,9 +82,11 @@ async def coops_get_extreme_water_levels(
             lines.append("| --- | --- | --- |")
             for low in lows[:10]:
                 level = low.get("level", low.get("value", "N/A"))
-                lines.append(f"| {low.get('date', '?')} | {level} {unit_label} | {low.get('status', '?')} |")
+                lines.append(
+                    f"| {low.get('date', '?')} | {level} {unit_label} | {low.get('status', '?')} |"
+                )
 
-        lines.append(f"\n*Data from NOAA CO-OPS.*")
+        lines.append("\n*Data from NOAA CO-OPS.*")
         return "\n".join(lines)
     except Exception as e:
         return handle_api_error(e)
@@ -134,12 +142,14 @@ async def coops_get_flood_stats(
                 ]
                 records = []
                 for fc in flood_counts:
-                    records.append({
-                        "year": str(fc.get("year", "")),
-                        "minCount": str(fc.get("minCount", 0)),
-                        "modCount": str(fc.get("modCount", 0)),
-                        "majCount": str(fc.get("majCount", 0)),
-                    })
+                    records.append(
+                        {
+                            "year": str(fc.get("year", "")),
+                            "minCount": str(fc.get("minCount", 0)),
+                            "modCount": str(fc.get("modCount", 0)),
+                            "majCount": str(fc.get("majCount", 0)),
+                        }
+                    )
                 lines.append(format_tabular_data(records, columns, count_label="years"))
             else:
                 lines.append("\n*No annual flood count data returned.*")
@@ -163,15 +173,21 @@ async def coops_get_flood_stats(
                 ]
                 records = []
                 for ol in outlooks:
-                    records.append({
-                        "metYear": str(ol.get("metYear", "")),
-                        "lowConf": str(ol.get("lowConf", "")),
-                        "highConf": str(ol.get("highConf", "")),
-                        "projectMethod": ol.get("projectMethod", ""),
-                    })
-                lines.append(format_tabular_data(records, columns, count_label="projections"))
+                    records.append(
+                        {
+                            "metYear": str(ol.get("metYear", "")),
+                            "lowConf": str(ol.get("lowConf", "")),
+                            "highConf": str(ol.get("highConf", "")),
+                            "projectMethod": ol.get("projectMethod", ""),
+                        }
+                    )
+                lines.append(
+                    format_tabular_data(records, columns, count_label="projections")
+                )
         except Exception:
-            lines.append("\n*High tide flooding outlook not available for this station.*")
+            lines.append(
+                "\n*High tide flooding outlook not available for this station.*"
+            )
 
         return "\n".join(lines)
     except Exception as e:
@@ -199,7 +215,9 @@ async def coops_get_sea_level_trends(
     """
     try:
         client = _get_client(ctx)
-        data = await client.fetch_derived("product/sealvltrends.json", {"station": station_id})
+        data = await client.fetch_derived(
+            "product/sealvltrends.json", {"station": station_id}
+        )
 
         trends_list = data.get("SeaLvlTrends", [])
 
@@ -208,7 +226,9 @@ async def coops_get_sea_level_trends(
 
         trends = trends_list[0]
 
-        lines = [f"## Sea Level Trends \u2014 {trends.get('stationName', station_id)} ({station_id})"]
+        lines = [
+            f"## Sea Level Trends \u2014 {trends.get('stationName', station_id)} ({station_id})"
+        ]
 
         for key, label in [
             ("trend", "Trend (inches/decade)"),
@@ -282,15 +302,18 @@ async def coops_get_peak_storm_events(
         records = []
         for ev in events:
             peak = ev.get("peakValue", ev.get("peak", ev.get("value", "")))
-            records.append({
-                "name": ev.get("name", ""),
-                "eventType": ev.get("eventType", ""),
-                "peakValue": str(peak) if peak is not None else "",
-                "startDate": ev.get("startDate", ""),
-            })
+            records.append(
+                {
+                    "name": ev.get("name", ""),
+                    "eventType": ev.get("eventType", ""),
+                    "peakValue": str(peak) if peak is not None else "",
+                    "startDate": ev.get("startDate", ""),
+                }
+            )
 
         return format_tabular_data(
-            records, columns,
+            records,
+            columns,
             title=f"Peak Storm Events \u2014 Station {station_id}",
             metadata_lines=[f"Datum: {datum.value}", f"Units: {units.value}"],
             count_label="events",
@@ -322,7 +345,9 @@ async def coops_get_datums(
     """
     try:
         client = _get_client(ctx)
-        data = await client.fetch_metadata(f"stations/{station_id}/datums.json", {"units": units.value})
+        data = await client.fetch_metadata(
+            f"stations/{station_id}/datums.json", {"units": units.value}
+        )
 
         datums = data.get("datums", [])
 
@@ -338,14 +363,17 @@ async def coops_get_datums(
 
         records = []
         for d in datums:
-            records.append({
-                "name": d.get("name", d.get("n", "")),
-                "value": d.get("value", d.get("v", "")),
-                "description": d.get("description", d.get("d", "")),
-            })
+            records.append(
+                {
+                    "name": d.get("name", d.get("n", "")),
+                    "value": d.get("value", d.get("v", "")),
+                    "description": d.get("description", d.get("d", "")),
+                }
+            )
 
         return format_tabular_data(
-            records, columns,
+            records,
+            columns,
             title=f"Tidal Datums \u2014 Station {station_id}",
             metadata_lines=[f"Units: {units.value}"],
             count_label="datums",

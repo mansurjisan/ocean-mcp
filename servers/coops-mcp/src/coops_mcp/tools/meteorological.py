@@ -21,7 +21,13 @@ def _get_client(ctx: Context) -> COOPSClient:
 
 # Column definitions per met product
 _MET_COLUMNS: dict[str, list[tuple[str, str]]] = {
-    "wind": [("t", "Time"), ("s", "Speed"), ("d", "Direction (\u00b0)"), ("dr", "Compass"), ("g", "Gust")],
+    "wind": [
+        ("t", "Time"),
+        ("s", "Speed"),
+        ("d", "Direction (\u00b0)"),
+        ("dr", "Compass"),
+        ("g", "Gust"),
+    ],
     "air_temperature": [("t", "Time"), ("v", "Air Temp")],
     "water_temperature": [("t", "Time"), ("v", "Water Temp")],
     "air_pressure": [("t", "Time"), ("v", "Pressure")],
@@ -101,7 +107,13 @@ async def coops_get_meteorological(
         title = f"{product.value.replace('_', ' ').title()} \u2014 Station {station_id}"
         meta = [f"Units: {units.value}", f"Timezone: {time_zone.value}"]
 
-        return format_tabular_data(records, columns, title=title, metadata_lines=meta, count_label="observations")
+        return format_tabular_data(
+            records,
+            columns,
+            title=title,
+            metadata_lines=meta,
+            count_label="observations",
+        )
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:

@@ -4,7 +4,6 @@ from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
 from ..client import NHCClient
-from ..models import classify_wind_speed
 from ..server import mcp
 from ..utils import format_tabular_data, handle_nhc_error
 
@@ -65,6 +64,7 @@ async def nhc_get_active_storms(
 
         if response_format == "json":
             import json
+
             return json.dumps({"active_storms": rows, "count": len(rows)}, indent=2)
 
         columns = [

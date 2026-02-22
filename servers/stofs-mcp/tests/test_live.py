@@ -6,7 +6,11 @@ Run with: uv run pytest tests/test_live.py -v -s
 import pytest
 
 from stofs_mcp.client import STOFSClient
-from stofs_mcp.utils import parse_station_netcdf, resolve_latest_cycle, cleanup_temp_file
+from stofs_mcp.utils import (
+    parse_station_netcdf,
+    resolve_latest_cycle,
+    cleanup_temp_file,
+)
 
 
 @pytest.fixture
@@ -96,7 +100,9 @@ async def test_coops_observation_fetch(client):
     begin_str = start.strftime("%Y%m%d %H:%M")
     end_str = end.strftime("%Y%m%d %H:%M")
 
-    data = await client.fetch_coops_observations("8518750", begin_str, end_str, datum="MSL")
+    data = await client.fetch_coops_observations(
+        "8518750", begin_str, end_str, datum="MSL"
+    )
 
     assert "data" in data, "Expected 'data' key in CO-OPS response"
     records = data["data"]
@@ -126,7 +132,9 @@ async def test_opendap_endpoint_reachable(client):
     available = await client.check_opendap_available(url)
 
     if not available:
-        pytest.skip("NOMADS OPeNDAP not reachable (may be temporarily down or outside 2-day window)")
+        pytest.skip(
+            "NOMADS OPeNDAP not reachable (may be temporarily down or outside 2-day window)"
+        )
 
     print(f"\nOPeNDAP reachable: {url}")
 
@@ -170,7 +178,9 @@ async def test_3d_atlantic_station_file(client):
     cycle = await resolve_latest_cycle(client, "3d_atlantic", num_days=3)
 
     if cycle is None:
-        pytest.skip("No STOFS-3D-Atlantic cycle found in last 3 days — possibly not yet published")
+        pytest.skip(
+            "No STOFS-3D-Atlantic cycle found in last 3 days — possibly not yet published"
+        )
 
     date_str, hour_str = cycle
     url = client.build_station_url("3d_atlantic", date_str, hour_str, "cwl")
@@ -181,7 +191,9 @@ async def test_3d_atlantic_station_file(client):
         assert tmp_path.exists()
 
         meta = parse_station_netcdf(tmp_path)
-        print(f"\n3D Atlantic stations: {meta['n_stations']}, Time steps: {meta['n_times']}")
+        print(
+            f"\n3D Atlantic stations: {meta['n_stations']}, Time steps: {meta['n_times']}"
+        )
 
         # 3D has fewer stations (~108) but should still be substantial
         assert meta["n_stations"] > 50

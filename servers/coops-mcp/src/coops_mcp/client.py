@@ -12,6 +12,7 @@ APPLICATION_NAME = "coops_mcp"
 
 class COOPSAPIError(Exception):
     """Custom exception for CO-OPS API errors."""
+
     pass
 
 
@@ -42,7 +43,9 @@ class COOPSClient:
             raise COOPSAPIError(data["error"].get("message", "Unknown API error"))
         return data
 
-    async def fetch_metadata(self, path: str, params: dict[str, Any] | None = None) -> dict:
+    async def fetch_metadata(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict:
         """Fetch from the Metadata API."""
         url = f"{METADATA_API_BASE}/{path}"
         client = await self._get_client()
@@ -50,7 +53,9 @@ class COOPSClient:
         response.raise_for_status()
         return response.json()
 
-    async def fetch_derived(self, path: str, params: dict[str, Any] | None = None) -> dict:
+    async def fetch_derived(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> dict:
         """Fetch from the Derived Product API."""
         url = f"{DERIVED_API_BASE}/{path}"
         client = await self._get_client()

@@ -15,8 +15,16 @@ from datetime import datetime
 # Slot order: AT1-AT5, EP1-EP5, CP1
 
 _SLOT_ORDER = [
-    "AT1", "AT2", "AT3", "AT4", "AT5",
-    "EP1", "EP2", "EP3", "EP4", "EP5",
+    "AT1",
+    "AT2",
+    "AT3",
+    "AT4",
+    "AT5",
+    "EP1",
+    "EP2",
+    "EP3",
+    "EP4",
+    "EP5",
     "CP1",
 ]
 
@@ -49,8 +57,7 @@ def get_arcgis_layer_id(bin_number: str, layer_type: str) -> int:
     bin_upper = bin_number.upper()
     if bin_upper not in _SLOT_ORDER:
         raise ValueError(
-            f"Unknown bin_number '{bin_number}'. "
-            f"Valid values: {', '.join(_SLOT_ORDER)}"
+            f"Unknown bin_number '{bin_number}'. Valid values: {', '.join(_SLOT_ORDER)}"
         )
     if layer_type not in _LAYER_BASES:
         raise ValueError(
@@ -88,6 +95,7 @@ def build_arcgis_query_url(layer_id: int, where: str = "1=1") -> str:
 # ---------------------------------------------------------------------------
 # ATCF coordinate parsing
 # ---------------------------------------------------------------------------
+
 
 def parse_atcf_latlon(lat_str: str, lon_str: str) -> tuple[float, float]:
     """Parse ATCF latitude/longitude strings (tenths of degree with hemisphere).
@@ -156,6 +164,7 @@ def parse_hurdat2_latlon(lat_str: str, lon_str: str) -> tuple[float, float]:
 # Storm ID parsing
 # ---------------------------------------------------------------------------
 
+
 def parse_storm_id(storm_id: str) -> tuple[str, int, int]:
     """Parse a storm identifier like 'AL092005' into components.
 
@@ -172,8 +181,7 @@ def parse_storm_id(storm_id: str) -> tuple[str, int, int]:
     match = re.match(r"^(AL|EP|CP)(\d{2})(\d{4})$", storm_id)
     if not match:
         raise ValueError(
-            f"Invalid storm ID '{storm_id}'. "
-            f"Expected format: AL092005, EP042023, etc."
+            f"Invalid storm ID '{storm_id}'. Expected format: AL092005, EP042023, etc."
         )
     basin = match.group(1).lower()
     number = int(match.group(2))
@@ -184,6 +192,7 @@ def parse_storm_id(storm_id: str) -> tuple[str, int, int]:
 # ---------------------------------------------------------------------------
 # HURDAT2 parser
 # ---------------------------------------------------------------------------
+
 
 def parse_hurdat2(text: str) -> list[dict]:
     """Parse HURDAT2-format text into a list of storm dictionaries.
@@ -250,12 +259,16 @@ def parse_hurdat2(text: str) -> list[dict]:
                 lat, lon = None, None
 
             try:
-                max_wind = int(fields[6]) if fields[6].strip() not in ("", "-999") else None
+                max_wind = (
+                    int(fields[6]) if fields[6].strip() not in ("", "-999") else None
+                )
             except ValueError:
                 max_wind = None
 
             try:
-                min_pressure = int(fields[7]) if fields[7].strip() not in ("", "-999") else None
+                min_pressure = (
+                    int(fields[7]) if fields[7].strip() not in ("", "-999") else None
+                )
             except ValueError:
                 min_pressure = None
 
@@ -271,12 +284,14 @@ def parse_hurdat2(text: str) -> list[dict]:
             }
             track.append(point)
 
-        storms.append({
-            "id": storm_id,
-            "name": storm_name,
-            "num_entries": num_entries,
-            "track": track,
-        })
+        storms.append(
+            {
+                "id": storm_id,
+                "name": storm_name,
+                "num_entries": num_entries,
+                "track": track,
+            }
+        )
         i += num_entries + 1
 
     return storms
@@ -285,6 +300,7 @@ def parse_hurdat2(text: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # ATCF B-deck parser
 # ---------------------------------------------------------------------------
+
 
 def parse_atcf_bdeck(text: str) -> list[dict]:
     """Parse ATCF B-deck (best track) text into a list of track point dicts.
@@ -347,16 +363,18 @@ def parse_atcf_bdeck(text: str) -> list[dict]:
         except ValueError:
             dt_str = date_str
 
-        points.append({
-            "basin": basin,
-            "cyclone_num": cyclone_num,
-            "datetime": dt_str,
-            "lat": lat,
-            "lon": lon,
-            "max_wind": max_wind,
-            "min_pressure": min_pressure,
-            "status": status,
-        })
+        points.append(
+            {
+                "basin": basin,
+                "cyclone_num": cyclone_num,
+                "datetime": dt_str,
+                "lat": lat,
+                "lon": lon,
+                "max_wind": max_wind,
+                "min_pressure": min_pressure,
+                "status": status,
+            }
+        )
 
     return points
 
@@ -364,6 +382,7 @@ def parse_atcf_bdeck(text: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+
 
 def format_tabular_data(
     data: list[dict],
@@ -424,6 +443,7 @@ def format_json_response(data: dict | list, context: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 def handle_nhc_error(e: Exception, context: str = "") -> str:
     """Format an exception into a user-friendly error message with suggestions.

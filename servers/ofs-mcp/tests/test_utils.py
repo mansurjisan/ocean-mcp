@@ -19,6 +19,7 @@ from ofs_mcp.utils import (
 # Haversine distance
 # ---------------------------------------------------------------------------
 
+
 def test_haversine_known_distance():
     # NYC to LA: roughly 3940 km
     dist = haversine(40.7128, -74.0060, 34.0522, -118.2437)
@@ -38,6 +39,7 @@ def test_haversine_short():
 # ---------------------------------------------------------------------------
 # Validation statistics
 # ---------------------------------------------------------------------------
+
 
 def test_validation_stats_perfect():
     vals = [1.0, 2.0, 3.0, 4.0, 5.0]
@@ -73,6 +75,7 @@ def test_validation_stats_mismatched_lengths():
 # ---------------------------------------------------------------------------
 # Time series alignment
 # ---------------------------------------------------------------------------
+
 
 def test_align_timeseries_exact_match():
     t_f = ["2026-02-19 00:00", "2026-02-19 01:00", "2026-02-19 02:00"]
@@ -123,6 +126,7 @@ def test_align_timeseries_outside_tolerance():
 # S3 URL construction
 # ---------------------------------------------------------------------------
 
+
 def test_s3_url_cbofs_forecast():
     client = OFSClient()
     url = client.build_s3_url("cbofs", "20260219", "06", "f", 1)
@@ -149,6 +153,7 @@ def test_s3_url_wcofs():
 # THREDDS URL construction
 # ---------------------------------------------------------------------------
 
+
 def test_thredds_url_cbofs():
     client = OFSClient()
     url = client.build_thredds_url("cbofs")
@@ -168,9 +173,19 @@ def test_thredds_url_ngofs2():
 # Model registry
 # ---------------------------------------------------------------------------
 
+
 def test_all_models_have_required_keys():
-    required = ["name", "short_name", "grid_type", "domain", "cycles",
-                "forecast_hours", "datum", "nc_vars", "thredds_id"]
+    required = [
+        "name",
+        "short_name",
+        "grid_type",
+        "domain",
+        "cycles",
+        "forecast_hours",
+        "datum",
+        "nc_vars",
+        "thredds_id",
+    ]
     for model_id, info in OFS_MODELS.items():
         for key in required:
             assert key in info, f"Model '{model_id}' missing key '{key}'"
@@ -180,29 +195,35 @@ def test_model_nc_vars_have_time_and_water_level():
     for model_id, info in OFS_MODELS.items():
         nc_vars = info["nc_vars"]
         assert "time" in nc_vars, f"Model '{model_id}' missing nc_vars['time']"
-        assert "water_level" in nc_vars, f"Model '{model_id}' missing nc_vars['water_level']"
+        assert "water_level" in nc_vars, (
+            f"Model '{model_id}' missing nc_vars['water_level']"
+        )
 
 
 def test_roms_models_have_lon_rho():
     for model_id, info in OFS_MODELS.items():
         if info["grid_type"] == "roms":
-            assert info["nc_vars"]["lon"] in ["lon_rho", "lon"], \
+            assert info["nc_vars"]["lon"] in ["lon_rho", "lon"], (
                 f"ROMS model '{model_id}' should have lon_rho coordinate"
+            )
 
 
 def test_fvcom_models_have_lon():
     for model_id, info in OFS_MODELS.items():
         if info["grid_type"] == "fvcom":
-            assert info["nc_vars"]["lon"] == "lon", \
+            assert info["nc_vars"]["lon"] == "lon", (
                 f"FVCOM model '{model_id}' should have lon coordinate"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Find nearest point (offline — using simple synthetic grids)
 # ---------------------------------------------------------------------------
 
+
 def test_find_nearest_fvcom_known_point():
     import numpy as np
+
     lats = np.array([38.0, 38.5, 39.0, 39.5])
     lons = np.array([-76.0, -76.5, -77.0, -77.5])
 
@@ -215,6 +236,7 @@ def test_find_nearest_fvcom_known_point():
 
 def test_find_nearest_fvcom_out_of_range():
     import numpy as np
+
     lats = np.array([38.0])
     lons = np.array([-76.0])
 
@@ -224,13 +246,12 @@ def test_find_nearest_fvcom_out_of_range():
 
 def test_find_nearest_roms_known_point():
     import numpy as np
+
     # Simple 3x3 rho grid
-    lats = np.array([[38.0, 38.0, 38.0],
-                      [38.5, 38.5, 38.5],
-                      [39.0, 39.0, 39.0]])
-    lons = np.array([[-77.0, -76.5, -76.0],
-                      [-77.0, -76.5, -76.0],
-                      [-77.0, -76.5, -76.0]])
+    lats = np.array([[38.0, 38.0, 38.0], [38.5, 38.5, 38.5], [39.0, 39.0, 39.0]])
+    lons = np.array(
+        [[-77.0, -76.5, -76.0], [-77.0, -76.5, -76.0], [-77.0, -76.5, -76.0]]
+    )
 
     result = find_nearest_roms(38.49, -76.49, lats, lons, max_distance_km=50.0)
     assert result is not None
@@ -241,6 +262,7 @@ def test_find_nearest_roms_known_point():
 
 def test_find_nearest_roms_out_of_range():
     import numpy as np
+
     lats = np.array([[38.0]])
     lons = np.array([[-76.0]])
 
@@ -251,6 +273,7 @@ def test_find_nearest_roms_out_of_range():
 # ---------------------------------------------------------------------------
 # Domain coverage
 # ---------------------------------------------------------------------------
+
 
 def test_chesapeake_bay_in_cbofs_domain():
     domain = OFS_MODELS["cbofs"]["domain"]

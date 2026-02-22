@@ -75,14 +75,16 @@ async def nhc_get_best_track(
                     if storm["id"] == storm_id_upper:
                         # Convert HURDAT2 track points to common format
                         for pt in storm["track"]:
-                            track_points.append({
-                                "datetime": f"{pt['date']} {pt['time']} UTC",
-                                "lat": pt["lat"],
-                                "lon": pt["lon"],
-                                "max_wind": pt["max_wind"],
-                                "min_pressure": pt["min_pressure"],
-                                "status": pt["status"],
-                            })
+                            track_points.append(
+                                {
+                                    "datetime": f"{pt['date']} {pt['time']} UTC",
+                                    "lat": pt["lat"],
+                                    "lon": pt["lon"],
+                                    "max_wind": pt["max_wind"],
+                                    "min_pressure": pt["min_pressure"],
+                                    "status": pt["status"],
+                                }
+                            )
                         source = "HURDAT2"
                         break
             except Exception as e2:
@@ -227,16 +229,20 @@ async def nhc_search_storms(
                     continue
 
                 storm_year = int(storm["id"][4:8])
-                all_results.append({
-                    "id": storm["id"],
-                    "name": storm["name"],
-                    "year": storm_year,
-                    "basin": storm["id"][:2],
-                    "peak_wind": peak_wind if peak_wind > 0 else "N/A",
-                    "min_pressure": min_pres if min_pres < 9999 else "N/A",
-                    "category": classify_wind_speed(peak_wind) if peak_wind > 0 else "N/A",
-                    "track_points": len(storm["track"]),
-                })
+                all_results.append(
+                    {
+                        "id": storm["id"],
+                        "name": storm["name"],
+                        "year": storm_year,
+                        "basin": storm["id"][:2],
+                        "peak_wind": peak_wind if peak_wind > 0 else "N/A",
+                        "min_pressure": min_pres if min_pres < 9999 else "N/A",
+                        "category": classify_wind_speed(peak_wind)
+                        if peak_wind > 0
+                        else "N/A",
+                        "track_points": len(storm["track"]),
+                    }
+                )
 
         # Sort by year descending, then peak wind descending
         all_results.sort(

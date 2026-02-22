@@ -18,6 +18,7 @@ COOPS_API_BASE = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 class STOFSAPIError(Exception):
     """Custom exception for STOFS API errors."""
+
     pass
 
 
@@ -30,7 +31,7 @@ class STOFSClient:
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                timeout=120.0,          # NetCDF downloads can be slow
+                timeout=120.0,  # NetCDF downloads can be slow
                 follow_redirects=True,
             )
         return self._client
@@ -174,7 +175,9 @@ class STOFSClient:
         elif model == "3d_atlantic":
             return f"{OPENDAP_BASE_3D}/{date}/stofs_3d_atl_{region}_{cycle}z"
         else:
-            raise ValueError(f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'.")
+            raise ValueError(
+                f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'."
+            )
 
     async def check_opendap_available(self, url: str) -> bool:
         """Check if a NOMADS OPeNDAP dataset endpoint is available.

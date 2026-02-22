@@ -107,39 +107,47 @@ class TestBuildTabledapQuery:
 
 class TestBuildGriddapQuery:
     def test_single_point(self):
-        dims = OrderedDict([
-            ("time", ("2024-01-15T00:00:00Z", "2024-01-15T00:00:00Z")),
-            ("latitude", ("37.0", "37.0")),
-            ("longitude", ("-122.0", "-122.0")),
-        ])
+        dims = OrderedDict(
+            [
+                ("time", ("2024-01-15T00:00:00Z", "2024-01-15T00:00:00Z")),
+                ("latitude", ("37.0", "37.0")),
+                ("longitude", ("-122.0", "-122.0")),
+            ]
+        )
         q = build_griddap_query("sst", dims)
         assert q == "sst[(2024-01-15T00:00:00Z)][(37.0)][(-122.0)]"
 
     def test_range(self):
-        dims = OrderedDict([
-            ("time", ("last", "last")),
-            ("latitude", ("36.0", "38.0")),
-            ("longitude", ("-123.0", "-121.0")),
-        ])
+        dims = OrderedDict(
+            [
+                ("time", ("last", "last")),
+                ("latitude", ("36.0", "38.0")),
+                ("longitude", ("-123.0", "-121.0")),
+            ]
+        )
         q = build_griddap_query("chlorophyll", dims)
         assert q == "chlorophyll[(last)][(36.0):(38.0)][(-123.0):(-121.0)]"
 
     def test_with_stride(self):
-        dims = OrderedDict([
-            ("time", ("last", "last")),
-            ("latitude", ("30.0", "2", "40.0")),
-            ("longitude", ("-130.0", "2", "-120.0")),
-        ])
+        dims = OrderedDict(
+            [
+                ("time", ("last", "last")),
+                ("latitude", ("30.0", "2", "40.0")),
+                ("longitude", ("-130.0", "2", "-120.0")),
+            ]
+        )
         q = build_griddap_query("sst", dims)
         assert q == "sst[(last)][(30.0):(2):(40.0)][(-130.0):(2):(-120.0)]"
 
     def test_four_dimensions(self):
-        dims = OrderedDict([
-            ("time", ("last", "last")),
-            ("depth", ("0.0", "0.0")),
-            ("latitude", ("36.0", "38.0")),
-            ("longitude", ("-123.0", "-121.0")),
-        ])
+        dims = OrderedDict(
+            [
+                ("time", ("last", "last")),
+                ("depth", ("0.0", "0.0")),
+                ("latitude", ("36.0", "38.0")),
+                ("longitude", ("-123.0", "-121.0")),
+            ]
+        )
         q = build_griddap_query("temp", dims)
         assert q == "temp[(last)][(0.0)][(36.0):(38.0)][(-123.0):(-121.0)]"
 
@@ -176,7 +184,9 @@ class TestFormatErddapTable:
 
     def test_metadata_lines(self):
         rows = [{"a": 1}]
-        result = format_erddap_table(rows, metadata_lines=["Server: test", "Mode: grid"])
+        result = format_erddap_table(
+            rows, metadata_lines=["Server: test", "Mode: grid"]
+        )
         assert "**Server: test**" in result
         assert "**Mode: grid**" in result
 
@@ -196,16 +206,21 @@ class TestFormatErddapTable:
 
 class TestHandleErddapError:
     def test_generic_exception(self):
-        result = handle_erddap_error(ValueError("bad value"), "https://example.com/erddap")
+        result = handle_erddap_error(
+            ValueError("bad value"), "https://example.com/erddap"
+        )
         assert "Unexpected error" in result
         assert "bad value" in result
 
     def test_json_error_hint(self):
-        result = handle_erddap_error(ValueError("failed to decode json"), "https://example.com/erddap")
+        result = handle_erddap_error(
+            ValueError("failed to decode json"), "https://example.com/erddap"
+        )
         assert "parsing ERDDAP response" in result
 
     def test_connect_error(self):
         import httpx
+
         err = httpx.ConnectError("connection refused")
         result = handle_erddap_error(err, "https://example.com/erddap")
         assert "Could not connect" in result
@@ -213,6 +228,7 @@ class TestHandleErddapError:
 
     def test_timeout_error(self):
         import httpx
+
         err = httpx.ReadTimeout("timed out")
         result = handle_erddap_error(err, "https://example.com/erddap")
         assert "timed out" in result.lower()

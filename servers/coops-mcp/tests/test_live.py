@@ -41,14 +41,16 @@ async def test_get_station_battery(client):
 @pytest.mark.asyncio
 async def test_get_water_levels_today(client):
     """Get today's water levels at The Battery."""
-    data = await client.fetch_data({
-        "station": "8518750",
-        "product": "water_level",
-        "datum": "MLLW",
-        "units": "metric",
-        "time_zone": "gmt",
-        "date": "today",
-    })
+    data = await client.fetch_data(
+        {
+            "station": "8518750",
+            "product": "water_level",
+            "datum": "MLLW",
+            "units": "metric",
+            "time_zone": "gmt",
+            "date": "today",
+        }
+    )
     records = data.get("data", [])
     assert len(records) > 0, "Expected water level data for today"
     assert "t" in records[0]
@@ -58,14 +60,16 @@ async def test_get_water_levels_today(client):
 @pytest.mark.asyncio
 async def test_get_tide_predictions(client):
     """Get tide predictions for The Battery."""
-    data = await client.fetch_data({
-        "station": "8518750",
-        "product": "predictions",
-        "datum": "MLLW",
-        "units": "metric",
-        "time_zone": "gmt",
-        "date": "today",
-    })
+    data = await client.fetch_data(
+        {
+            "station": "8518750",
+            "product": "predictions",
+            "datum": "MLLW",
+            "units": "metric",
+            "time_zone": "gmt",
+            "date": "today",
+        }
+    )
     records = data.get("predictions", [])
     assert len(records) > 0, "Expected tide prediction data"
 
@@ -73,13 +77,15 @@ async def test_get_tide_predictions(client):
 @pytest.mark.asyncio
 async def test_get_wind_key_west(client):
     """Get latest wind data at Key West (8724580)."""
-    data = await client.fetch_data({
-        "station": "8724580",
-        "product": "wind",
-        "units": "metric",
-        "time_zone": "gmt",
-        "date": "latest",
-    })
+    data = await client.fetch_data(
+        {
+            "station": "8724580",
+            "product": "wind",
+            "units": "metric",
+            "time_zone": "gmt",
+            "date": "latest",
+        }
+    )
     records = data.get("data", [])
     assert len(records) > 0, "Expected wind data"
     assert "s" in records[0]  # speed
@@ -91,7 +97,12 @@ async def test_get_extreme_water_levels(client):
     """Get extreme water levels at The Battery."""
     data = await client.fetch_derived(
         "product.json",
-        {"name": "extremewaterlevels", "station": "8518750", "datum": "MHHW", "units": "metric"},
+        {
+            "name": "extremewaterlevels",
+            "station": "8518750",
+            "datum": "MHHW",
+            "units": "metric",
+        },
     )
     assert "ExtremeWaterLevels" in data
 

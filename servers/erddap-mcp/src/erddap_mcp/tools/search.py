@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -10,7 +9,7 @@ from mcp.types import ToolAnnotations
 from ..client import ERDDAPClient
 from ..registry import DEFAULT_SERVER_URL, get_servers
 from ..server import mcp
-from ..utils import format_erddap_table, handle_erddap_error, parse_erddap_json
+from ..utils import handle_erddap_error, parse_erddap_json
 
 
 def _get_client(ctx: Context) -> ERDDAPClient:
@@ -58,7 +57,9 @@ async def erddap_list_servers(
         lines.append(f"| {s.name} | {s.url} | {s.focus} | {s.region} |")
 
     lines.append("")
-    lines.append(f"*{len(servers)} servers listed. Use any server URL with other erddap tools.*")
+    lines.append(
+        f"*{len(servers)} servers listed. Use any server URL with other erddap tools.*"
+    )
 
     return "\n".join(lines)
 
@@ -110,9 +111,9 @@ async def erddap_search_datasets(
                 rows = [r for r in rows if r.get("tabledap", "") != ""]
 
         # Format results
-        lines = [f"## Dataset Search Results"]
+        lines = ["## Dataset Search Results"]
         lines.append(f"**Server**: {server_url}")
-        lines.append(f"**Search**: \"{search_for}\" | **Page**: {page}")
+        lines.append(f'**Search**: "{search_for}" | **Page**: {page}')
         lines.append("")
 
         lines.append("| Dataset ID | Title | Protocol |")
@@ -134,7 +135,9 @@ async def erddap_search_datasets(
             lines.append(f"| {dataset_id} | {title} | {proto} |")
 
         lines.append("")
-        lines.append(f"*{len(rows)} datasets found. Use erddap_get_dataset_info for details on a specific dataset.*")
+        lines.append(
+            f"*{len(rows)} datasets found. Use erddap_get_dataset_info for details on a specific dataset.*"
+        )
         if len(rows) == items_per_page:
             lines.append(f"*More results may be available — try page={page + 1}.*")
 
@@ -193,13 +196,16 @@ async def erddap_get_all_datasets(
         # Filter by institution
         if institution:
             inst_lower = institution.lower()
-            rows = [r for r in rows if inst_lower in str(r.get("institution", "")).lower()]
+            rows = [
+                r for r in rows if inst_lower in str(r.get("institution", "")).lower()
+            ]
 
         # Filter by search text
         if search_text:
             text_lower = search_text.lower()
             rows = [
-                r for r in rows
+                r
+                for r in rows
                 if text_lower in str(r.get("title", "")).lower()
                 or text_lower in str(r.get("summary", "")).lower()
             ]
@@ -218,7 +224,9 @@ async def erddap_get_all_datasets(
             filters.append(f"Search: {search_text}")
         if filters:
             lines.append(f"**Filters**: {', '.join(filters)}")
-        lines.append(f"**Showing**: {offset + 1}\u2013{offset + len(rows)} of {total} datasets")
+        lines.append(
+            f"**Showing**: {offset + 1}\u2013{offset + len(rows)} of {total} datasets"
+        )
         lines.append("")
 
         lines.append("| Dataset ID | Title | Institution | Protocol |")

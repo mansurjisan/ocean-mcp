@@ -26,12 +26,15 @@ from stofs_mcp.utils import (
 # Haversine / nearest station
 # ---------------------------------------------------------------------------
 
+
 class TestFindNearestStation:
     def test_finds_nearest(self):
         lats = [40.0, 41.0, 42.0]
         lons = [-74.0, -74.0, -74.0]
         names = ["A", "B", "C"]
-        result = find_nearest_station(40.1, -74.0, lats, lons, names, max_distance_km=200)
+        result = find_nearest_station(
+            40.1, -74.0, lats, lons, names, max_distance_km=200
+        )
         assert result is not None
         idx, name, dist = result
         assert name == "A"
@@ -41,12 +44,16 @@ class TestFindNearestStation:
         lats = [40.0]
         lons = [-74.0]
         names = ["A"]
-        result = find_nearest_station(50.0, -74.0, lats, lons, names, max_distance_km=10)
+        result = find_nearest_station(
+            50.0, -74.0, lats, lons, names, max_distance_km=10
+        )
         assert result is None
 
     def test_known_distance(self):
         # NYC to Boston ≈ 307 km
-        result = find_nearest_station(42.36, -71.06, [40.71], [-74.01], ["NYC"], max_distance_km=400)
+        result = find_nearest_station(
+            42.36, -71.06, [40.71], [-74.01], ["NYC"], max_distance_km=400
+        )
         assert result is not None
         _, _, dist = result
         assert 290 < dist < 325
@@ -55,6 +62,7 @@ class TestFindNearestStation:
 # ---------------------------------------------------------------------------
 # Validation statistics
 # ---------------------------------------------------------------------------
+
 
 class TestComputeValidationStats:
     def test_perfect_forecast(self):
@@ -97,6 +105,7 @@ class TestComputeValidationStats:
 # Time series alignment
 # ---------------------------------------------------------------------------
 
+
 class TestAlignTimeseries:
     def test_exact_match(self):
         times = ["2026-02-19 00:00", "2026-02-19 00:06", "2026-02-19 00:12"]
@@ -133,6 +142,7 @@ class TestAlignTimeseries:
 # URL construction
 # ---------------------------------------------------------------------------
 
+
 class TestBuildStationUrl:
     def setup_method(self):
         self.client = STOFSClient()
@@ -161,6 +171,7 @@ class TestBuildStationUrl:
 # ---------------------------------------------------------------------------
 # OPeNDAP URL construction
 # ---------------------------------------------------------------------------
+
 
 class TestBuildOpendapUrl:
     def setup_method(self):
@@ -225,6 +236,7 @@ class TestGetOpendapRegion:
 # Station registry
 # ---------------------------------------------------------------------------
 
+
 class TestStationRegistry:
     def test_battery_found(self):
         s = get_station_by_id("8518750")
@@ -264,6 +276,7 @@ class TestStationRegistry:
 # Formatters
 # ---------------------------------------------------------------------------
 
+
 class TestFormatters:
     def test_timeseries_table_basic(self):
         times = ["2026-02-19 00:00", "2026-02-19 00:06"]
@@ -278,16 +291,34 @@ class TestFormatters:
         assert "No data" in result
 
     def test_station_table_basic(self):
-        stations = [{"id": "8518750", "name": "The Battery", "state": "NY", "lat": 40.7, "lon": -74.0}]
+        stations = [
+            {
+                "id": "8518750",
+                "name": "The Battery",
+                "state": "NY",
+                "lat": 40.7,
+                "lon": -74.0,
+            }
+        ]
         result = format_station_table(stations, title="Stations")
         assert "## Stations" in result
         assert "8518750" in result
         assert "The Battery" in result
 
     def test_station_table_with_extra_col(self):
-        stations = [{"id": "8518750", "name": "The Battery", "state": "NY",
-                     "lat": 40.7, "lon": -74.0, "distance_km": 5.2}]
-        result = format_station_table(stations, extra_col=("distance_km", "Distance (km)"))
+        stations = [
+            {
+                "id": "8518750",
+                "name": "The Battery",
+                "state": "NY",
+                "lat": 40.7,
+                "lon": -74.0,
+                "distance_km": 5.2,
+            }
+        ]
+        result = format_station_table(
+            stations, extra_col=("distance_km", "Distance (km)")
+        )
         assert "Distance (km)" in result
         assert "5.2" in result
 
@@ -296,24 +327,32 @@ class TestFormatters:
 # Error handler
 # ---------------------------------------------------------------------------
 
+
 class TestHandleStofsError:
     def test_404_error(self):
         import httpx
+
         response = httpx.Response(404, request=httpx.Request("GET", "http://test"))
-        err = httpx.HTTPStatusError("not found", request=response.request, response=response)
+        err = httpx.HTTPStatusError(
+            "not found", request=response.request, response=response
+        )
         result = handle_stofs_error(err, model="2d_global")
         assert "404" in result
         assert "stofs_list_cycles" in result
 
     def test_403_error(self):
         import httpx
+
         response = httpx.Response(403, request=httpx.Request("GET", "http://test"))
-        err = httpx.HTTPStatusError("forbidden", request=response.request, response=response)
+        err = httpx.HTTPStatusError(
+            "forbidden", request=response.request, response=response
+        )
         result = handle_stofs_error(err)
         assert "403" in result
 
     def test_timeout(self):
         import httpx
+
         result = handle_stofs_error(httpx.ReadTimeout("timeout"))
         assert "timed out" in result.lower()
 

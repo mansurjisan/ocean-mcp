@@ -48,12 +48,14 @@ async def coops_list_stations(
         # Filter by state if provided
         if state:
             state_upper = state.upper()
-            stations = [s for s in stations if s.get("state", "").upper() == state_upper]
+            stations = [
+                s for s in stations if s.get("state", "").upper() == state_upper
+            ]
 
         total = len(stations)
         stations = stations[offset : offset + limit]
 
-        lines = [f"## CO-OPS Stations"]
+        lines = ["## CO-OPS Stations"]
         filters = []
         if station_type:
             filters.append(f"Type: {station_type.value}")
@@ -61,7 +63,9 @@ async def coops_list_stations(
             filters.append(f"State: {state.upper()}")
         if filters:
             lines.append(f"**Filters**: {', '.join(filters)}")
-        lines.append(f"**Showing**: {offset + 1}\u2013{offset + len(stations)} of {total} stations")
+        lines.append(
+            f"**Showing**: {offset + 1}\u2013{offset + len(stations)} of {total} stations"
+        )
         lines.append("")
 
         for s in stations:
@@ -111,8 +115,12 @@ async def coops_get_station(
         lines.append(f"**Name**: {station.get('name', 'Unknown')}")
         if station.get("state"):
             lines.append(f"**State**: {station['state']}")
-        lines.append(f"**Latitude**: {station.get('lat', station.get('latitude', '?'))}")
-        lines.append(f"**Longitude**: {station.get('lng', station.get('longitude', '?'))}")
+        lines.append(
+            f"**Latitude**: {station.get('lat', station.get('latitude', '?'))}"
+        )
+        lines.append(
+            f"**Longitude**: {station.get('lng', station.get('longitude', '?'))}"
+        )
 
         if station.get("affiliations"):
             lines.append(f"**Affiliations**: {station['affiliations']}")
@@ -123,7 +131,14 @@ async def coops_get_station(
         if station.get("details"):
             details = station["details"]
             lines.append("\n### Details")
-            for key in ("accepted", "epoch", "origyear", "meridian", "datum", "timezonecorr"):
+            for key in (
+                "accepted",
+                "epoch",
+                "origyear",
+                "meridian",
+                "datum",
+                "timezonecorr",
+            ):
                 if details.get(key):
                     lines.append(f"- **{key}**: {details[key]}")
 
@@ -136,9 +151,13 @@ async def coops_get_station(
         if station.get("datums"):
             datums = station["datums"]
             lines.append("\n### Datums")
-            datum_list = datums if isinstance(datums, list) else datums.get("datums", [])
+            datum_list = (
+                datums if isinstance(datums, list) else datums.get("datums", [])
+            )
             for d in datum_list:
-                lines.append(f"- **{d.get('name', '?')}**: {d.get('value', '?')} {units.value}")
+                lines.append(
+                    f"- **{d.get('name', '?')}**: {d.get('value', '?')} {units.value}"
+                )
 
         if station.get("floodlevels"):
             flood = station["floodlevels"]
@@ -215,7 +234,9 @@ async def coops_find_nearest_stations(
             lines.append(f"- {format_station_summary(s)} \u2014 **{dist:.1f} km**")
 
         if not results:
-            lines.append("No stations found within the specified radius. Try increasing radius_km.")
+            lines.append(
+                "No stations found within the specified radius. Try increasing radius_km."
+            )
 
         return "\n".join(lines)
     except Exception as e:

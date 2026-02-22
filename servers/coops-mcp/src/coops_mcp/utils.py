@@ -16,7 +16,11 @@ def format_station_summary(station: dict) -> str:
 
     location = f"{name}, {state}" if state else name
     try:
-        coord = f"({float(lat):.4f}\u00b0N, {abs(float(lng)):.4f}\u00b0W)" if float(lng) < 0 else f"({float(lat):.4f}\u00b0N, {float(lng):.4f}\u00b0E)"
+        coord = (
+            f"({float(lat):.4f}\u00b0N, {abs(float(lng)):.4f}\u00b0W)"
+            if float(lng) < 0
+            else f"({float(lat):.4f}\u00b0N, {float(lng):.4f}\u00b0E)"
+        )
     except (ValueError, TypeError):
         coord = ""
 
@@ -30,7 +34,10 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
 
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -48,7 +55,12 @@ def normalize_date(date_str: str) -> str:
         return date_str
 
     # ISO 8601: 2024-10-01T14:30:00 or 2024-10-01 14:30
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+    ):
         try:
             dt = datetime.strptime(date_str, fmt)
             return dt.strftime("%Y%m%d %H:%M")
@@ -63,7 +75,9 @@ def normalize_date(date_str: str) -> str:
         except ValueError:
             continue
 
-    raise ValueError(f"Unrecognized date format: '{date_str}'. Use YYYY-MM-DD or YYYYMMDD.")
+    raise ValueError(
+        f"Unrecognized date format: '{date_str}'. Use YYYY-MM-DD or YYYYMMDD."
+    )
 
 
 def validate_date_range(begin_date: str, end_date: str, max_days: int = 365) -> None:
@@ -71,6 +85,7 @@ def validate_date_range(begin_date: str, end_date: str, max_days: int = 365) -> 
 
     Raises ValueError with a clear message if it does.
     """
+
     # Parse the normalized dates (yyyyMMdd or yyyyMMdd HH:mm)
     def parse(d: str) -> datetime:
         d = d.strip()
@@ -133,7 +148,9 @@ def format_tabular_data(
     return "\n".join(lines)
 
 
-def format_json_response(data: dict, station_id: str = "", params: dict | None = None) -> str:
+def format_json_response(
+    data: dict, station_id: str = "", params: dict | None = None
+) -> str:
     """Format API response as JSON string with metadata wrapper."""
     wrapper = {
         "station_id": station_id,
@@ -153,12 +170,22 @@ def handle_api_error(e: Exception) -> str:
         msg = str(e)
         suggestions = []
         if "not found" in msg.lower() or "no station" in msg.lower():
-            suggestions.append("Verify the station ID with coops_list_stations or coops_find_nearest_stations.")
+            suggestions.append(
+                "Verify the station ID with coops_list_stations or coops_find_nearest_stations."
+            )
         if "no data" in msg.lower():
-            suggestions.append("The station may not have data for the requested period or product. Check available sensors with coops_get_station.")
+            suggestions.append(
+                "The station may not have data for the requested period or product. Check available sensors with coops_get_station."
+            )
         if "exceed" in msg.lower() or "range" in msg.lower():
-            suggestions.append("The date range may be too large. Max is 365 days (or 3650 for hilo predictions).")
-        suggestion_text = " ".join(suggestions) if suggestions else "Check your parameters and try again."
+            suggestions.append(
+                "The date range may be too large. Max is 365 days (or 3650 for hilo predictions)."
+            )
+        suggestion_text = (
+            " ".join(suggestions)
+            if suggestions
+            else "Check your parameters and try again."
+        )
         return f"CO-OPS API Error: {msg}. {suggestion_text}"
 
     if isinstance(e, httpx.HTTPStatusError):

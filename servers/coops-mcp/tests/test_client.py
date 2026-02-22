@@ -4,7 +4,13 @@ import pytest
 import httpx
 import respx
 
-from coops_mcp.client import COOPSClient, COOPSAPIError, DATA_API_BASE, METADATA_API_BASE, DERIVED_API_BASE
+from coops_mcp.client import (
+    COOPSClient,
+    COOPSAPIError,
+    DATA_API_BASE,
+    METADATA_API_BASE,
+    DERIVED_API_BASE,
+)
 
 
 @pytest.fixture
@@ -19,9 +25,13 @@ class TestFetchData:
     @pytest.mark.asyncio
     async def test_successful_fetch(self, client):
         respx.get(DATA_API_BASE).mock(
-            return_value=httpx.Response(200, json={"data": [{"t": "2024-10-01", "v": "1.0"}]})
+            return_value=httpx.Response(
+                200, json={"data": [{"t": "2024-10-01", "v": "1.0"}]}
+            )
         )
-        result = await client.fetch_data({"station": "8518750", "product": "water_level"})
+        result = await client.fetch_data(
+            {"station": "8518750", "product": "water_level"}
+        )
         assert "data" in result
         assert len(result["data"]) == 1
 
@@ -29,7 +39,9 @@ class TestFetchData:
     @pytest.mark.asyncio
     async def test_api_error_in_json(self, client):
         respx.get(DATA_API_BASE).mock(
-            return_value=httpx.Response(200, json={"error": {"message": "No data found"}})
+            return_value=httpx.Response(
+                200, json={"error": {"message": "No data found"}}
+            )
         )
         with pytest.raises(COOPSAPIError, match="No data found"):
             await client.fetch_data({"station": "0000000", "product": "water_level"})
@@ -67,9 +79,13 @@ class TestFetchMetadata:
     @pytest.mark.asyncio
     async def test_station_detail(self, client):
         respx.get(f"{METADATA_API_BASE}/stations/8518750.json").mock(
-            return_value=httpx.Response(200, json={"stations": [{"id": "8518750", "name": "The Battery"}]})
+            return_value=httpx.Response(
+                200, json={"stations": [{"id": "8518750", "name": "The Battery"}]}
+            )
         )
-        result = await client.fetch_metadata("stations/8518750.json", {"units": "metric"})
+        result = await client.fetch_metadata(
+            "stations/8518750.json", {"units": "metric"}
+        )
         assert result["stations"][0]["name"] == "The Battery"
 
 
@@ -80,7 +96,9 @@ class TestFetchDerived:
         respx.get(f"{DERIVED_API_BASE}/product/sltrends.json").mock(
             return_value=httpx.Response(200, json={"sltrends": [{"sltrend": 2.87}]})
         )
-        result = await client.fetch_derived("product/sltrends.json", {"station": "8518750"})
+        result = await client.fetch_derived(
+            "product/sltrends.json", {"station": "8518750"}
+        )
         assert "sltrends" in result
 
 

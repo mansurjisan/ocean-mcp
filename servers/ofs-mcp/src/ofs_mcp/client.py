@@ -13,6 +13,7 @@ from .models import COOPS_API_BASE, OFS_MODELS, S3_BASE, THREDDS_BASE
 
 class OFSAPIError(Exception):
     """Custom exception for OFS API errors."""
+
     pass
 
 
