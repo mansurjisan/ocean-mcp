@@ -107,5 +107,7 @@ class TestAircraftCodes:
     def test_aircraft_codes_values_are_nonempty_strings(self):
         """All AIRCRAFT_CODES values are non-empty descriptive strings."""
         for code, description in AIRCRAFT_CODES.items():
-            assert isinstance(description, str), f"Description for '{code}' is not a string"
+            assert isinstance(description, str), (
+                f"Description for '{code}' is not a string"
+            )
             assert len(description) > 0, f"Description for '{code}' is empty"

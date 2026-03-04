@@ -19,7 +19,18 @@ class TestDatum:
 
     def test_valid_datum_values(self):
         """All defined datum values should be constructible from their string."""
-        expected = ["MLLW", "MHHW", "MSL", "NAVD", "STND", "MHW", "MLW", "MTL", "IGLD", "LWD"]
+        expected = [
+            "MLLW",
+            "MHHW",
+            "MSL",
+            "NAVD",
+            "STND",
+            "MHW",
+            "MLW",
+            "MTL",
+            "IGLD",
+            "LWD",
+        ]
         for val in expected:
             assert Datum(val) == val
 
@@ -113,7 +124,14 @@ class TestStationType:
 
     def test_valid_station_types(self):
         """All station type values should be constructible."""
-        expected = ["waterlevels", "currentpredictions", "waterlevelsandmet", "tcoon", "nwlon", "ports"]
+        expected = [
+            "waterlevels",
+            "currentpredictions",
+            "waterlevelsandmet",
+            "tcoon",
+            "nwlon",
+            "ports",
+        ]
         for val in expected:
             assert StationType(val) == val
 

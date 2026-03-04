@@ -31,7 +31,13 @@ def _decode_sfmr_filename(filename: str) -> dict:
         AFRC_SFMR20220926H1.nc -> aircraft='H', date='20220926', seq='1'
         NOAA_SFMR20200825U2.nc -> aircraft='U', date='20200825', seq='2'
     """
-    info = {"filename": filename, "date": None, "aircraft_code": None, "aircraft": None, "mission_seq": None}
+    info = {
+        "filename": filename,
+        "date": None,
+        "aircraft_code": None,
+        "aircraft": None,
+        "mission_seq": None,
+    }
 
     # Extract the part after SFMR
     import re
@@ -40,7 +46,9 @@ def _decode_sfmr_filename(filename: str) -> dict:
     if match:
         info["date"] = match.group(1)
         info["aircraft_code"] = match.group(2)
-        info["aircraft"] = AIRCRAFT_CODES.get(match.group(2), f"Unknown ({match.group(2)})")
+        info["aircraft"] = AIRCRAFT_CODES.get(
+            match.group(2), f"Unknown ({match.group(2)})"
+        )
         info["mission_seq"] = match.group(3)
 
     return info
@@ -125,7 +133,9 @@ async def recon_list_sfmr(
             )
 
         lines.append("")
-        lines.append(f"*{len(decoded)} SFMR files available. Data from AOML HRD Archive.*")
+        lines.append(
+            f"*{len(decoded)} SFMR files available. Data from AOML HRD Archive.*"
+        )
 
         return "\n".join(lines)
 
@@ -224,7 +234,8 @@ async def recon_get_sfmr(
 
                 sfmr_data = parse_sfmr_netcdf(tmp_path)
                 profile = compute_radial_wind_profile(
-                    sfmr_data, track,
+                    sfmr_data,
+                    track,
                     bin_size_km=bin_size_km,
                     max_radius_km=max_radius_km,
                 )
@@ -243,7 +254,9 @@ async def recon_get_sfmr(
                 if profile:
                     peak_bin = max(profile, key=lambda b: b["max_wind_ms"])
                     mission["peak_wind_ms"] = peak_bin["max_wind_ms"]
-                    mission["peak_radius_km"] = f"{peak_bin['radius_min_km']:.0f}-{peak_bin['radius_max_km']:.0f}"
+                    mission["peak_radius_km"] = (
+                        f"{peak_bin['radius_min_km']:.0f}-{peak_bin['radius_max_km']:.0f}"
+                    )
 
                 all_missions.append(mission)
 

@@ -83,7 +83,9 @@ class TestOFSModelsRegistry:
     def test_registry_has_all_nine_models(self):
         """OFS_MODELS should have an entry for every OFSModel enum member."""
         for model in OFSModel:
-            assert model.value in OFS_MODELS, f"Missing registry entry for {model.value}"
+            assert model.value in OFS_MODELS, (
+                f"Missing registry entry for {model.value}"
+            )
 
     def test_registry_entries_have_required_keys(self):
         """Each OFS_MODELS entry should contain the required metadata keys."""
@@ -109,7 +111,9 @@ class TestOFSModelsRegistry:
             for cycle in model_info["cycles"]:
                 assert len(cycle) == 2, f"{model_key} cycle '{cycle}' is not two digits"
                 hour = int(cycle)
-                assert 0 <= hour <= 23, f"{model_key} cycle '{cycle}' is not a valid hour"
+                assert 0 <= hour <= 23, (
+                    f"{model_key} cycle '{cycle}' is not a valid hour"
+                )
 
     def test_nc_vars_contain_core_variables(self):
         """Each model's nc_vars should map water_level, temperature, and salinity."""

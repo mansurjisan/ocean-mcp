@@ -595,7 +595,10 @@ def haversine(
             rlon2 = np.radians(lon2)
             dlat = rlat2 - rlat1
             dlon = rlon2 - rlon1
-            a = np.sin(dlat / 2) ** 2 + math.cos(rlat1) * np.cos(rlat2) * np.sin(dlon / 2) ** 2
+            a = (
+                np.sin(dlat / 2) ** 2
+                + math.cos(rlat1) * np.cos(rlat2) * np.sin(dlon / 2) ** 2
+            )
             return EARTH_RADIUS_KM * 2 * np.arcsin(np.sqrt(a))
     except ImportError:
         pass
@@ -605,7 +608,10 @@ def haversine(
     rlon2 = math.radians(float(lon2))
     dlat = rlat2 - rlat1
     dlon = rlon2 - rlon1
-    a = math.sin(dlat / 2) ** 2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2) ** 2
+    )
     return EARTH_RADIUS_KM * 2 * math.asin(math.sqrt(a))
 
 
@@ -658,7 +664,9 @@ def parse_sfmr_netcdf(filepath: str | Path) -> dict:
                 minute = (t_int % 10000) // 100
                 second = t_int % 100
                 try:
-                    dt = datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+                    dt = datetime(
+                        year, month, day, hour, minute, second, tzinfo=timezone.utc
+                    )
                     datetimes.append(dt)
                 except ValueError:
                     datetimes.append(None)
@@ -677,7 +685,11 @@ def parse_sfmr_netcdf(filepath: str | Path) -> dict:
         lat_arr = np.ma.filled(lat, np.nan).astype(float)
         lon_arr = np.ma.filled(lon, np.nan).astype(float)
         sws_arr = np.ma.filled(sws, np.nan).astype(float)
-        srr_arr = np.ma.filled(srr, np.nan).astype(float) if srr is not None else np.full(len(lat_arr), np.nan)
+        srr_arr = (
+            np.ma.filled(srr, np.nan).astype(float)
+            if srr is not None
+            else np.full(len(lat_arr), np.nan)
+        )
 
         return {
             "datetime": datetimes,
@@ -742,13 +754,15 @@ def parse_atcf_best_track(text: str) -> list[dict]:
             except ValueError:
                 pass
 
-        track.append({
-            "datetime": dt,
-            "lat": lat,
-            "lon": lon,
-            "max_wind_kt": max_wind,
-            "min_slp_mb": min_slp,
-        })
+        track.append(
+            {
+                "datetime": dt,
+                "lat": lat,
+                "lon": lon,
+                "max_wind_kt": max_wind,
+                "min_slp_mb": min_slp,
+            }
+        )
 
     # Sort by datetime
     track.sort(key=lambda p: p["datetime"])
@@ -870,14 +884,16 @@ def compute_radial_wind_profile(
             continue
 
         bin_winds = winds[mask]
-        bins.append({
-            "radius_min_km": r_min,
-            "radius_max_km": r_max,
-            "mean_wind_ms": round(float(np.mean(bin_winds)), 1),
-            "max_wind_ms": round(float(np.max(bin_winds)), 1),
-            "min_wind_ms": round(float(np.min(bin_winds)), 1),
-            "samples": count,
-        })
+        bins.append(
+            {
+                "radius_min_km": r_min,
+                "radius_max_km": r_max,
+                "mean_wind_ms": round(float(np.mean(bin_winds)), 1),
+                "max_wind_ms": round(float(np.max(bin_winds)), 1),
+                "min_wind_ms": round(float(np.min(bin_winds)), 1),
+                "samples": count,
+            }
+        )
 
     return bins
 

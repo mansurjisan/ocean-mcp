@@ -1,0 +1,88 @@
+{
+  "count": 1,
+  "SeaLvlTrends": [
+    {
+      "stationId": "8518750",
+      "stationName": "The Battery",
+      "affil": "US",
+      "trendUnits": "inches/decade",
+      "seasonalUnits": "inches",
+      "seasonalAverage": 1.14,
+      "latitude": 40.700554,
+      "longitude": -74.014168,
+      "trendType": "SINGLE",
+      "autoregressive": 0.38,
+      "autoregressiveError": 0.02,
+      "trend": 1.16,
+      "trendError": 0.02,
+      "y2000_offset": 0.0,
+      "startDate": "01/15/1856",
+      "endDate": "12/15/2025",
+      "monthlyMeans": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product/sealvltrends.json?station=8518750&details=monthlymeans&units=english&trendType=SINGLE",
+      "numberEvents": 0,
+      "events": [],
+      "seasonalCycleMonth": [
+        {
+          "month": 1,
+          "seasonalVar": -3.56,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 2,
+          "seasonalVar": -3.66,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 3,
+          "seasonalVar": -1.94,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 4,
+          "seasonalVar": 0.24,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 5,
+          "seasonalVar": 1.18,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 6,
+          "seasonalVar": 1.8,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 7,
+          "seasonalVar": 1.62,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 8,
+          "seasonalVar": 2.28,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 9,
+          "seasonalVar": 2.66,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 10,
+          "seasonalVar": 2.06,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 11,
+          "seasonalVar": -0.19,
+          "seasonalErr": 0.2
+        },
+        {
+          "month": 12,
+          "seasonalVar": -2.49,
+          "seasonalErr": 0.2
+        }
+      ]
+    }
+  ]
+}
