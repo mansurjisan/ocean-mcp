@@ -1,0 +1,13 @@
+{
+  "table": {
+    "columnNames": ["datasetID", "title", "summary", "institution", "griddap", "tabledap"],
+    "columnTypes": ["String", "String", "String", "String", "String", "String"],
+    "rows": [
+      ["erdMH1chlamday", "Chlorophyll-a, Aqua MODIS, NPP, L3SMI, Global, 4km, Science Quality, 2003-present (Monthly Composite)", "Level 3 Standard Mapped Image chlorophyll-a data from NASA Aqua MODIS.", "NASA/GSFC OBPG", "https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMH1chlamday", ""],
+      ["erdMBsstdmday", "SST, Aqua MODIS, NPP, 0.025 degrees, Pacific, Day and Night, 2006-present (Monthly Composite)", "NOAA CoastWatch SST from MODIS on Aqua.", "NOAA CoastWatch WCN", "https://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMBsstdmday", ""],
+      ["cwwcNDBCMet", "NDBC Standard Meteorological Buoy Data, 1970-present", "NDBC Standard Meteorological Buoy Data from NOAA National Data Buoy Center.", "NOAA NDBC", "", "https://coastwatch.pfeg.noaa.gov/erddap/tabledap/cwwcNDBCMet"],
+      ["pmelTao5dayIso", "TAO/TRITON, RAMA, and PIRATA Buoys, 5-Day, 1977-present, Isotherm Depth", "TAO/TRITON buoy isotherm depth data.", "NOAA PMEL", "", "https://coastwatch.pfeg.noaa.gov/erddap/tabledap/pmelTao5dayIso"],
+      ["nesdisBLENDEDsstDNDaily", "Blended SST, Global, GHRSST, Daily", "Blended sea surface temperature analysis.", "NOAA NESDIS", "https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisBLENDEDsstDNDaily", ""]
+    ]
+  }
+}

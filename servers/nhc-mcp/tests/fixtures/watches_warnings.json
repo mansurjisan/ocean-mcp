@@ -1,0 +1,32 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "stormname": "MILTON",
+        "advisnum": "12",
+        "basin": "AL",
+        "stormnum": 5,
+        "tcww": "HWR",
+        "tcww_lbl": "Hurricane Warning",
+        "advdate": "1500 UTC WED OCT 09 2024"
+      },
+      "geometry": {
+        "paths": [[[-82.0, 27.0], [-81.5, 27.5], [-81.0, 28.0]]]
+      }
+    },
+    {
+      "attributes": {
+        "stormname": "MILTON",
+        "advisnum": "12",
+        "basin": "AL",
+        "stormnum": 5,
+        "tcww": "TSW",
+        "tcww_lbl": "Tropical Storm Warning",
+        "advdate": "1500 UTC WED OCT 09 2024"
+      },
+      "geometry": {
+        "paths": [[[-83.0, 26.0], [-82.5, 26.5]]]
+      }
+    }
+  ]
+}

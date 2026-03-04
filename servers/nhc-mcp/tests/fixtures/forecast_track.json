@@ -1,0 +1,79 @@
+{
+  "features": [
+    {
+      "attributes": {
+        "stormname": "MILTON",
+        "stormtype": "HU",
+        "advdate": "1500 UTC WED OCT 09 2024",
+        "advisnum": "12",
+        "stormnum": 5,
+        "basin": "AL",
+        "tau": 0,
+        "lat": 25.5,
+        "lon": -85.2,
+        "maxwind": 120,
+        "gust": 145,
+        "mslp": 950,
+        "tcdvlp": "Hurricane",
+        "dvlbl": "H",
+        "ssnum": 4,
+        "datelbl": "3PM Wed",
+        "timezone": "EDT"
+      },
+      "geometry": {
+        "x": -85.2,
+        "y": 25.5
+      }
+    },
+    {
+      "attributes": {
+        "stormname": "MILTON",
+        "stormtype": "HU",
+        "advdate": "1500 UTC WED OCT 09 2024",
+        "advisnum": "12",
+        "stormnum": 5,
+        "basin": "AL",
+        "tau": 12,
+        "lat": 26.5,
+        "lon": -84.0,
+        "maxwind": 130,
+        "gust": 160,
+        "mslp": 940,
+        "tcdvlp": "Hurricane",
+        "dvlbl": "H",
+        "ssnum": 4,
+        "datelbl": "3AM Thu",
+        "timezone": "EDT"
+      },
+      "geometry": {
+        "x": -84.0,
+        "y": 26.5
+      }
+    },
+    {
+      "attributes": {
+        "stormname": "MILTON",
+        "stormtype": "HU",
+        "advdate": "1500 UTC WED OCT 09 2024",
+        "advisnum": "12",
+        "stormnum": 5,
+        "basin": "AL",
+        "tau": 24,
+        "lat": 27.8,
+        "lon": -82.5,
+        "maxwind": 115,
+        "gust": 140,
+        "mslp": 955,
+        "tcdvlp": "Hurricane",
+        "dvlbl": "H",
+        "ssnum": 4,
+        "datelbl": "3PM Thu",
+        "timezone": "EDT"
+      },
+      "geometry": {
+        "x": -82.5,
+        "y": 27.8
+      }
+    }
+  ]
+}

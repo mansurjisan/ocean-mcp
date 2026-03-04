@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import httpx
 
-from .models import ATCF_FIX_BASE, NHC_RECON_ARCHIVE_BASE, PRODUCT_DIRS
+from .models import (
+    AOML_SFMR_BASE,
+    ATCF_ARCHIVE_BASE,
+    ATCF_BDECK_BASE,
+    ATCF_FIX_BASE,
+    NHC_RECON_ARCHIVE_BASE,
+    PRODUCT_DIRS,
+)
 
 
 class ReconAPIError(Exception):
@@ -94,6 +104,90 @@ class ReconClient:
             Full URL to the f-deck file.
         """
         return f"{ATCF_FIX_BASE}/f{basin}{storm_number:02d}{year}.dat"
+
+    async def download_netcdf(self, url: str) -> Path:
+        """Download a NetCDF file to a temporary location.
+
+        Args:
+            url: Full HTTPS URL to the NetCDF file.
+
+        Returns:
+            Path to the temporary file. Caller must delete it.
+
+        Raises:
+            httpx.HTTPStatusError: If the file is not found or request fails.
+        """
+        client = await self._get_client()
+        response = await client.get(url)
+        response.raise_for_status()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
+        tmp.write(response.content)
+        tmp.close()
+        return Path(tmp.name)
+
+    def build_sfmr_url(self, year: int, storm_name: str) -> str:
+        """Build the AOML SFMR archive directory URL for a storm.
+
+        Args:
+            year: 4-digit year.
+            storm_name: Lowercase storm name (e.g., 'ian', 'laura').
+
+        Returns:
+            Full URL to the SFMR directory.
+        """
+        return f"{AOML_SFMR_BASE}/{year}/{storm_name.lower()}/"
+
+    def build_atcf_bdeck_url(self, basin: str, storm_number: int, year: int) -> str:
+        """Build a URL for an ATCF b-deck best track file.
+
+        Args:
+            basin: Basin code ('al', 'ep', 'cp').
+            storm_number: Storm number within the season.
+            year: 4-digit year.
+
+        Returns:
+            Full URL to the b-deck file.
+        """
+        return f"{ATCF_BDECK_BASE}/b{basin.lower()}{storm_number:02d}{year}.dat"
+
+    async def fetch_best_track(self, basin: str, storm_number: int, year: int) -> str:
+        """Fetch ATCF b-deck best track text, trying active then archive paths.
+
+        The btk/ directory only has current/recent storms. Older storms
+        are archived as gzipped files at /atcf/archive/{year}/.
+
+        Args:
+            basin: Basin code ('al', 'ep', 'cp').
+            storm_number: Storm number within the season.
+            year: 4-digit year.
+
+        Returns:
+            Raw b-deck text content.
+
+        Raises:
+            httpx.HTTPStatusError: If the file is not found at any location.
+        """
+        import gzip
+
+        client = await self._get_client()
+        b = basin.lower()
+        stem = f"b{b}{storm_number:02d}{year}.dat"
+
+        # Try active btk/ directory first
+        btk_url = f"{ATCF_BDECK_BASE}/{stem}"
+        try:
+            response = await client.get(btk_url)
+            response.raise_for_status()
+            return response.text
+        except httpx.HTTPStatusError:
+            pass
+
+        # Fall back to archive (gzipped)
+        archive_url = f"{ATCF_ARCHIVE_BASE}/{year}/{stem}.gz"
+        response = await client.get(archive_url)
+        response.raise_for_status()
+        return gzip.decompress(response.content).decode("utf-8")
 
     async def close(self) -> None:
         """Close the HTTP client."""

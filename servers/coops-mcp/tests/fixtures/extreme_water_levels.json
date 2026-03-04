@@ -1,0 +1,177 @@
+{
+  "count": 1,
+  "ExtremeWaterLevels": [
+    {
+      "stationId": "8518750",
+      "stationName": "The Battery",
+      "stationTitle": "8518750   The Battery, NY",
+      "state": "NY",
+      "epoch": "1983-2001",
+      "epochMidyear": "1992",
+      "latitude": 40.700554,
+      "longitude": -74.014168,
+      "annotation": "null",
+      "tenYearEvents": {
+        "count": 30,
+        "highs": [
+          {
+            "type": "GEV_HI",
+            "date": "09/21/1938",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "09/15/1944",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "11/25/1950",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "11/07/1953",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "02/19/1960",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "09/12/1960",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "04/13/1961",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "03/07/1962",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "02/07/1978",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "03/29/1984",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "10/31/1991",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "12/11/1992",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "03/14/2010",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "08/28/2011",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_HI",
+            "date": "10/30/2012",
+            "status": "YES"
+          }
+        ],
+        "lows": [
+          {
+            "type": "GEV_LO",
+            "date": "02/02/1908",
+            "status": "NO"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/06/1912",
+            "status": "NO"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "02/22/1912",
+            "status": "NO"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/13/1914",
+            "status": "NO"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/26/1928",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "03/08/1932",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/24/1936",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/06/1959",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "12/31/1962",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/31/1966",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "02/02/1976",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/10/1978",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "03/16/1980",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "02/08/1985",
+            "status": "YES"
+          },
+          {
+            "type": "GEV_LO",
+            "date": "01/06/2018",
+            "status": "YES"
+          }
+        ]
+      },
+      "annuals": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product.json?name=extremewaterlevels&station=8518750&extremeType=annuals&levelType=high&units=english",
+      "monthlies": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product.json?name=extremewaterlevels&station=8518750&extremeType=monthlies&levelType=high&units=english",
+      "exceedanceLevels": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product.json?name=extremewaterlevels&station=8518750&details=exceedancelevels&levelType=high&units=english",
+      "exceedanceLevelsByMonth": "https://api.tidesandcurrents.noaa.gov/dpapi/prod/webapi/product.json?name=extremewaterlevels&station=8518750&details=exceedancelevelsmonth&levelType=high&units=english"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "stations": [
+    {
+      "id": "8571892",
+      "name": "Cambridge",
+      "state": "MD",
+      "lat": "38.5733",
+      "lng": "-76.0683",
+      "timeZoneCorr": "-5"
+    }
+  ]
+}

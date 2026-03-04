@@ -16,6 +16,7 @@ async def client():
     await c.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_active_storms_endpoint(client):
     """CurrentStorms.json should return valid JSON (may be empty off-season)."""
@@ -26,6 +27,7 @@ async def test_active_storms_endpoint(client):
         assert "id" in storm or "name" in storm
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_hurdat2_atlantic_download(client):
     """Download and parse Atlantic HURDAT2 — should contain 1000+ storms."""
@@ -35,6 +37,7 @@ async def test_hurdat2_atlantic_download(client):
     assert len(storms) > 1000
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_hurdat2_katrina_lookup(client):
     """Find Hurricane Katrina in HURDAT2 by name and verify peak wind."""
@@ -58,6 +61,7 @@ async def test_hurdat2_katrina_lookup(client):
     assert peak_wind >= 140, f"Katrina peak wind {peak_wind} kt seems too low"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_hurdat2_east_pacific_download(client):
     """Download and parse East Pacific HURDAT2."""
@@ -67,6 +71,7 @@ async def test_hurdat2_east_pacific_download(client):
     assert len(storms) > 500
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_arcgis_forecast_layer_query(client):
     """Query the AT1 forecast points layer — should return valid response structure."""
@@ -77,6 +82,7 @@ async def test_arcgis_forecast_layer_query(client):
     assert isinstance(data["features"], list)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_hurdat2_caching(client):
     """Verify that HURDAT2 data is cached after first download."""

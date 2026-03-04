@@ -19,6 +19,10 @@
     "ofs": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
+    },
+    "recon": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
     }
   }
 }

@@ -1,0 +1,29 @@
+{
+  "activeStorms": [
+    {
+      "id": "al052024",
+      "binNumber": "AT5",
+      "name": "Milton",
+      "classification": "HU",
+      "intensity": 120,
+      "pressure": 950,
+      "lat": 25.5,
+      "lon": -85.2,
+      "lastUpdate": "2024-10-09T15:00:00.000Z",
+      "publicAdvisory": {
+        "advNum": "012",
+        "issuance": "2024-10-09T15:00:00.000Z",
+        "fileUpdateDate": "2024-10-09T15:05:00.000Z",
+        "url": "https://www.nhc.noaa.gov/text/refresh/MIATCPAT5+shtml/091500.shtml"
+      },
+      "forecastAdvisory": {
+        "advNum": "012",
+        "issuance": "2024-10-09T15:00:00.000Z",
+        "fileUpdateDate": "2024-10-09T15:03:00.000Z",
+        "url": "https://www.nhc.noaa.gov/text/refresh/MIATCMAT5+shtml/091500.shtml"
+      },
+      "movementDir": 50,
+      "movementSpeed": 14
+    }
+  ]
+}
