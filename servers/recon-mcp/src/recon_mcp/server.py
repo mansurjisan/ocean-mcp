@@ -21,7 +21,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[dict]:
 mcp = FastMCP("recon_mcp", lifespan=app_lifespan)
 
 # Import tool modules to register them with the server
-from .tools import fixes, hdob, missions, vdm  # noqa: E402, F401
+from .tools import fixes, hdob, missions, sfmr, vdm  # noqa: E402, F401
 
 
 def main() -> None:

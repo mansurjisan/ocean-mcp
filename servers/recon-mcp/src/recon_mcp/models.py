@@ -35,3 +35,14 @@ PRODUCT_DIRS: dict[tuple[str, str], str] = {
 # Base URLs
 NHC_RECON_ARCHIVE_BASE = "https://www.nhc.noaa.gov/archive/recon"
 ATCF_FIX_BASE = "https://ftp.nhc.noaa.gov/atcf/fix"
+AOML_SFMR_BASE = "https://www.aoml.noaa.gov/ftp/hrd/data/sfmr"
+ATCF_BDECK_BASE = "https://ftp.nhc.noaa.gov/atcf/btk"
+ATCF_ARCHIVE_BASE = "https://ftp.nhc.noaa.gov/atcf/archive"
+
+# Aircraft codes used in SFMR filenames
+AIRCRAFT_CODES: dict[str, str] = {
+    "U": "USAF WC-130J",
+    "H": "NOAA N42RF (P-3)",
+    "I": "NOAA N43RF (P-3)",
+    "N": "NOAA N49RF (G-IV)",
+}
