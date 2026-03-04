@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, stofs-mcp]
+        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, recon-mcp, stofs-mcp]
     steps:
       - uses: actions/checkout@v4
 

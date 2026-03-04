@@ -20,6 +20,7 @@ async def client():
     await c.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_check_latest_2d_cycle_exists(client):
     """Verify that at least one recent STOFS-2D-Global cycle exists on S3."""
@@ -34,6 +35,7 @@ async def test_check_latest_2d_cycle_exists(client):
     print(f"\nLatest 2D cycle: {date_str} {cycle_str}z")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_download_and_parse_station_file(client):
     """Download a STOFS-2D station file and verify NetCDF dimensions."""
@@ -60,6 +62,7 @@ async def test_download_and_parse_station_file(client):
         cleanup_temp_file(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_extract_single_station(client):
     """Download STOFS-2D file and extract The Battery (8518750) time series."""
@@ -89,6 +92,7 @@ async def test_extract_single_station(client):
         cleanup_temp_file(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_coops_observation_fetch(client):
     """Fetch 24 hours of CO-OPS water level data for The Battery."""
@@ -116,6 +120,7 @@ async def test_coops_observation_fetch(client):
     print(f"Sample: {sample}")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_opendap_endpoint_reachable(client):
     """Check that the NOMADS OPeNDAP endpoint is reachable for the latest cycle."""
@@ -139,6 +144,7 @@ async def test_opendap_endpoint_reachable(client):
     print(f"\nOPeNDAP reachable: {url}")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_opendap_point_extraction(client):
     """Extract a single point from STOFS via OPeNDAP at The Battery, NY."""
@@ -172,6 +178,7 @@ async def test_opendap_point_extraction(client):
     assert abs(data["actual_lon"] - (-74.0)) < 0.5
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_3d_atlantic_station_file(client):
     """Download STOFS-3D-Atlantic station file and verify structure."""

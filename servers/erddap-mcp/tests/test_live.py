@@ -19,6 +19,7 @@ async def client():
     await c.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_search_sst(client):
     """Search CoastWatch for 'sea surface temperature' — should return results."""
@@ -32,6 +33,7 @@ async def test_search_sst(client):
     assert "Dataset ID" in first or "datasetID" in first
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_info_chlorophyll(client):
     """Get info for erdSW2018chlamday on CoastWatch — should return variables."""
@@ -45,6 +47,7 @@ async def test_get_info_chlorophyll(client):
     )
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_tabledap_ndbc(client):
     """Get tabledap data from NDBC buoy dataset — should return rows."""
@@ -55,6 +58,7 @@ async def test_get_tabledap_ndbc(client):
     assert len(rows) > 0, "Expected tabledap rows"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_all_datasets(client):
     """List all datasets on CoastWatch — should return 100+ datasets."""
@@ -63,6 +67,7 @@ async def test_get_all_datasets(client):
     assert len(rows) > 100, f"Expected 100+ datasets, got {len(rows)}"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_griddap_small_subset(client):
     """Get a small griddap data subset — should return grid values."""

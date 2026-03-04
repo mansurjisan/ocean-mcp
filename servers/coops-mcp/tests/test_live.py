@@ -16,6 +16,7 @@ async def client():
     await c.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_list_water_level_stations(client):
     """List water level stations — should return many stations."""
@@ -28,6 +29,7 @@ async def test_list_water_level_stations(client):
     assert "name" in s
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_station_battery(client):
     """Get The Battery (8518750) station metadata."""
@@ -38,6 +40,7 @@ async def test_get_station_battery(client):
     assert station.get("lat") is not None or station.get("latitude") is not None
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_water_levels_today(client):
     """Get today's water levels at The Battery."""
@@ -57,6 +60,7 @@ async def test_get_water_levels_today(client):
     assert "v" in records[0]
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_tide_predictions(client):
     """Get tide predictions for The Battery."""
@@ -74,6 +78,7 @@ async def test_get_tide_predictions(client):
     assert len(records) > 0, "Expected tide prediction data"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_wind_key_west(client):
     """Get latest wind data at Key West (8724580)."""
@@ -92,6 +97,7 @@ async def test_get_wind_key_west(client):
     assert "d" in records[0]  # direction
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_extreme_water_levels(client):
     """Get extreme water levels at The Battery."""
@@ -107,6 +113,7 @@ async def test_get_extreme_water_levels(client):
     assert "ExtremeWaterLevels" in data
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_sea_level_trends(client):
     """Get sea level trends at The Battery."""
@@ -117,6 +124,7 @@ async def test_get_sea_level_trends(client):
     assert "SeaLvlTrends" in data
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_datums(client):
     """Get tidal datums at The Battery."""
