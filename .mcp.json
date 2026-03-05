@@ -12,6 +12,10 @@
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
     },
+    "goes": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/goes-mcp", "python", "-m", "goes_mcp"]
+    },
     "nhc": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
@@ -31,6 +35,10 @@
     "schism": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/schism-mcp", "python", "-m", "schism_mcp"]
+    },
+    "usgs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/usgs-mcp", "python", "-m", "usgs_mcp"]
     },
     "winds": {
       "command": "uv",

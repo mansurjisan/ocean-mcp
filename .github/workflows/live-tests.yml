@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [adcirc-mcp, coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, recon-mcp, schism-mcp, stofs-mcp, ww3-mcp]
+        server: [adcirc-mcp, coops-mcp, erddap-mcp, goes-mcp, nhc-mcp, ofs-mcp, recon-mcp, schism-mcp, stofs-mcp, usgs-mcp, ww3-mcp]
     steps:
       - uses: actions/checkout@v6
 
