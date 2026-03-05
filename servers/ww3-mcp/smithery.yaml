@@ -1,0 +1,9 @@
+# Smithery configuration — https://smithery.ai/docs/config
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required: []
+    properties: {}
+  commandFunction: |-
+    (config) => ({ command: 'uvx', args: ['ww3-mcp'] })
