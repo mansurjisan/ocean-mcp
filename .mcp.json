@@ -23,6 +23,10 @@
     "recon": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
+    },
+    "winds": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/winds-mcp", "python", "-m", "winds_mcp"]
     }
   }
 }

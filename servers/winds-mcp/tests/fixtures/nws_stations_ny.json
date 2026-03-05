@@ -1,0 +1,53 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "https://api.weather.gov/stations/KJFK",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.76393, 40.63915]
+      },
+      "properties": {
+        "stationIdentifier": "KJFK",
+        "name": "New York, Kennedy International Airport",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 3.048},
+        "county": "https://api.weather.gov/zones/county/NYC081",
+        "forecast": "https://api.weather.gov/zones/forecast/NYZ178"
+      }
+    },
+    {
+      "id": "https://api.weather.gov/stations/KLGA",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.88, 40.77917]
+      },
+      "properties": {
+        "stationIdentifier": "KLGA",
+        "name": "New York, La Guardia Airport",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 6.096},
+        "county": "https://api.weather.gov/zones/county/NYC081",
+        "forecast": "https://api.weather.gov/zones/forecast/NYZ176"
+      }
+    },
+    {
+      "id": "https://api.weather.gov/stations/KNYC",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.96667, 40.78333]
+      },
+      "properties": {
+        "stationIdentifier": "KNYC",
+        "name": "New York City, Central Park",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 46.9392},
+        "county": "https://api.weather.gov/zones/county/NYC061",
+        "forecast": "https://api.weather.gov/zones/forecast/NYZ072"
+      }
+    }
+  ]
+}

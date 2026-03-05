@@ -1,0 +1,50 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "https://api.weather.gov/stations/KNYC",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.96667, 40.78333]
+      },
+      "properties": {
+        "stationIdentifier": "KNYC",
+        "name": "New York City, Central Park",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 46.9392},
+        "distance": {"unitCode": "wmoUnit:m", "value": 10605.64}
+      }
+    },
+    {
+      "id": "https://api.weather.gov/stations/KLGA",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-73.88, 40.77917]
+      },
+      "properties": {
+        "stationIdentifier": "KLGA",
+        "name": "New York, La Guardia Airport",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 6.096},
+        "distance": {"unitCode": "wmoUnit:m", "value": 13553.95}
+      }
+    },
+    {
+      "id": "https://api.weather.gov/stations/KEWR",
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-74.16868, 40.68268]
+      },
+      "properties": {
+        "stationIdentifier": "KEWR",
+        "name": "Newark, Newark Liberty International Airport",
+        "timeZone": "America/New_York",
+        "elevation": {"unitCode": "wmoUnit:m", "value": 2.1336},
+        "distance": {"unitCode": "wmoUnit:m", "value": 15321.22}
+      }
+    }
+  ]
+}
