@@ -78,3 +78,5 @@ uv run pytest tests/ --ignore=tests/test_live.py --ignore=tests/test_mcp_protoco
 ## License
 
 MIT
+
+<!-- mcp-name: io.github.mansurjisan/ww3-mcp -->

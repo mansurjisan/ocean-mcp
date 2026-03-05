@@ -3,7 +3,7 @@
   "name": "io.github.mansurjisan/ww3-mcp",
   "title": "NOAA WW3 MCP Server",
   "description": "GFS-Wave (WAVEWATCH III) forecasts and NDBC buoy wave observations",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/mansurjisan/ocean-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "ww3-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

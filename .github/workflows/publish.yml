@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI and MCP Registry
 
 on:
   push:
@@ -92,3 +92,43 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: servers/${{ needs.parse-tag.outputs.server }}/dist/
+
+  mcp-registry:
+    needs: [parse-tag, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for server.json
+        id: check
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: |
+          if [ -f server.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install mcp-publisher
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Update version in server.json
+        if: steps.check.outputs.exists == 'true'
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: |
+          VERSION="${{ needs.parse-tag.outputs.version }}"
+          jq --arg v "$VERSION" '(.version = $v) | (.packages[].version = $v)' server.json > server.tmp && mv server.tmp server.json
+
+      - name: Authenticate to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        if: steps.check.outputs.exists == 'true'
+        working-directory: servers/${{ needs.parse-tag.outputs.server }}
+        run: $GITHUB_WORKSPACE/mcp-publisher publish
