@@ -1,0 +1,16 @@
+{
+  "id": "https://api.weather.gov/stations/KJFK",
+  "type": "Feature",
+  "geometry": {
+    "type": "Point",
+    "coordinates": [-73.76393, 40.63915]
+  },
+  "properties": {
+    "stationIdentifier": "KJFK",
+    "name": "New York, Kennedy International Airport",
+    "timeZone": "America/New_York",
+    "elevation": {"unitCode": "wmoUnit:m", "value": 3.048},
+    "county": "https://api.weather.gov/zones/county/NYC081",
+    "forecast": "https://api.weather.gov/zones/forecast/NYZ178"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mansurjisan/winds-mcp",
+  "title": "NWS Surface Wind Observations MCP Server",
+  "description": "NWS surface wind observations from ASOS, AWOS, and other stations via Weather.gov and Iowa Environmental Mesonet APIs",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "winds-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

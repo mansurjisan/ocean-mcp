@@ -1,0 +1,49 @@
+{
+  "id": "https://api.weather.gov/stations/KJFK/observations/2026-03-05T12:20:00+00:00",
+  "type": "Feature",
+  "geometry": {
+    "type": "Point",
+    "coordinates": [-73.78, 40.65]
+  },
+  "properties": {
+    "stationId": "KJFK",
+    "stationName": "New York, Kennedy International Airport",
+    "timestamp": "2026-03-05T12:20:00+00:00",
+    "textDescription": "Light Rain and Fog/Mist",
+    "temperature": {
+      "unitCode": "wmoUnit:degC",
+      "value": 4,
+      "qualityControl": "V"
+    },
+    "dewpoint": {
+      "unitCode": "wmoUnit:degC",
+      "value": 3,
+      "qualityControl": "V"
+    },
+    "windDirection": {
+      "unitCode": "wmoUnit:degree_(angle)",
+      "value": 100,
+      "qualityControl": "V"
+    },
+    "windSpeed": {
+      "unitCode": "wmoUnit:km_h-1",
+      "value": 7.416,
+      "qualityControl": "V"
+    },
+    "windGust": {
+      "unitCode": "wmoUnit:km_h-1",
+      "value": null,
+      "qualityControl": "Z"
+    },
+    "barometricPressure": {
+      "unitCode": "wmoUnit:Pa",
+      "value": 102370.52,
+      "qualityControl": "V"
+    },
+    "visibility": {
+      "unitCode": "wmoUnit:m",
+      "value": 6437.38,
+      "qualityControl": "C"
+    }
+  }
+}

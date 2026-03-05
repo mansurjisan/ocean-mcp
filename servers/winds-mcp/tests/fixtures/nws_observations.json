@@ -1,0 +1,47 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-73.78, 40.65]},
+      "properties": {
+        "timestamp": "2026-03-05T12:20:00+00:00",
+        "textDescription": "Light Rain",
+        "temperature": {"unitCode": "wmoUnit:degC", "value": 4},
+        "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 100},
+        "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 7.416},
+        "windGust": {"unitCode": "wmoUnit:km_h-1", "value": null},
+        "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 102370},
+        "visibility": {"unitCode": "wmoUnit:m", "value": 6437}
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-73.78, 40.65]},
+      "properties": {
+        "timestamp": "2026-03-05T11:51:00+00:00",
+        "textDescription": "Overcast",
+        "temperature": {"unitCode": "wmoUnit:degC", "value": 5},
+        "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 120},
+        "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 14.832},
+        "windGust": {"unitCode": "wmoUnit:km_h-1", "value": 27.78},
+        "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 102200},
+        "visibility": {"unitCode": "wmoUnit:m", "value": 16093}
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {"type": "Point", "coordinates": [-73.78, 40.65]},
+      "properties": {
+        "timestamp": "2026-03-05T10:51:00+00:00",
+        "textDescription": "Cloudy",
+        "temperature": {"unitCode": "wmoUnit:degC", "value": 6},
+        "windDirection": {"unitCode": "wmoUnit:degree_(angle)", "value": 200},
+        "windSpeed": {"unitCode": "wmoUnit:km_h-1", "value": 18.52},
+        "windGust": {"unitCode": "wmoUnit:km_h-1", "value": 33.336},
+        "barometricPressure": {"unitCode": "wmoUnit:Pa", "value": 102100},
+        "visibility": {"unitCode": "wmoUnit:m", "value": 16093}
+      }
+    }
+  ]
+}
