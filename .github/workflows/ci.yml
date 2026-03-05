@@ -13,11 +13,13 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
+      adcirc-mcp: ${{ steps.filter.outputs.adcirc-mcp }}
       coops-mcp: ${{ steps.filter.outputs.coops-mcp }}
       erddap-mcp: ${{ steps.filter.outputs.erddap-mcp }}
       nhc-mcp: ${{ steps.filter.outputs.nhc-mcp }}
       ofs-mcp: ${{ steps.filter.outputs.ofs-mcp }}
       recon-mcp: ${{ steps.filter.outputs.recon-mcp }}
+      schism-mcp: ${{ steps.filter.outputs.schism-mcp }}
       stofs-mcp: ${{ steps.filter.outputs.stofs-mcp }}
       winds-mcp: ${{ steps.filter.outputs.winds-mcp }}
       ww3-mcp: ${{ steps.filter.outputs.ww3-mcp }}
@@ -27,6 +29,8 @@ jobs:
         id: filter
         with:
           filters: |
+            adcirc-mcp:
+              - 'servers/adcirc-mcp/**'
             coops-mcp:
               - 'servers/coops-mcp/**'
             erddap-mcp:
@@ -37,6 +41,8 @@ jobs:
               - 'servers/ofs-mcp/**'
             recon-mcp:
               - 'servers/recon-mcp/**'
+            schism-mcp:
+              - 'servers/schism-mcp/**'
             stofs-mcp:
               - 'servers/stofs-mcp/**'
             winds-mcp:
@@ -61,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, recon-mcp, stofs-mcp, winds-mcp, ww3-mcp]
+        server: [adcirc-mcp, coops-mcp, erddap-mcp, nhc-mcp, ofs-mcp, recon-mcp, schism-mcp, stofs-mcp, winds-mcp, ww3-mcp]
     # On PRs, skip unchanged servers. On push to main, run all.
     if: always()
     steps:

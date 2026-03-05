@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "adcirc": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/adcirc-mcp", "python", "-m", "adcirc_mcp"]
+    },
     "coops": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/coops-mcp", "python", "-m", "coops_mcp"]
@@ -23,6 +27,10 @@
     "recon": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
+    },
+    "schism": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/schism-mcp", "python", "-m", "schism_mcp"]
     },
     "winds": {
       "command": "uv",

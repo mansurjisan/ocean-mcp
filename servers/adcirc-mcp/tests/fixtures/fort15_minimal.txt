@@ -1,0 +1,45 @@
+Shinnecock Inlet Coarse Grid - Test Case
+ShinneTest
+1                                  ! NFOVER
+0                                  ! NABOUT
+1000                               ! NSCREEN
+0                                  ! IHOT
+2                                  ! ICS
+0                                  ! IM
+1 2 1 0                            ! NOLIBF NOLIFA NOLICA NOLICAT
+2                                  ! NWP
+mannings_n_at_sea_floor
+primitive_weighting_in_continuity_equation
+1                                  ! NCOR
+1                                  ! NTIP
+0                                  ! NWS
+1                                  ! NRAMP
+9.81                               ! G
+-3.0                               ! TAU0
+2.0                                ! DTDP
+0.0                                ! STATIM
+0.0                                ! REFTIM
+5.0                                ! RNDAY
+2.0                                ! DRAMP
+0.35 0.30 0.35                     ! A00 B00 C00
+0.05 0.05 0.1 0.05                 ! H0 NODEDRYMIN NODEWETMIN VELMIN
+-73.93 40.55                       ! SLAM0 SFEA0
+0.0025                             ! CF
+5.0                                ! ESLM
+0.0                                ! CORI
+2                                  ! NTIF
+M2
+0.242334  1.405189e-04  0.693000  1.000000  0.000000
+S2
+0.112841  1.454441e-04  0.693000  1.000000  0.000000
+2                                  ! NBFR
+M2
+1.405189e-04  1.000000  0.000000
+S2
+1.454441e-04  1.000000  0.000000
+110.0                              ! ANGINN
+5 0.0 5.0 10                       ! NOUTE TOUTSE TOUTFE NSPOOLE
+3                                  ! NSTAE
+-73.95 40.50
+-73.90 40.55
+-73.85 40.60

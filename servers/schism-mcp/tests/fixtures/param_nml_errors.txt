@@ -1,0 +1,23 @@
+&CORE
+dt = -100.0       ! invalid negative timestep
+rnday = -5.0      ! invalid negative run time
+ihfskip = 100     ! not divisible by nspool
+nhot = 1          ! hotstart enabled
+/
+
+&OPT
+ics = 2           ! spherical coordinates
+slam0 = 0.0       ! not centered on domain
+sfea0 = 0.0       ! not centered on domain
+nws = 2           ! wind forcing
+wtiminc = 50.0    ! less than dt
+h0 = -0.1         ! invalid negative
+nramp = 1         ! ramp enabled
+dramp = 0.0       ! zero ramp duration
+itur = 3          ! 3D turbulence in 2D setup
+/
+
+&SCHOUT
+nspool = 7        ! prime number - won't divide evenly into ihfskip
+iof_hydro(1) = 1
+/
