@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mansurjisan/recon-mcp",
+  "title": "NOAA Recon MCP Server",
+  "description": "Hurricane reconnaissance data — HDOB flight observations, Vortex Data Messages, SFMR, and ATCF fixes",
+  "version": "0.1.1",
+  "repository": {
+    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "recon-mcp",
+      "version": "0.1.1",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
