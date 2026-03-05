@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-6_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-7_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -13,9 +13,10 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [coops-mcp](servers/coops-mcp/) | [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/) | NOAA CO-OPS tides, water levels, currents, meteorological data |
 | [erddap-mcp](servers/erddap-mcp/) | [![PyPI](https://img.shields.io/pypi/v/erddap-mcp)](https://pypi.org/project/erddap-mcp/) | Universal ERDDAP data access across 80+ public servers |
 | [nhc-mcp](servers/nhc-mcp/) | [![PyPI](https://img.shields.io/pypi/v/nhc-mcp)](https://pypi.org/project/nhc-mcp/) | NHC storm tracks, advisories, HURDAT2 best track data |
-| [recon-mcp](servers/recon-mcp/) | — | Hurricane reconnaissance data (HDOB, Vortex Data Messages, ATCF fixes) |
+| [recon-mcp](servers/recon-mcp/) | [![PyPI](https://img.shields.io/pypi/v/recon-mcp)](https://pypi.org/project/recon-mcp/) | Hurricane reconnaissance data (HDOB, Vortex Data Messages, ATCF fixes) |
 | [stofs-mcp](servers/stofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/stofs-mcp)](https://pypi.org/project/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation |
 | [ofs-mcp](servers/ofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ofs-mcp)](https://pypi.org/project/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
+| [ww3-mcp](servers/ww3-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ww3-mcp)](https://pypi.org/project/ww3-mcp/) | GFS-Wave (WAVEWATCH III) forecasts and NDBC buoy wave observations |
 
 **No API keys required** — all servers use free, publicly available datasets.
 
@@ -34,13 +35,13 @@ pip install coops-mcp
 pipx install coops-mcp
 ```
 
-Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`.
+Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`, `ww3-mcp`.
 
 ### Install from source
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp, ww3-mcp
 uv sync
 ```
 
@@ -76,6 +77,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "ofs": {
       "command": "uvx",
       "args": ["ofs-mcp"]
+    },
+    "ww3": {
+      "command": "uvx",
+      "args": ["ww3-mcp"]
     }
   }
 }
@@ -110,6 +115,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "ofs": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
+    },
+    "ww3": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/ww3-mcp", "python", "-m", "ww3_mcp"]
     }
   }
 }
@@ -157,6 +166,13 @@ With servers configured, you can ask your AI assistant naturally:
 - "Compare CBOFS water level with CO-OPS observations at station 8571892"
 - "List available NGOFS2 forecast cycles for today"
 
+**WW3 queries:**
+- "What GFS-Wave model grids are available?"
+- "Find NDBC buoys near Cape Hatteras"
+- "Get the latest wave observations from buoy 41025"
+- "Show me the GFS-Wave forecast at 35°N, 75°W for the next 48 hours"
+- "Compare the wave forecast against buoy 41025 observations"
+
 **Cross-server queries:**
 - "Find CO-OPS stations near this ERDDAP buoy location"
 - "Compare tide station data with nearby ERDDAP satellite SST"
@@ -188,7 +204,7 @@ If you use this project in your research or work, please cite:
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
   url       = {https://github.com/mansurjisan/ocean-mcp},
-  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, and OFS data}
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, and WW3 data}
 }
 ```
 
