@@ -1,0 +1,16 @@
+{
+  "latitude": 35.0,
+  "longitude": 284.5,
+  "valid_time": "2026-03-04 12:00",
+  "HTSGW": 1.85,
+  "PERPW": 8.2,
+  "DIRPW": 195.0,
+  "WVHGT": 0.95,
+  "WVPER": 5.5,
+  "WVDIR": 210.0,
+  "SWELL": 1.55,
+  "SWPER": 10.3,
+  "SWDIR": 185.0,
+  "WIND": 5.2,
+  "WDIR": 200.0
+}
