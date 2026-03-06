@@ -25,6 +25,7 @@ jobs:
       usgs-mcp: ${{ steps.filter.outputs.usgs-mcp }}
       winds-mcp: ${{ steps.filter.outputs.winds-mcp }}
       ww3-mcp: ${{ steps.filter.outputs.ww3-mcp }}
+      rtofs-mcp: ${{ steps.filter.outputs.rtofs-mcp }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -55,6 +56,8 @@ jobs:
               - 'servers/winds-mcp/**'
             ww3-mcp:
               - 'servers/ww3-mcp/**'
+            rtofs-mcp:
+              - 'servers/rtofs-mcp/**'
 
   lint:
     runs-on: ubuntu-latest
@@ -73,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [adcirc-mcp, coops-mcp, erddap-mcp, goes-mcp, nhc-mcp, ofs-mcp, recon-mcp, schism-mcp, stofs-mcp, usgs-mcp, winds-mcp, ww3-mcp]
+        server: [adcirc-mcp, coops-mcp, erddap-mcp, goes-mcp, nhc-mcp, ofs-mcp, recon-mcp, rtofs-mcp, schism-mcp, stofs-mcp, usgs-mcp, winds-mcp, ww3-mcp]
     # On PRs, skip unchanged servers. On push to main, run all.
     if: always()
     steps:

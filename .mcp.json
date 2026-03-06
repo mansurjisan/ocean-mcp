@@ -43,6 +43,10 @@
     "winds": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/winds-mcp", "python", "-m", "winds_mcp"]
+    },
+    "rtofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/rtofs-mcp", "python", "-m", "rtofs_mcp"]
     }
   }
 }
