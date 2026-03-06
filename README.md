@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-7_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-8_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -16,6 +16,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [recon-mcp](servers/recon-mcp/) | [![PyPI](https://img.shields.io/pypi/v/recon-mcp)](https://pypi.org/project/recon-mcp/) | Hurricane reconnaissance data (HDOB, Vortex Data Messages, ATCF fixes) |
 | [stofs-mcp](servers/stofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/stofs-mcp)](https://pypi.org/project/stofs-mcp/) | NOAA STOFS storm surge forecasts and observation validation |
 | [ofs-mcp](servers/ofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ofs-mcp)](https://pypi.org/project/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
+| [rtofs-mcp](servers/rtofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/rtofs-mcp)](https://pypi.org/project/rtofs-mcp/) | NOAA RTOFS global ocean forecasts (SST, salinity, currents, SSH) via HYCOM THREDDS |
 | [ww3-mcp](servers/ww3-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ww3-mcp)](https://pypi.org/project/ww3-mcp/) | GFS-Wave (WAVEWATCH III) forecasts and NDBC buoy wave observations |
 
 **No API keys required** — all servers use free, publicly available datasets.
@@ -35,13 +36,13 @@ pip install coops-mcp
 pipx install coops-mcp
 ```
 
-Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`, `ww3-mcp`.
+Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`, `rtofs-mcp`, `ww3-mcp`.
 
 ### Install from source
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp, ww3-mcp
+cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp, rtofs-mcp, ww3-mcp
 uv sync
 ```
 
@@ -77,6 +78,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "ofs": {
       "command": "uvx",
       "args": ["ofs-mcp"]
+    },
+    "rtofs": {
+      "command": "uvx",
+      "args": ["rtofs-mcp"]
     },
     "ww3": {
       "command": "uvx",
@@ -115,6 +120,10 @@ Add to your MCP settings (e.g., project `.mcp.json`):
     "ofs": {
       "command": "uv",
       "args": ["run", "--directory", "/path/to/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
+    },
+    "rtofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/ocean-mcp/servers/rtofs-mcp", "python", "-m", "rtofs_mcp"]
     },
     "ww3": {
       "command": "uv",
@@ -166,6 +175,13 @@ With servers configured, you can ask your AI assistant naturally:
 - "Compare CBOFS water level with CO-OPS observations at station 8571892"
 - "List available NGOFS2 forecast cycles for today"
 
+**RTOFS queries:**
+- "Get the RTOFS sea surface temperature forecast at 40°N, 74°W"
+- "Show me a temperature depth profile in the Gulf Stream"
+- "What RTOFS datasets are currently available on HYCOM THREDDS?"
+- "Get a vertical transect of salinity from Miami to Bermuda"
+- "Show the SST area forecast for the Gulf of Mexico"
+
 **WW3 queries:**
 - "What GFS-Wave model grids are available?"
 - "Find NDBC buoys near Cape Hatteras"
@@ -204,7 +220,7 @@ If you use this project in your research or work, please cite:
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
   url       = {https://github.com/mansurjisan/ocean-mcp},
-  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, and WW3 data}
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, RTOFS, and WW3 data}
 }
 ```
 
