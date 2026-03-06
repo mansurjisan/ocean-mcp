@@ -1,5 +1,7 @@
 # schism-mcp
 
+<!-- mcp-name: io.github.mansurjisan/schism-mcp -->
+
 MCP server for SCHISM model setup debugging, parameter lookup, and configuration validation.
 
 Unlike the other ocean-mcp servers that query remote NOAA APIs, schism-mcp **parses local model input files** and provides **embedded domain knowledge** to help debug and understand SCHISM configurations.
