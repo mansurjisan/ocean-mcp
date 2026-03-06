@@ -1,0 +1,34 @@
+Error Test Case - Multiple Issues
+ErrorTest
+0                                  ! NFOVER
+0                                  ! NABOUT
+1000                               ! NSCREEN
+0                                  ! IHOT
+2                                  ! ICS
+0                                  ! IM
+2 2 1 0                            ! NOLIBF NOLIFA NOLICA NOLICAT
+0                                  ! NWP (mismatch - NOLIBF=2 but no manning's n)
+1                                  ! NCOR
+1                                  ! NTIP
+0                                  ! NWS
+1                                  ! NRAMP
+9.81                               ! G
+0.03                               ! TAU0
+-1.0                               ! DTDP (invalid - negative)
+0.0                                ! STATIM
+0.0                                ! REFTIM
+-5.0                               ! RNDAY (invalid - negative)
+0.0                                ! DRAMP (warning - ramp enabled but zero duration)
+0.50 0.30 0.30                     ! A00 B00 C00 (sum > 1.0)
+0.0                                ! H0 (invalid - zero with NOLIFA=2)
+0.0 0.0                            ! SLAM0 SFEA0 (warning - ICS=2 but center at 0,0)
+0.0025                             ! CF
+5.0                                ! ESLM
+0.0                                ! CORI
+1                                  ! NTIF
+M2
+0.242334  1.405189e-04  0.693000  1.000000  0.000000
+2                                  ! NBFR (mismatch - says 2 but only 1 follows)
+M2
+1.405189e-04  1.000000  0.000000
+110.0                              ! ANGINN

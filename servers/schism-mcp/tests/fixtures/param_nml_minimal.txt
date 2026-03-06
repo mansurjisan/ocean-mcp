@@ -1,0 +1,28 @@
+&CORE
+!--- Time stepping
+dt = 100.0         ! timestep in seconds
+rnday = 30.0       ! total run time in days
+ihfskip = 864      ! output stack skip count
+nhot = 0           ! cold start
+nhot_write = 1     ! write hotstart files
+/
+
+&OPT
+ics = 2           ! spherical coordinates
+nws = 2           ! sflux atmospheric forcing
+wtiminc = 150.0   ! wind input time step
+nramp = 1         ! enable tidal ramp
+dramp = 2.0       ! ramp duration in days
+h0 = 0.01         ! minimum depth
+slam0 = -75.0     ! center longitude
+sfea0 = 38.0      ! center latitude
+itur = 0          ! no turbulence closure
+ncor = 1          ! spatially varying Coriolis
+/
+
+&SCHOUT
+nspool = 36       ! output spool interval
+iof_hydro(1) = 1  ! elevation output
+iof_hydro(19) = 1 ! depth-averaged velocity
+iof_hydro(26) = 1 ! wind speed
+/

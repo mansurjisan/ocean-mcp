@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "adcirc": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/adcirc-mcp", "python", "-m", "adcirc_mcp"]
+    },
     "coops": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/coops-mcp", "python", "-m", "coops_mcp"]
@@ -7,6 +11,10 @@
     "erddap": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
+    },
+    "goes": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/goes-mcp", "python", "-m", "goes_mcp"]
     },
     "nhc": {
       "command": "uv",
@@ -23,6 +31,14 @@
     "recon": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
+    },
+    "schism": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/schism-mcp", "python", "-m", "schism_mcp"]
+    },
+    "usgs": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/usgs-mcp", "python", "-m", "usgs_mcp"]
     },
     "winds": {
       "command": "uv",
