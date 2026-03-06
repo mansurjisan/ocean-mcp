@@ -1,5 +1,7 @@
 # goes-mcp
 
+<!-- mcp-name: io.github.mansurjisan/goes-mcp -->
+
 MCP server for **NOAA GOES satellite imagery** — visible, infrared, water vapor, and composite products from GOES-18 (West) and GOES-19 (East).
 
 ## Features

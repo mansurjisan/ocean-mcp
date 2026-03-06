@@ -1,5 +1,7 @@
 # adcirc-mcp
 
+<!-- mcp-name: io.github.mansurjisan/adcirc-mcp -->
+
 MCP server for ADCIRC model setup debugging, parameter lookup, and configuration validation.
 
 Unlike the other ocean-mcp servers that query remote NOAA APIs, adcirc-mcp **parses local model input files** and provides **embedded domain knowledge** to help debug and understand ADCIRC configurations.

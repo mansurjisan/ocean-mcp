@@ -1,5 +1,7 @@
 # usgs-mcp
 
+<!-- mcp-name: io.github.mansurjisan/usgs-mcp -->
+
 MCP server providing access to **USGS Water Services** for real-time streamflow, flood stages, peak events, and historical statistics.
 
 This server fills a critical gap in the ocean-mcp ecosystem by providing **inland flooding and river data** — often the deadliest aspect of hurricanes and storms.
