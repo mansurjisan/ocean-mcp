@@ -52,7 +52,7 @@ async def ndbc_get_latest_observation(
     """
     try:
         client = _get_client(ctx)
-        columns, records = await client.get_observations(station_id, hours=1)
+        columns, records = await client.get_observations(station_id)
 
         if not records:
             return f"No recent observations found for station {station_id.upper()}."
