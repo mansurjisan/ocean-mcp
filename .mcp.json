@@ -47,6 +47,10 @@
     "rtofs": {
       "command": "uv",
       "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/rtofs-mcp", "python", "-m", "rtofs_mcp"]
+    },
+    "ndbc": {
+      "command": "uv",
+      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/ndbc-mcp", "python", "-m", "ndbc_mcp"]
     }
   }
 }

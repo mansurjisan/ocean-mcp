@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<stations created="2026-03-07T11:55:02UTC" count="5">
+  <station id="44013" lat="42.346" lon="-70.651" elev="0" name="Boston 16 NM East of Boston, MA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="41001" lat="34.7" lon="-72.73" elev="0" name="150 NM East of Cape HATTERAS" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="46042" lat="36.785" lon="-122.469" elev="0" name="Monterey - 27NM West of Monterey Bay, CA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="TPLM2" lat="38.899" lon="-76.436" elev="0" name="Thomas Point Light, MD" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="fixed" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="21413" lat="30.487" lon="152.124" elev="0" name="SOUTHEAST TOKYO" owner="NDBC" pgm="Tsunami" type="dart" met="n" currents="n" waterquality="n" dart="y"/>
+</stations>
