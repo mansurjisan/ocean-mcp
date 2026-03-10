@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mansurjisan/ufs-runner-mcp",
+  "title": "UFS-Coastal Experiment Runner",
+  "description": "MCP server for setting up, validating, submitting, and monitoring UFS-Coastal experiments on NOAA HPC",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "ufs-runner-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
