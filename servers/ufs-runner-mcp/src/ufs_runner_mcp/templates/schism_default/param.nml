@@ -1,0 +1,25 @@
+&CORE
+ ipre = 0
+ ibc = 0
+ ibtp = 0
+ rnday = 1.0
+ dt = 120.0
+ nspool = 36
+ ihfskip = 720
+/
+
+&OPT
+ ipre2 = 0
+ start_year = 2024
+ start_month = 1
+ start_day = 1
+ start_hour = 0.0
+ utc_start = 0.0
+/
+
+&SCHOUT
+ nhot = 1
+ nhot_write = 720
+ iout_sta = 1
+ nspool_sta = 36
+/
