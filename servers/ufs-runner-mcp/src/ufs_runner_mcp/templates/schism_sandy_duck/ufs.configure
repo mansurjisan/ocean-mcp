@@ -14,7 +14,7 @@ EARTH_attributes::
 
 # MED #
 MED_model:                      cmeps
-MED_petlist_bounds:             0 159
+MED_petlist_bounds:             0 {{atm_tasks_minus1}}
 MED_omp_num_threads:            1
 MED_attributes::
   ATM_model = datm
@@ -27,7 +27,7 @@ MED_attributes::
 
 # ATM #
 ATM_model:                      datm
-ATM_petlist_bounds:             0 159
+ATM_petlist_bounds:             0 {{atm_tasks_minus1}}
 ATM_omp_num_threads:            1
 ATM_attributes::
   Verbosity = 0
@@ -38,7 +38,7 @@ ATM_attributes::
 
 # OCN #
 OCN_model:                      schism
-OCN_petlist_bounds:             160 319
+OCN_petlist_bounds:             {{atm_tasks}} {{total_tasks_minus1}}
 OCN_omp_num_threads:            1
 OCN_attributes::
   Verbosity = 0
@@ -49,9 +49,9 @@ OCN_attributes::
   CouplingConfig = none
 ::
 
-# Run Sequence # 
+# Run Sequence #
 runSeq::
-@1800
+@{{coupling_interval}}
   ATM -> MED :remapMethod=redist
   MED med_phases_post_atm
   OCN -> MED :remapMethod=redist
@@ -74,10 +74,10 @@ ALLCOMP_attributes::
   ScalarFieldIdxGridNY = 2
   ScalarFieldIdxNextSwCday = 3
   ScalarFieldName = cpl_scalars
-  start_type = startup 
-  restart_dir = RESTART/
+  start_type = startup
+  restart_dir = {{restart_dir}}
   case_name = ufs.cpld
-  restart_n = 6
+  restart_n = {{nhours_fcst}}
   restart_option = nhours
   restart_ymd = -999
   orb_eccen = 1.e36
@@ -86,7 +86,7 @@ ALLCOMP_attributes::
   orb_mode = fixed_year
   orb_mvelp = 1.e36
   orb_obliq = 1.e36
-  stop_n = 6
+  stop_n = {{nhours_fcst}}
   stop_option = nhours
   stop_ymd = -999
 ::

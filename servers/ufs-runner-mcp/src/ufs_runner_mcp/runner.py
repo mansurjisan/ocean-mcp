@@ -11,8 +11,42 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import f90nml
+import yaml
 
 from .models import MAX_NODES, MAX_WALL_HOURS, ModelType, validate_job_id, validate_run_dir
+
+
+def _load_template_defaults(template_path: Path) -> dict:
+    """Load defaults.yaml from a template directory."""
+    defaults_file = template_path / "defaults.yaml"
+    if not defaults_file.exists():
+        return {}
+    with open(defaults_file) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _compute_derived_vars(variables: dict) -> dict:
+    """Compute derived variables from base variables."""
+    v = dict(variables)
+    # Computed fields for ufs.configure petlist_bounds
+    atm = int(v.get("atm_tasks", 160))
+    ocn = int(v.get("ocn_tasks", 160))
+    v["atm_tasks_minus1"] = atm - 1
+    v["total_tasks_minus1"] = atm + ocn - 1
+    v["total_tasks"] = atm + ocn
+    v["atm_tasks"] = atm
+    v["ocn_tasks"] = ocn
+    return v
+
+
+def _render_template(content: str, variables: dict) -> str:
+    """Replace {{var}} placeholders with values from variables dict."""
+    def replacer(match: re.Match) -> str:
+        key = match.group(1).strip()
+        if key in variables:
+            return str(variables[key])
+        return match.group(0)  # Leave unresolved placeholders as-is
+    return re.sub(r"\{\{(\w+)\}\}", replacer, content)
 
 
 class RunnerError(Exception):
@@ -72,18 +106,40 @@ class UfsRunner:
                 f"Available: {', '.join(available) or 'none'}"
             )
 
-        # Copy template to run directory
+        # Load template defaults and merge with user overrides
+        variables = _load_template_defaults(template_path)
+        if overrides:
+            # Flat keys override defaults directly
+            for key, value in overrides.items():
+                if isinstance(value, dict):
+                    # Nested dict = namelist group override (applied later via f90nml)
+                    continue
+                variables[key] = value
+        variables = _compute_derived_vars(variables)
+
+        # Copy template to run directory, rendering {{var}} placeholders
         run_path.mkdir(parents=True, exist_ok=True)
+        _skip_files = {"defaults.yaml", "TEMPLATE_README"}
         for item in template_path.iterdir():
+            if item.name in _skip_files:
+                continue
             dest = run_path / item.name
             if item.is_dir():
                 shutil.copytree(item, dest)
-            else:
+            elif item.suffix in (".nc", ".gr3", ".ll", ".exe", ".sif"):
+                # Binary files: copy without rendering
                 shutil.copy2(item, dest)
+            else:
+                # Text files: render template variables
+                content = item.read_text()
+                rendered = _render_template(content, variables)
+                dest.write_text(rendered)
 
-        # Apply namelist overrides
+        # Apply f90nml namelist overrides (for nested dict overrides)
         if overrides:
-            self._apply_overrides(run_path, overrides)
+            nml_overrides = {k: v for k, v in overrides.items() if isinstance(v, dict)}
+            if nml_overrides:
+                self._apply_overrides(run_path, nml_overrides)
 
         # Write metadata
         meta = {
@@ -92,6 +148,8 @@ class UfsRunner:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": os.environ.get("USER", "unknown"),
             "overrides_applied": overrides or {},
+            "resolved_variables": {k: v for k, v in variables.items()
+                                   if not isinstance(v, (dict, list))},
             "status": "created",
         }
         (run_path / ".ufs_experiment.json").write_text(json.dumps(meta, indent=2))

@@ -85,6 +85,58 @@ class TestCreateExperiment:
         assert nml["CORE"]["dt"] == 60.0
         assert nml["CORE"]["rnday"] == 3.0
 
+    def test_template_rendering_model_configure(self, runner, tmp_path):
+        """Template variables are substituted in generated config files."""
+        run_dir = str(tmp_path / "render_test")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"start_year": 2024, "start_month": 3, "start_day": 15, "nhours_fcst": 12},
+        )
+        content = (Path(run_dir) / "model_configure").read_text()
+        assert "start_year:              2024" in content
+        assert "start_month:             3" in content
+        assert "start_day:               15" in content
+        assert "nhours_fcst:             12" in content
+
+    def test_template_rendering_ufs_configure(self, runner, tmp_path):
+        """Task distribution variables are computed and rendered."""
+        run_dir = str(tmp_path / "tasks_test")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"atm_tasks": 80, "ocn_tasks": 80},
+        )
+        content = (Path(run_dir) / "ufs.configure").read_text()
+        assert "ATM_petlist_bounds:             0 79" in content
+        assert "OCN_petlist_bounds:             80 159" in content
+
+    def test_template_rendering_run_script(self, runner, tmp_path):
+        """Slurm parameters are rendered in run script."""
+        run_dir = str(tmp_path / "slurm_test")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"nodes": 8, "tasks_per_node": 40, "total_tasks": 320, "job_name": "my-run"},
+        )
+        content = (Path(run_dir) / "run_ufs.sh").read_text()
+        assert "#SBATCH --nodes=8" in content
+        assert "#SBATCH --ntasks-per-node=40" in content
+        assert "#SBATCH --job-name=my-run" in content
+        assert "srun --label -n 320" in content
+
+    def test_metadata_includes_resolved_variables(self, runner, tmp_path):
+        """Experiment metadata records resolved template variables."""
+        run_dir = str(tmp_path / "meta_vars_test")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"start_year": 2025},
+        )
+        meta = json.loads((Path(run_dir) / ".ufs_experiment.json").read_text())
+        assert "resolved_variables" in meta
+        assert meta["resolved_variables"]["start_year"] == 2025
+
     def test_create_nonexistent_template(self, runner, tmp_path):
         with pytest.raises(RunnerError, match="Template.*not found"):
             runner.create_experiment(

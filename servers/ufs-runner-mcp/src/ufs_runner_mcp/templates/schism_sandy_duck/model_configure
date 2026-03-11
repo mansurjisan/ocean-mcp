@@ -1,15 +1,15 @@
-start_year:              2012
-start_month:             10
-start_day:               27
-start_hour:              00
+start_year:              {{start_year}}
+start_month:             {{start_month}}
+start_day:               {{start_day}}
+start_hour:              {{start_hour}}
 start_minute:            0
 start_second:            0
-nhours_fcst:             6
+nhours_fcst:             {{nhours_fcst}}
 fhrot:                   0
 
-dt_atmos:                720
+dt_atmos:                {{dt_atmos}}
 restart_interval:        0
-restart_fh:               
+restart_fh:
 
 quilting:                .true.
 quilting_restart:        .false.

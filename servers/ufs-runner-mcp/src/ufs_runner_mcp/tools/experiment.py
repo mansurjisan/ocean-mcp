@@ -34,8 +34,14 @@ async def ufs_create_experiment(
     Args:
         model_type: Model configuration — 'schism', 'adcirc', or 'fvcom'.
         run_dir: Absolute path for the experiment directory (must be under /scratch*).
-        template: Template name (default: '{model_type}_default'). Use ufs_list_templates to see options.
-        overrides: JSON string of namelist overrides, e.g. '{"core": {"dt": 60}}'.
+        template: Template name (default: auto-detected). Use ufs_list_templates to see options.
+        overrides: JSON string of parameter overrides. Flat keys set template variables
+            (e.g. '{"start_year": 2024, "nhours_fcst": 12, "nodes": 8}').
+            Nested dicts set namelist group values
+            (e.g. '{"CORE": {"dt": 5.0, "rnday": 0.5}}').
+            Common variables: start_year, start_month, start_day, start_hour,
+            nhours_fcst, dt_ocean, dt_atmos, coupling_interval, atm_tasks,
+            ocn_tasks, nodes, tasks_per_node, wall_minutes, job_name.
     """
     try:
         import json as _json

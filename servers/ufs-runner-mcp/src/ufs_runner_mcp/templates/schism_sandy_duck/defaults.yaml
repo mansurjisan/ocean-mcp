@@ -1,0 +1,51 @@
+# Template variables with defaults.
+# Users can override any of these via the 'overrides' parameter.
+# Template files use {{VAR_NAME}} syntax for substitution.
+
+# --- Simulation time ---
+start_year: 2012
+start_month: 10
+start_day: 27
+start_hour: 0
+nhours_fcst: 6
+rnday: 0.25       # Total run time in days (must match nhours_fcst / 24)
+
+# --- SCHISM ocean model ---
+dt_ocean: 10.0     # Ocean time step (seconds)
+nspool: 1          # Output step spool
+ihfskip: 180       # Stack spool (steps per output file)
+ihot: 0            # 0: cold start, 1: hotstart reset, 2: hotstart continue
+
+# --- FV3/DATM atmosphere ---
+dt_atmos: 720      # Atmosphere time step (seconds)
+
+# --- Coupling ---
+coupling_interval: 1800   # ATM-OCN coupling interval (seconds)
+atm_tasks: 160            # MPI tasks for atmosphere
+ocn_tasks: 160            # MPI tasks for ocean
+total_tasks: 320          # Total MPI tasks (atm + ocn)
+
+# --- Slurm ---
+nodes: 4
+tasks_per_node: 80
+wall_minutes: 60
+job_name: ufs-coastal-schism
+
+# --- Paths ---
+restart_dir: RESTART/
+output_dir: outputs/
+
+# --- Physics (SCHISM) ---
+ibc: 1              # 0: barotropic, 1: baroclinic
+ics: 2              # 1: Cartesian, 2: lon/lat
+nws: 4              # Atmospheric forcing type
+iwind_form: -1      # Wind stress: -1=Pond&Pichard, 1=Hwang
+itur: 3             # Turbulence: 3=MY2.5
+nchi: 1             # Bottom friction: 1=roughness (log law)
+h0: 0.01            # Min water depth for wetting/drying (m)
+shapiro0: 0.5       # Shapiro filter strength
+
+# --- DATM ---
+datm_datamode: ATMMESH
+datm_nx: 1440       # ERA5 grid x (0.25 deg)
+datm_ny: 721        # ERA5 grid y

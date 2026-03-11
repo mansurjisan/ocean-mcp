@@ -1,5 +1,5 @@
 &datm_nml
-  datamode = "ATMMESH"
+  datamode = "{{datm_datamode}}"
   factorfn_data = "null"
   factorfn_mesh = "null"
   flds_co2 = .false.
@@ -8,8 +8,8 @@
   iradsw = 1
   model_maskfile = "INPUT/era5_data_19941012_19941014_rot_fix_SCRIP_ESMF.nc"
   model_meshfile = "INPUT/era5_data_19941012_19941014_rot_fix_SCRIP_ESMF.nc"
-  nx_global = 1440
-  ny_global = 721
+  nx_global = {{datm_nx}}
+  ny_global = {{datm_ny}}
   restfilm = "null"
   export_all = .true.
 /

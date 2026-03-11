@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=ufs-coastal-schism
+#SBATCH --job-name={{job_name}}
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.out
-#SBATCH --nodes=4
-#SBATCH --ntasks-per-node=80
-#SBATCH --time=01:00:00
+#SBATCH --nodes={{nodes}}
+#SBATCH --ntasks-per-node={{tasks_per_node}}
+#SBATCH --time={{wall_minutes}}
 #SBATCH --exclusive
 
 set -eux
@@ -31,11 +31,11 @@ export I_MPI_EXTRA_FILESYSTEM=ON
 export FI_MLX_INJECT_LIMIT=0
 
 # Create output directories
-mkdir -p outputs RESTART
+mkdir -p {{output_dir}} {{restart_dir}}
 
 sync && sleep 1
 
-srun --label -n 320 ./ufs_model
+srun --label -n {{total_tasks}} ./ufs_model
 
 echo "Model ended: $(date)"
 echo -n " $( date +%s )," >> job_timestamp.txt
