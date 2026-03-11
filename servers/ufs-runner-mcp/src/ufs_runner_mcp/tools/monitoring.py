@@ -105,7 +105,7 @@ async def ufs_collect_outputs(
             return f"No output files found in {result['run_dir']}."
 
         lines = [
-            f"## Experiment Outputs",
+            "## Experiment Outputs",
             f"- **Directory**: {result['run_dir']}",
             f"- **Files found**: {result['output_count']}",
             "",

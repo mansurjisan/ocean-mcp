@@ -1,0 +1,5 @@
+10/27/2012 00:00:00 UTC
+ 0  0.000   ! number of earth tidal potential, cut-off depth for applying tidal potential
+ 0          ! number of boundary forcing freqs
+ 1          ! number of open boundaries                   
+ 23 4 0 0 0 0 ! type of b.c.  

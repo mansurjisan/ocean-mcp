@@ -1,0 +1,92 @@
+#############################################
+####  NEMS Run-Time Configuration File  #####
+#############################################
+
+# ESMF #
+logKindFlag:            ESMF_LOGKIND_MULTI
+globalResourceControl:  true
+
+# EARTH #
+EARTH_component_list: ATM OCN MED
+EARTH_attributes::
+  Verbosity = 0
+::
+
+# MED #
+MED_model:                      cmeps
+MED_petlist_bounds:             0 {{atm_tasks_minus1}}
+MED_omp_num_threads:            1
+MED_attributes::
+  ATM_model = datm
+  OCN_model = schism
+  history_n = 1
+  history_option = nhours
+  history_ymd = -999
+  coupling_mode = coastal
+::
+
+# ATM #
+ATM_model:                      datm
+ATM_petlist_bounds:             0 {{atm_tasks_minus1}}
+ATM_omp_num_threads:            1
+ATM_attributes::
+  Verbosity = 0
+  DumpFields = false
+  ProfileMemory = false
+  OverwriteSlice = true
+::
+
+# OCN #
+OCN_model:                      schism
+OCN_petlist_bounds:             {{atm_tasks}} {{total_tasks_minus1}}
+OCN_omp_num_threads:            1
+OCN_attributes::
+  Verbosity = 0
+  DumpFields = false
+  ProfileMemory = false
+  OverwriteSlice = true
+  meshloc = element
+  CouplingConfig = none
+::
+
+# Run Sequence #
+runSeq::
+@{{coupling_interval}}
+  ATM -> MED :remapMethod=redist
+  MED med_phases_post_atm
+  OCN -> MED :remapMethod=redist
+  MED med_phases_post_ocn
+  MED med_phases_prep_atm
+  MED med_phases_prep_ocn_accum
+  MED med_phases_prep_ocn_avg
+  MED -> ATM :remapMethod=redist
+  MED -> OCN :remapMethod=redist
+  ATM
+  OCN
+  MED med_phases_history_write
+  MED med_phases_restart_write
+@
+::
+
+ALLCOMP_attributes::
+  ScalarFieldCount = 3
+  ScalarFieldIdxGridNX = 1
+  ScalarFieldIdxGridNY = 2
+  ScalarFieldIdxNextSwCday = 3
+  ScalarFieldName = cpl_scalars
+  start_type = startup
+  restart_dir = {{restart_dir}}
+  case_name = ufs.cpld
+  restart_n = {{nhours_fcst}}
+  restart_option = nhours
+  restart_ymd = -999
+  orb_eccen = 1.e36
+  orb_iyear = 2000
+  orb_iyear_align = 2000
+  orb_mode = fixed_year
+  orb_mvelp = 1.e36
+  orb_obliq = 1.e36
+  stop_n = {{nhours_fcst}}
+  stop_option = nhours
+  stop_ymd = -999
+::

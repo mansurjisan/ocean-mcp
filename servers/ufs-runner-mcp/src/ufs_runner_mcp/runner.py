@@ -11,8 +11,50 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import f90nml
+import yaml
 
-from .models import MAX_NODES, MAX_WALL_HOURS, ModelType, validate_job_id, validate_run_dir
+from .models import (
+    MAX_NODES,
+    MAX_WALL_HOURS,
+    ModelType,
+    validate_job_id,
+    validate_run_dir,
+)
+
+
+def _load_template_defaults(template_path: Path) -> dict:
+    """Load defaults.yaml from a template directory."""
+    defaults_file = template_path / "defaults.yaml"
+    if not defaults_file.exists():
+        return {}
+    with open(defaults_file) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _compute_derived_vars(variables: dict) -> dict:
+    """Compute derived variables from base variables."""
+    v = dict(variables)
+    # Computed fields for ufs.configure petlist_bounds
+    atm = int(v.get("atm_tasks", 160))
+    ocn = int(v.get("ocn_tasks", 160))
+    v["atm_tasks_minus1"] = atm - 1
+    v["total_tasks_minus1"] = atm + ocn - 1
+    v["total_tasks"] = atm + ocn
+    v["atm_tasks"] = atm
+    v["ocn_tasks"] = ocn
+    return v
+
+
+def _render_template(content: str, variables: dict) -> str:
+    """Replace {{var}} placeholders with values from variables dict."""
+
+    def replacer(match: re.Match) -> str:
+        key = match.group(1).strip()
+        if key in variables:
+            return str(variables[key])
+        return match.group(0)  # Leave unresolved placeholders as-is
+
+    return re.sub(r"\{\{(\w+)\}\}", replacer, content)
 
 
 class RunnerError(Exception):
@@ -59,31 +101,58 @@ class UfsRunner:
                 f"Choose a different path or remove it first."
             )
 
-        # Find template
-        template_name = template or f"{model.value}_default"
+        # Find template — try explicit name, then model_default, then first match
+        template_name = template or self._find_default_template(model.value)
         template_path = self._templates_dir / template_name
         if not template_path.is_dir():
-            available = [
-                d.name for d in self._templates_dir.iterdir()
-                if d.is_dir() and not d.name.startswith(".")
-            ] if self._templates_dir.exists() else []
+            available = (
+                [
+                    d.name
+                    for d in self._templates_dir.iterdir()
+                    if d.is_dir() and not d.name.startswith(".")
+                ]
+                if self._templates_dir.exists()
+                else []
+            )
             raise RunnerError(
                 f"Template '{template_name}' not found. "
                 f"Available: {', '.join(available) or 'none'}"
             )
 
-        # Copy template to run directory
+        # Load template defaults and merge with user overrides
+        variables = _load_template_defaults(template_path)
+        if overrides:
+            # Flat keys override defaults directly
+            for key, value in overrides.items():
+                if isinstance(value, dict):
+                    # Nested dict = namelist group override (applied later via f90nml)
+                    continue
+                variables[key] = value
+        variables = _compute_derived_vars(variables)
+
+        # Copy template to run directory, rendering {{var}} placeholders
         run_path.mkdir(parents=True, exist_ok=True)
+        _skip_files = {"defaults.yaml", "TEMPLATE_README"}
         for item in template_path.iterdir():
+            if item.name in _skip_files:
+                continue
             dest = run_path / item.name
             if item.is_dir():
                 shutil.copytree(item, dest)
-            else:
+            elif item.suffix in (".nc", ".gr3", ".ll", ".exe", ".sif"):
+                # Binary files: copy without rendering
                 shutil.copy2(item, dest)
+            else:
+                # Text files: render template variables
+                content = item.read_text()
+                rendered = _render_template(content, variables)
+                dest.write_text(rendered)
 
-        # Apply namelist overrides
+        # Apply f90nml namelist overrides (for nested dict overrides)
         if overrides:
-            self._apply_overrides(run_path, overrides)
+            nml_overrides = {k: v for k, v in overrides.items() if isinstance(v, dict)}
+            if nml_overrides:
+                self._apply_overrides(run_path, nml_overrides)
 
         # Write metadata
         meta = {
@@ -92,6 +161,9 @@ class UfsRunner:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": os.environ.get("USER", "unknown"),
             "overrides_applied": overrides or {},
+            "resolved_variables": {
+                k: v for k, v in variables.items() if not isinstance(v, (dict, list))
+            },
             "status": "created",
         }
         (run_path / ".ufs_experiment.json").write_text(json.dumps(meta, indent=2))
@@ -101,13 +173,30 @@ class UfsRunner:
             "run_dir": str(run_path),
             "model_type": model.value,
             "template": template_name,
-            "files": sorted(str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()),
+            "files": sorted(
+                str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
+            ),
         }
+
+    def _find_default_template(self, model_value: str) -> str:
+        """Find the best matching template for a model type."""
+        if not self._templates_dir.exists():
+            return f"{model_value}_default"
+        # Look for exact default first, then any template starting with model name
+        default_name = f"{model_value}_default"
+        if (self._templates_dir / default_name).is_dir():
+            return default_name
+        for d in sorted(self._templates_dir.iterdir()):
+            if d.is_dir() and d.name.startswith(model_value):
+                return d.name
+        return default_name  # Will fail later with clear error
 
     def _apply_overrides(self, run_path: Path, overrides: dict) -> None:
         """Apply namelist overrides using f90nml."""
         # Look for param.nml (SCHISM) or fort.15 (ADCIRC) or model_configure
-        nml_files = list(run_path.glob("*.nml")) + list(run_path.glob("model_configure"))
+        nml_files = list(run_path.glob("*.nml")) + list(
+            run_path.glob("model_configure")
+        )
         for nml_file in nml_files:
             try:
                 nml = f90nml.read(str(nml_file))
@@ -139,7 +228,12 @@ class UfsRunner:
         # Check metadata
         meta_file = run_path / ".ufs_experiment.json"
         if not meta_file.exists():
-            issues.append({"severity": "error", "message": "Missing .ufs_experiment.json metadata"})
+            issues.append(
+                {
+                    "severity": "error",
+                    "message": "Missing .ufs_experiment.json metadata",
+                }
+            )
             model_type = "unknown"
         else:
             meta = json.loads(meta_file.read_text())
@@ -149,7 +243,9 @@ class UfsRunner:
         required_files = self._get_required_files(model_type)
         for fname in required_files:
             if not (run_path / fname).exists():
-                issues.append({"severity": "error", "message": f"Missing required file: {fname}"})
+                issues.append(
+                    {"severity": "error", "message": f"Missing required file: {fname}"}
+                )
 
         # Check for Slurm script
         slurm_scripts = list(run_path.glob("*.slurm")) + list(run_path.glob("run_*.sh"))
@@ -161,7 +257,12 @@ class UfsRunner:
             try:
                 f90nml.read(str(nml_file))
             except Exception as e:
-                issues.append({"severity": "error", "message": f"Invalid namelist {nml_file.name}: {e}"})
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Invalid namelist {nml_file.name}: {e}",
+                    }
+                )
 
         return {
             "run_dir": str(run_path),
@@ -169,16 +270,33 @@ class UfsRunner:
             "errors": [i for i in issues if i["severity"] == "error"],
             "warnings": warnings,
             "ready": len([i for i in issues if i["severity"] == "error"]) == 0,
-            "files_found": sorted(str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()),
+            "files_found": sorted(
+                str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
+            ),
         }
 
     def _get_required_files(self, model_type: str) -> list[str]:
         """Return required files for a given model type."""
-        common = ["model_configure"]
+        common = ["model_configure", "ufs.configure"]
         model_specific = {
-            "schism": ["param.nml", "hgrid.gr3", "vgrid.in", "drag.gr3"],
-            "adcirc": ["fort.14", "fort.15", "fort.13"],
-            "fvcom": ["namelist.input"],
+            "schism": [
+                "param.nml",
+                "hgrid.gr3",
+                "hgrid.ll",
+                "vgrid.in",
+                "rough.gr3",
+                "bctides.in",
+                "datm_in",
+                "datm.streams",
+            ],
+            "adcirc": [
+                "fort.14",
+                "fort.15",
+                "fort.13",
+                "datm_in",
+                "datm.streams",
+            ],
+            "fvcom": ["namelist.input", "datm_in", "datm.streams"],
         }
         return common + model_specific.get(model_type, [])
 
@@ -213,7 +331,9 @@ class UfsRunner:
         if nodes > MAX_NODES:
             raise RunnerError(f"Requested {nodes} nodes exceeds limit of {MAX_NODES}.")
         if wall_hours > MAX_WALL_HOURS:
-            raise RunnerError(f"Requested {wall_hours}h wall time exceeds limit of {MAX_WALL_HOURS}h.")
+            raise RunnerError(
+                f"Requested {wall_hours}h wall time exceeds limit of {MAX_WALL_HOURS}h."
+            )
 
         # Validate account/partition format
         if not re.match(r"^[\w-]+$", account):
@@ -254,16 +374,21 @@ class UfsRunner:
                 "run_dir": str(run_path),
                 "script": str(script.name),
                 "message": "Dry run — review the command above. "
-                           "Call submit_ufs_experiment again with dry_run=false to submit.",
+                "Call submit_ufs_experiment again with dry_run=false to submit.",
             }
 
         # Actually submit
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
-            raise RunnerError("sbatch not found. Are you on a Slurm login/service node?")
+            raise RunnerError(
+                "sbatch not found. Are you on a Slurm login/service node?"
+            )
         except subprocess.TimeoutExpired:
             raise RunnerError("sbatch timed out after 30s.")
 
@@ -275,12 +400,15 @@ class UfsRunner:
         job_id = match.group(1) if match else "unknown"
 
         # Update metadata
-        self._update_meta(run_path, {
-            "status": "submitted",
-            "job_id": job_id,
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
-            "sbatch_command": " ".join(cmd),
-        })
+        self._update_meta(
+            run_path,
+            {
+                "status": "submitted",
+                "job_id": job_id,
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "sbatch_command": " ".join(cmd),
+            },
+        )
 
         return {
             "mode": "submitted",
@@ -294,7 +422,9 @@ class UfsRunner:
     # 4. Get run status
     # ------------------------------------------------------------------
 
-    def get_run_status(self, run_dir: str | None = None, job_id: str | None = None) -> dict:
+    def get_run_status(
+        self, run_dir: str | None = None, job_id: str | None = None
+    ) -> dict:
         """Check the status of a UFS experiment run."""
         if job_id:
             err = validate_job_id(job_id)
@@ -324,7 +454,9 @@ class UfsRunner:
         try:
             result = subprocess.run(
                 ["sacct", "-j", job_id, f"--format={fmt}", "-n", "-X"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
             raise RunnerError("sacct not found. Slurm may not be available.")
@@ -349,7 +481,9 @@ class UfsRunner:
         try:
             result = subprocess.run(
                 ["scancel", job_id],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
             raise RunnerError("scancel not found. Slurm may not be available.")
@@ -381,21 +515,27 @@ class UfsRunner:
             for f in run_path.glob(pattern):
                 if f.is_file():
                     stat = f.stat()
-                    found.append({
-                        "path": str(f.relative_to(run_path)),
-                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    })
+                    found.append(
+                        {
+                            "path": str(f.relative_to(run_path)),
+                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                            "modified": datetime.fromtimestamp(
+                                stat.st_mtime
+                            ).isoformat(),
+                        }
+                    )
 
         # Check Slurm log
         slurm_logs = list(run_path.glob("slurm-*.out"))
         for log in slurm_logs:
             stat = log.stat()
-            found.append({
-                "path": str(log.relative_to(run_path)),
-                "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            found.append(
+                {
+                    "path": str(log.relative_to(run_path)),
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
 
         # Sort by modification time, newest first
         found.sort(key=lambda x: x["modified"], reverse=True)
