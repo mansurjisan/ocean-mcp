@@ -69,7 +69,9 @@ async def ufs_create_experiment(
             f"- **Files**: {len(result['files'])}",
         ]
         if result.get("staged_files"):
-            lines.append(f"- **Staged from input**: {len(result['staged_files'])} files")
+            lines.append(
+                f"- **Staged from input**: {len(result['staged_files'])} files"
+            )
 
         lines += ["", "### Files"]
         for f in result["files"]:

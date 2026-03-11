@@ -10,6 +10,8 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+import logging
+
 import f90nml
 import yaml
 
@@ -18,43 +20,12 @@ from .models import (
     MAX_WALL_HOURS,
     ModelType,
     validate_job_id,
+    validate_path,
     validate_run_dir,
+    validate_template_variables,
 )
 
-
-def _load_template_defaults(template_path: Path) -> dict:
-    """Load defaults.yaml from a template directory."""
-    defaults_file = template_path / "defaults.yaml"
-    if not defaults_file.exists():
-        return {}
-    with open(defaults_file) as f:
-        return yaml.safe_load(f) or {}
-
-
-def _compute_derived_vars(variables: dict) -> dict:
-    """Compute derived variables from base variables."""
-    v = dict(variables)
-    # Computed fields for ufs.configure petlist_bounds
-    atm = int(v.get("atm_tasks", 160))
-    ocn = int(v.get("ocn_tasks", 160))
-    v["atm_tasks_minus1"] = atm - 1
-    v["total_tasks_minus1"] = atm + ocn - 1
-    v["total_tasks"] = atm + ocn
-    v["atm_tasks"] = atm
-    v["ocn_tasks"] = ocn
-    return v
-
-
-def _render_template(content: str, variables: dict) -> str:
-    """Replace {{var}} placeholders with values from variables dict."""
-
-    def replacer(match: re.Match) -> str:
-        key = match.group(1).strip()
-        if key in variables:
-            return str(variables[key])
-        return match.group(0)  # Leave unresolved placeholders as-is
-
-    return re.sub(r"\{\{(\w+)\}\}", replacer, content)
+logger = logging.getLogger(__name__)
 
 
 def _load_template_defaults(template_path: Path) -> dict:
@@ -66,15 +37,24 @@ def _load_template_defaults(template_path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _compute_derived_vars(variables: dict) -> dict:
-    """Compute derived variables from base variables."""
+def _compute_derived_vars(
+    variables: dict, user_overrides: set[str] | None = None
+) -> dict:
+    """Compute derived variables from base variables.
+
+    Only sets total_tasks when the user hasn't explicitly provided it
+    (via *user_overrides*).
+    """
     v = dict(variables)
-    # Computed fields for ufs.configure petlist_bounds
+    user_overrides = user_overrides or set()
     atm = int(v.get("atm_tasks", 160))
     ocn = int(v.get("ocn_tasks", 160))
     v["atm_tasks_minus1"] = atm - 1
-    v["total_tasks_minus1"] = atm + ocn - 1
-    v["total_tasks"] = atm + ocn
+    # Only compute total_tasks if the user didn't explicitly override it
+    if "total_tasks" not in user_overrides:
+        v["total_tasks"] = atm + ocn
+    total = int(v["total_tasks"])
+    v["total_tasks_minus1"] = total - 1
     v["atm_tasks"] = atm
     v["ocn_tasks"] = ocn
     return v
@@ -82,11 +62,13 @@ def _compute_derived_vars(variables: dict) -> dict:
 
 def _render_template(content: str, variables: dict) -> str:
     """Replace {{var}} placeholders with values from variables dict."""
+
     def replacer(match: re.Match) -> str:
-        key = match.group(1).strip()
+        key = match.group(1)
         if key in variables:
             return str(variables[key])
         return match.group(0)  # Leave unresolved placeholders as-is
+
     return re.sub(r"\{\{(\w+)\}\}", replacer, content)
 
 
@@ -155,14 +137,20 @@ class UfsRunner:
 
         # Load template defaults and merge with user overrides
         variables = _load_template_defaults(template_path)
+        user_flat_keys: set[str] = set()
         if overrides:
-            # Flat keys override defaults directly
             for key, value in overrides.items():
                 if isinstance(value, dict):
                     # Nested dict = namelist group override (applied later via f90nml)
                     continue
                 variables[key] = value
-        variables = _compute_derived_vars(variables)
+                user_flat_keys.add(key)
+        variables = _compute_derived_vars(variables, user_overrides=user_flat_keys)
+
+        # Validate variables that will be interpolated into shell contexts
+        shell_err = validate_template_variables(variables)
+        if shell_err:
+            raise RunnerError(shell_err)
 
         # Copy template to run directory, rendering {{var}} placeholders
         run_path.mkdir(parents=True, exist_ok=True)
@@ -174,7 +162,7 @@ class UfsRunner:
             if item.is_dir():
                 shutil.copytree(item, dest)
             elif item.suffix in (".nc", ".gr3", ".ll", ".exe", ".sif"):
-                # Binary files: copy without rendering
+                # Non-text / domain files: copy without template rendering
                 shutil.copy2(item, dest)
             else:
                 # Text files: render template variables
@@ -191,6 +179,9 @@ class UfsRunner:
         # Stage input data from user's input directory
         staged_files: list[str] = []
         if input_data_dir:
+            path_err = validate_path(input_data_dir, label="input_data_dir")
+            if path_err:
+                raise RunnerError(path_err)
             staged_files = self._stage_input_data(
                 input_dir=Path(input_data_dir),
                 run_path=run_path,
@@ -239,7 +230,6 @@ class UfsRunner:
 
     def _apply_overrides(self, run_path: Path, overrides: dict) -> None:
         """Apply namelist overrides using f90nml."""
-        # Look for param.nml (SCHISM) or fort.15 (ADCIRC) or model_configure
         nml_files = list(run_path.glob("*.nml")) + list(
             run_path.glob("model_configure")
         )
@@ -251,8 +241,8 @@ class UfsRunner:
                         for key, value in params.items():
                             nml[group][key] = value
                 nml.write(str(nml_file), force=True)
-            except Exception:
-                continue  # Skip files that aren't valid namelists
+            except Exception as e:
+                logger.warning("Failed to apply overrides to %s: %s", nml_file.name, e)
 
     # ------------------------------------------------------------------
     # 2. Validate experiment
@@ -601,36 +591,74 @@ class UfsRunner:
     _STAGE_PATTERNS: dict[str, list[str]] = {
         "schism": [
             # Mesh / grid
-            "hgrid.gr3", "hgrid.ll", "vgrid.in",
+            "hgrid.gr3",
+            "hgrid.ll",
+            "vgrid.in",
             # Bottom friction / diffusivity
-            "rough.gr3", "drag.gr3", "diffmin.gr3", "diffmax.gr3",
-            "windrot_geo2proj.gr3", "wwmbnd.gr3",
+            "rough.gr3",
+            "drag.gr3",
+            "diffmin.gr3",
+            "diffmax.gr3",
+            "windrot_geo2proj.gr3",
+            "wwmbnd.gr3",
             # Initial conditions
-            "elev.ic", "temp.ic", "salt.ic",
+            "elev.ic",
+            "temp.ic",
+            "salt.ic",
             # Boundary / forcing
-            "elev2D.th.nc", "uv3D.th.nc", "TEM_3D.th.nc", "SAL_3D.th.nc",
-            "bctides.in", "station.in",
+            "elev2D.th.nc",
+            "uv3D.th.nc",
+            "TEM_3D.th.nc",
+            "SAL_3D.th.nc",
+            "bctides.in",
+            "station.in",
             # ERA5 / DATM input data
             "INPUT/*.nc",
             # Executables and modules
-            "ufs_model", "modulefiles/*", "module-setup.sh",
+            "ufs_model",
+            "modulefiles/*",
+            "module-setup.sh",
             # NUOPC / ESMF
-            "fd_ufs.yaml", "noahmptable.tbl",
+            "fd_ufs.yaml",
+            "noahmptable.tbl",
             # Mesh SCRIP files
-            "INPUT/*SCRIP*.nc", "INPUT/*ESMF*.nc",
+            "INPUT/*SCRIP*.nc",
+            "INPUT/*ESMF*.nc",
         ],
         "adcirc": [
-            "fort.14", "fort.15", "fort.13", "fort.22",
+            "fort.14",
+            "fort.15",
+            "fort.13",
+            "fort.22",
             "INPUT/*.nc",
-            "ufs_model", "modulefiles/*", "module-setup.sh",
-            "fd_ufs.yaml", "noahmptable.tbl",
+            "ufs_model",
+            "modulefiles/*",
+            "module-setup.sh",
+            "fd_ufs.yaml",
+            "noahmptable.tbl",
         ],
         "fvcom": [
-            "*.msh", "*.nml",
+            "*.msh",
+            "*.nml",
             "INPUT/*.nc",
-            "ufs_model", "modulefiles/*", "module-setup.sh",
-            "fd_ufs.yaml", "noahmptable.tbl",
+            "ufs_model",
+            "modulefiles/*",
+            "module-setup.sh",
+            "fd_ufs.yaml",
+            "noahmptable.tbl",
         ],
+    }
+
+    # Domain-specific files where the user's version should override
+    # the template stub (e.g. bctides.in, station.in contain real
+    # domain data while the template only has placeholder stubs).
+    _DOMAIN_OVERRIDE_FILES: set[str] = {
+        "bctides.in",
+        "station.in",
+        "vgrid.in",
+        "fort.14",
+        "fort.15",
+        "fort.13",
     }
 
     def _stage_input_data(
@@ -644,6 +672,10 @@ class UfsRunner:
         Uses symlinks when possible (same filesystem) to avoid duplicating
         large NetCDF files.  Falls back to a regular copy.
 
+        Domain-specific files (bctides.in, station.in, etc.) from the user's
+        input directory will *replace* the template stubs, since those stubs
+        are only placeholders while the user's files contain real domain data.
+
         Returns the list of staged file names (relative to run_path).
         """
         if not input_dir.is_dir():
@@ -656,13 +688,17 @@ class UfsRunner:
             for src in input_dir.glob(pattern):
                 if not src.is_file():
                     continue
-                # Preserve sub-directory structure (e.g. INPUT/era5.nc)
                 rel = src.relative_to(input_dir)
                 dest = run_path / rel
 
-                # Don't overwrite files already placed by the template
-                if dest.exists():
+                # Domain files: user's version replaces template stub
+                is_domain_file = src.name in self._DOMAIN_OVERRIDE_FILES
+                if dest.exists() and not is_domain_file:
                     continue
+
+                # Remove existing template stub if we're overriding it
+                if dest.exists() and is_domain_file:
+                    dest.unlink()
 
                 dest.parent.mkdir(parents=True, exist_ok=True)
 
