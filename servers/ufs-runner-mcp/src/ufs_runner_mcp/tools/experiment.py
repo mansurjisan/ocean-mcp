@@ -25,6 +25,7 @@ async def ufs_create_experiment(
     run_dir: str,
     template: str | None = None,
     overrides: str | None = None,
+    input_data_dir: str | None = None,
 ) -> str:
     """Create a UFS-Coastal experiment directory from a template.
 
@@ -42,6 +43,9 @@ async def ufs_create_experiment(
             Common variables: start_year, start_month, start_day, start_hour,
             nhours_fcst, dt_ocean, dt_atmos, coupling_interval, atm_tasks,
             ocn_tasks, nodes, tasks_per_node, wall_minutes, job_name.
+        input_data_dir: Path to an existing UFS run directory to copy input data
+            from (mesh files, forcing data, executables). Files are symlinked
+            when possible. Template files are not overwritten.
     """
     try:
         import json as _json
@@ -54,6 +58,7 @@ async def ufs_create_experiment(
             run_dir=run_dir,
             template=template,
             overrides=override_dict,
+            input_data_dir=input_data_dir,
         )
 
         lines = [
@@ -62,11 +67,18 @@ async def ufs_create_experiment(
             f"- **Template**: {result['template']}",
             f"- **Directory**: {result['run_dir']}",
             f"- **Files**: {len(result['files'])}",
-            "",
-            "### Files",
         ]
+        if result.get("staged_files"):
+            lines.append(f"- **Staged from input**: {len(result['staged_files'])} files")
+
+        lines += ["", "### Files"]
         for f in result["files"]:
             lines.append(f"- {f}")
+
+        if result.get("staged_files"):
+            lines += ["", "### Staged Input Files"]
+            for f in result["staged_files"]:
+                lines.append(f"- {f}")
 
         lines.append(
             "\nNext: call `ufs_validate_experiment` to check the setup, "

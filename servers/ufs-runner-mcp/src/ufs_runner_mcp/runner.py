@@ -110,6 +110,7 @@ class UfsRunner:
         run_dir: str,
         template: str | None = None,
         overrides: dict | None = None,
+        input_data_dir: str | None = None,
     ) -> dict:
         """Set up a UFS experiment directory from a template.
 
@@ -187,6 +188,15 @@ class UfsRunner:
             if nml_overrides:
                 self._apply_overrides(run_path, nml_overrides)
 
+        # Stage input data from user's input directory
+        staged_files: list[str] = []
+        if input_data_dir:
+            staged_files = self._stage_input_data(
+                input_dir=Path(input_data_dir),
+                run_path=run_path,
+                model_type=model.value,
+            )
+
         # Write metadata
         meta = {
             "model_type": model.value,
@@ -197,6 +207,8 @@ class UfsRunner:
             "resolved_variables": {
                 k: v for k, v in variables.items() if not isinstance(v, (dict, list))
             },
+            "input_data_dir": input_data_dir,
+            "staged_files": staged_files,
             "status": "created",
         }
         (run_path / ".ufs_experiment.json").write_text(json.dumps(meta, indent=2))
@@ -209,6 +221,7 @@ class UfsRunner:
             "files": sorted(
                 str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
             ),
+            "staged_files": staged_files,
         }
 
     def _find_default_template(self, model_value: str) -> str:
@@ -578,6 +591,91 @@ class UfsRunner:
             "output_count": len(found),
             "outputs": found[:50],  # Cap at 50 files
         }
+
+    # ------------------------------------------------------------------
+    # 7. Stage input data
+    # ------------------------------------------------------------------
+
+    # File patterns per model type that should be copied from the user's
+    # input directory.  Globs are resolved relative to input_dir.
+    _STAGE_PATTERNS: dict[str, list[str]] = {
+        "schism": [
+            # Mesh / grid
+            "hgrid.gr3", "hgrid.ll", "vgrid.in",
+            # Bottom friction / diffusivity
+            "rough.gr3", "drag.gr3", "diffmin.gr3", "diffmax.gr3",
+            "windrot_geo2proj.gr3", "wwmbnd.gr3",
+            # Initial conditions
+            "elev.ic", "temp.ic", "salt.ic",
+            # Boundary / forcing
+            "elev2D.th.nc", "uv3D.th.nc", "TEM_3D.th.nc", "SAL_3D.th.nc",
+            "bctides.in", "station.in",
+            # ERA5 / DATM input data
+            "INPUT/*.nc",
+            # Executables and modules
+            "ufs_model", "modulefiles/*", "module-setup.sh",
+            # NUOPC / ESMF
+            "fd_ufs.yaml", "noahmptable.tbl",
+            # Mesh SCRIP files
+            "INPUT/*SCRIP*.nc", "INPUT/*ESMF*.nc",
+        ],
+        "adcirc": [
+            "fort.14", "fort.15", "fort.13", "fort.22",
+            "INPUT/*.nc",
+            "ufs_model", "modulefiles/*", "module-setup.sh",
+            "fd_ufs.yaml", "noahmptable.tbl",
+        ],
+        "fvcom": [
+            "*.msh", "*.nml",
+            "INPUT/*.nc",
+            "ufs_model", "modulefiles/*", "module-setup.sh",
+            "fd_ufs.yaml", "noahmptable.tbl",
+        ],
+    }
+
+    def _stage_input_data(
+        self,
+        input_dir: Path,
+        run_path: Path,
+        model_type: str,
+    ) -> list[str]:
+        """Copy required input files from *input_dir* into *run_path*.
+
+        Uses symlinks when possible (same filesystem) to avoid duplicating
+        large NetCDF files.  Falls back to a regular copy.
+
+        Returns the list of staged file names (relative to run_path).
+        """
+        if not input_dir.is_dir():
+            raise RunnerError(f"Input data directory '{input_dir}' does not exist.")
+
+        patterns = self._STAGE_PATTERNS.get(model_type, [])
+        staged: list[str] = []
+
+        for pattern in patterns:
+            for src in input_dir.glob(pattern):
+                if not src.is_file():
+                    continue
+                # Preserve sub-directory structure (e.g. INPUT/era5.nc)
+                rel = src.relative_to(input_dir)
+                dest = run_path / rel
+
+                # Don't overwrite files already placed by the template
+                if dest.exists():
+                    continue
+
+                dest.parent.mkdir(parents=True, exist_ok=True)
+
+                # Prefer symlinks to save disk space; fall back to copy
+                try:
+                    dest.symlink_to(src.resolve())
+                except OSError:
+                    shutil.copy2(src, dest)
+
+                staged.append(str(rel))
+
+        staged.sort()
+        return staged
 
     # ------------------------------------------------------------------
     # Helpers

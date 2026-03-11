@@ -156,6 +156,125 @@ class TestCreateExperiment:
             )
 
 
+class TestStageInputData:
+    """Test input data staging from user directories."""
+
+    def _make_input_dir(self, tmp_path):
+        """Create a fake input directory with typical SCHISM files."""
+        input_dir = tmp_path / "input_data"
+        input_dir.mkdir()
+        # Mesh files
+        (input_dir / "hgrid.gr3").write_text("mesh data")
+        (input_dir / "hgrid.ll").write_text("mesh ll")
+        (input_dir / "vgrid.in").write_text("vgrid data")
+        # Friction / diffusivity
+        (input_dir / "rough.gr3").write_text("rough")
+        (input_dir / "drag.gr3").write_text("drag")
+        (input_dir / "diffmin.gr3").write_text("diffmin")
+        (input_dir / "diffmax.gr3").write_text("diffmax")
+        (input_dir / "windrot_geo2proj.gr3").write_text("windrot")
+        # Initial conditions
+        (input_dir / "elev.ic").write_text("elev ic")
+        # Forcing
+        (input_dir / "elev2D.th.nc").write_bytes(b"fake nc")
+        # INPUT subdirectory
+        inp = input_dir / "INPUT"
+        inp.mkdir()
+        (inp / "era5_data.nc").write_bytes(b"era5")
+        (inp / "era5_SCRIP_ESMF.nc").write_bytes(b"scrip")
+        # Executable
+        (input_dir / "ufs_model").write_bytes(b"ELF")
+        (input_dir / "module-setup.sh").write_text("#!/bin/bash")
+        mods = input_dir / "modulefiles"
+        mods.mkdir()
+        (mods / "modules.fv3").write_text("module load fv3")
+        return input_dir
+
+    def test_stage_copies_mesh_files(self, runner, tmp_path):
+        input_dir = self._make_input_dir(tmp_path)
+        run_dir = str(tmp_path / "staged_run")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        staged = result["staged_files"]
+        assert "hgrid.gr3" in staged
+        assert "hgrid.ll" in staged
+        # vgrid.in already exists in the template, so it should NOT be staged
+        assert "vgrid.in" not in staged
+        assert "drag.gr3" in staged
+        assert Path(run_dir, "hgrid.gr3").exists()
+
+    def test_stage_copies_input_subdir(self, runner, tmp_path):
+        input_dir = self._make_input_dir(tmp_path)
+        run_dir = str(tmp_path / "staged_input")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        staged = result["staged_files"]
+        # INPUT/ files should be staged
+        input_files = [f for f in staged if f.startswith("INPUT/")]
+        assert len(input_files) >= 2
+        assert Path(run_dir, "INPUT", "era5_data.nc").exists()
+
+    def test_stage_copies_executables(self, runner, tmp_path):
+        input_dir = self._make_input_dir(tmp_path)
+        run_dir = str(tmp_path / "staged_exec")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        staged = result["staged_files"]
+        assert "ufs_model" in staged
+        assert "module-setup.sh" in staged
+        assert any("modulefiles" in f for f in staged)
+
+    def test_stage_does_not_overwrite_template(self, runner, tmp_path):
+        """Template files should not be overwritten by staged files."""
+        input_dir = self._make_input_dir(tmp_path)
+        # Create a file in input_dir that also exists in the template
+        (input_dir / "bctides.in").write_text("FROM INPUT DIR")
+        run_dir = str(tmp_path / "no_overwrite")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        # The template version should have been kept
+        content = (Path(run_dir) / "bctides.in").read_text()
+        assert content != "FROM INPUT DIR"
+
+    def test_stage_records_in_metadata(self, runner, tmp_path):
+        input_dir = self._make_input_dir(tmp_path)
+        run_dir = str(tmp_path / "meta_stage")
+        runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            input_data_dir=str(input_dir),
+        )
+        meta = json.loads((Path(run_dir) / ".ufs_experiment.json").read_text())
+        assert meta["input_data_dir"] == str(input_dir)
+        assert len(meta["staged_files"]) > 0
+
+    def test_stage_rejects_nonexistent_dir(self, runner, tmp_path):
+        with pytest.raises(RunnerError, match="does not exist"):
+            runner.create_experiment(
+                model_type="schism",
+                run_dir=str(tmp_path / "bad_stage"),
+                input_data_dir=str(tmp_path / "nope"),
+            )
+
+    def test_stage_no_data_dir(self, runner, tmp_path):
+        """Without input_data_dir, staged_files should be empty."""
+        run_dir = str(tmp_path / "no_stage")
+        result = runner.create_experiment(model_type="schism", run_dir=run_dir)
+        assert result["staged_files"] == []
+
+
 class TestValidateExperiment:
     """Test experiment validation."""
 
