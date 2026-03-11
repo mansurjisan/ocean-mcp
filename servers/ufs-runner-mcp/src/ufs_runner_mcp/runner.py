@@ -57,6 +57,39 @@ def _render_template(content: str, variables: dict) -> str:
     return re.sub(r"\{\{(\w+)\}\}", replacer, content)
 
 
+def _load_template_defaults(template_path: Path) -> dict:
+    """Load defaults.yaml from a template directory."""
+    defaults_file = template_path / "defaults.yaml"
+    if not defaults_file.exists():
+        return {}
+    with open(defaults_file) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _compute_derived_vars(variables: dict) -> dict:
+    """Compute derived variables from base variables."""
+    v = dict(variables)
+    # Computed fields for ufs.configure petlist_bounds
+    atm = int(v.get("atm_tasks", 160))
+    ocn = int(v.get("ocn_tasks", 160))
+    v["atm_tasks_minus1"] = atm - 1
+    v["total_tasks_minus1"] = atm + ocn - 1
+    v["total_tasks"] = atm + ocn
+    v["atm_tasks"] = atm
+    v["ocn_tasks"] = ocn
+    return v
+
+
+def _render_template(content: str, variables: dict) -> str:
+    """Replace {{var}} placeholders with values from variables dict."""
+    def replacer(match: re.Match) -> str:
+        key = match.group(1).strip()
+        if key in variables:
+            return str(variables[key])
+        return match.group(0)  # Leave unresolved placeholders as-is
+    return re.sub(r"\{\{(\w+)\}\}", replacer, content)
+
+
 class RunnerError(Exception):
     """Raised when a runner operation fails."""
 
