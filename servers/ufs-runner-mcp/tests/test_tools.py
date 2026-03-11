@@ -1,7 +1,6 @@
 """Tests for MCP tool functions."""
 
 import pytest
-from unittest.mock import MagicMock
 
 from ufs_runner_mcp.tools.experiment import (
     ufs_create_experiment,
@@ -11,7 +10,6 @@ from ufs_runner_mcp.tools.experiment import (
 )
 from ufs_runner_mcp.tools.monitoring import (
     ufs_get_run_status,
-    ufs_cancel_run,
     ufs_collect_outputs,
 )
 
@@ -21,7 +19,9 @@ async def test_create_experiment_tool(mock_ctx, tmp_path, monkeypatch):
     monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(tmp_path))
     run_dir = str(tmp_path / "tool_test")
     result = await ufs_create_experiment(
-        mock_ctx, model_type="schism", run_dir=run_dir,
+        mock_ctx,
+        model_type="schism",
+        run_dir=run_dir,
     )
     assert "Experiment Created" in result
     assert "param.nml" in result
@@ -31,7 +31,9 @@ async def test_create_experiment_tool(mock_ctx, tmp_path, monkeypatch):
 async def test_create_experiment_bad_model(mock_ctx, tmp_path, monkeypatch):
     monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(tmp_path))
     result = await ufs_create_experiment(
-        mock_ctx, model_type="nope", run_dir=str(tmp_path / "x"),
+        mock_ctx,
+        model_type="nope",
+        run_dir=str(tmp_path / "x"),
     )
     assert "Error" in result
 

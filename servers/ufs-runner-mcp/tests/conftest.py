@@ -1,8 +1,6 @@
 """Shared test fixtures for ufs-runner-mcp."""
 
-import os
 import pytest
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from ufs_runner_mcp.runner import UfsRunner
@@ -27,7 +25,7 @@ def mock_ctx(runner):
 def schism_run_dir(tmp_path, runner):
     """Create a SCHISM experiment in tmp_path and return the path."""
     run_dir = str(tmp_path / "test_schism_run")
-    result = runner.create_experiment(
+    runner.create_experiment(
         model_type="schism",
         run_dir=run_dir,
     )

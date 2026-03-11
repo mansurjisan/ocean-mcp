@@ -1,11 +1,10 @@
 """Unit tests for UfsRunner core logic."""
 
 import json
-import os
 import pytest
 from pathlib import Path
 
-from ufs_runner_mcp.runner import RunnerError, UfsRunner
+from ufs_runner_mcp.runner import RunnerError
 from ufs_runner_mcp.models import validate_run_dir, validate_job_id
 
 
@@ -81,6 +80,7 @@ class TestCreateExperiment:
         )
 
         import f90nml
+
         nml = f90nml.read(str(Path(run_dir) / "param.nml"))
         assert nml["CORE"]["dt"] == 60.0
         assert nml["CORE"]["rnday"] == 3.0
@@ -91,7 +91,12 @@ class TestCreateExperiment:
         runner.create_experiment(
             model_type="schism",
             run_dir=run_dir,
-            overrides={"start_year": 2024, "start_month": 3, "start_day": 15, "nhours_fcst": 12},
+            overrides={
+                "start_year": 2024,
+                "start_month": 3,
+                "start_day": 15,
+                "nhours_fcst": 12,
+            },
         )
         content = (Path(run_dir) / "model_configure").read_text()
         assert "start_year:              2024" in content
@@ -117,7 +122,12 @@ class TestCreateExperiment:
         runner.create_experiment(
             model_type="schism",
             run_dir=run_dir,
-            overrides={"nodes": 8, "tasks_per_node": 40, "total_tasks": 320, "job_name": "my-run"},
+            overrides={
+                "nodes": 8,
+                "tasks_per_node": 40,
+                "total_tasks": 320,
+                "job_name": "my-run",
+            },
         )
         content = (Path(run_dir) / "run_ufs.sh").read_text()
         assert "#SBATCH --nodes=8" in content

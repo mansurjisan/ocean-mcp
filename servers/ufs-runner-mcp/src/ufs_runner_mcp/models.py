@@ -10,6 +10,7 @@ from pathlib import Path
 
 class ModelType(str, Enum):
     """Supported UFS-Coastal model configurations."""
+
     SCHISM = "schism"
     ADCIRC = "adcirc"
     FVCOM = "fvcom"

@@ -13,7 +13,13 @@ from pathlib import Path
 import f90nml
 import yaml
 
-from .models import MAX_NODES, MAX_WALL_HOURS, ModelType, validate_job_id, validate_run_dir
+from .models import (
+    MAX_NODES,
+    MAX_WALL_HOURS,
+    ModelType,
+    validate_job_id,
+    validate_run_dir,
+)
 
 
 def _load_template_defaults(template_path: Path) -> dict:
@@ -41,11 +47,13 @@ def _compute_derived_vars(variables: dict) -> dict:
 
 def _render_template(content: str, variables: dict) -> str:
     """Replace {{var}} placeholders with values from variables dict."""
+
     def replacer(match: re.Match) -> str:
         key = match.group(1).strip()
         if key in variables:
             return str(variables[key])
         return match.group(0)  # Leave unresolved placeholders as-is
+
     return re.sub(r"\{\{(\w+)\}\}", replacer, content)
 
 
@@ -97,10 +105,15 @@ class UfsRunner:
         template_name = template or self._find_default_template(model.value)
         template_path = self._templates_dir / template_name
         if not template_path.is_dir():
-            available = [
-                d.name for d in self._templates_dir.iterdir()
-                if d.is_dir() and not d.name.startswith(".")
-            ] if self._templates_dir.exists() else []
+            available = (
+                [
+                    d.name
+                    for d in self._templates_dir.iterdir()
+                    if d.is_dir() and not d.name.startswith(".")
+                ]
+                if self._templates_dir.exists()
+                else []
+            )
             raise RunnerError(
                 f"Template '{template_name}' not found. "
                 f"Available: {', '.join(available) or 'none'}"
@@ -148,8 +161,9 @@ class UfsRunner:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": os.environ.get("USER", "unknown"),
             "overrides_applied": overrides or {},
-            "resolved_variables": {k: v for k, v in variables.items()
-                                   if not isinstance(v, (dict, list))},
+            "resolved_variables": {
+                k: v for k, v in variables.items() if not isinstance(v, (dict, list))
+            },
             "status": "created",
         }
         (run_path / ".ufs_experiment.json").write_text(json.dumps(meta, indent=2))
@@ -159,7 +173,9 @@ class UfsRunner:
             "run_dir": str(run_path),
             "model_type": model.value,
             "template": template_name,
-            "files": sorted(str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()),
+            "files": sorted(
+                str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
+            ),
         }
 
     def _find_default_template(self, model_value: str) -> str:
@@ -178,7 +194,9 @@ class UfsRunner:
     def _apply_overrides(self, run_path: Path, overrides: dict) -> None:
         """Apply namelist overrides using f90nml."""
         # Look for param.nml (SCHISM) or fort.15 (ADCIRC) or model_configure
-        nml_files = list(run_path.glob("*.nml")) + list(run_path.glob("model_configure"))
+        nml_files = list(run_path.glob("*.nml")) + list(
+            run_path.glob("model_configure")
+        )
         for nml_file in nml_files:
             try:
                 nml = f90nml.read(str(nml_file))
@@ -210,7 +228,12 @@ class UfsRunner:
         # Check metadata
         meta_file = run_path / ".ufs_experiment.json"
         if not meta_file.exists():
-            issues.append({"severity": "error", "message": "Missing .ufs_experiment.json metadata"})
+            issues.append(
+                {
+                    "severity": "error",
+                    "message": "Missing .ufs_experiment.json metadata",
+                }
+            )
             model_type = "unknown"
         else:
             meta = json.loads(meta_file.read_text())
@@ -220,7 +243,9 @@ class UfsRunner:
         required_files = self._get_required_files(model_type)
         for fname in required_files:
             if not (run_path / fname).exists():
-                issues.append({"severity": "error", "message": f"Missing required file: {fname}"})
+                issues.append(
+                    {"severity": "error", "message": f"Missing required file: {fname}"}
+                )
 
         # Check for Slurm script
         slurm_scripts = list(run_path.glob("*.slurm")) + list(run_path.glob("run_*.sh"))
@@ -232,7 +257,12 @@ class UfsRunner:
             try:
                 f90nml.read(str(nml_file))
             except Exception as e:
-                issues.append({"severity": "error", "message": f"Invalid namelist {nml_file.name}: {e}"})
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Invalid namelist {nml_file.name}: {e}",
+                    }
+                )
 
         return {
             "run_dir": str(run_path),
@@ -240,7 +270,9 @@ class UfsRunner:
             "errors": [i for i in issues if i["severity"] == "error"],
             "warnings": warnings,
             "ready": len([i for i in issues if i["severity"] == "error"]) == 0,
-            "files_found": sorted(str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()),
+            "files_found": sorted(
+                str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
+            ),
         }
 
     def _get_required_files(self, model_type: str) -> list[str]:
@@ -248,12 +280,21 @@ class UfsRunner:
         common = ["model_configure", "ufs.configure"]
         model_specific = {
             "schism": [
-                "param.nml", "hgrid.gr3", "hgrid.ll", "vgrid.in",
-                "rough.gr3", "bctides.in", "datm_in", "datm.streams",
+                "param.nml",
+                "hgrid.gr3",
+                "hgrid.ll",
+                "vgrid.in",
+                "rough.gr3",
+                "bctides.in",
+                "datm_in",
+                "datm.streams",
             ],
             "adcirc": [
-                "fort.14", "fort.15", "fort.13",
-                "datm_in", "datm.streams",
+                "fort.14",
+                "fort.15",
+                "fort.13",
+                "datm_in",
+                "datm.streams",
             ],
             "fvcom": ["namelist.input", "datm_in", "datm.streams"],
         }
@@ -290,7 +331,9 @@ class UfsRunner:
         if nodes > MAX_NODES:
             raise RunnerError(f"Requested {nodes} nodes exceeds limit of {MAX_NODES}.")
         if wall_hours > MAX_WALL_HOURS:
-            raise RunnerError(f"Requested {wall_hours}h wall time exceeds limit of {MAX_WALL_HOURS}h.")
+            raise RunnerError(
+                f"Requested {wall_hours}h wall time exceeds limit of {MAX_WALL_HOURS}h."
+            )
 
         # Validate account/partition format
         if not re.match(r"^[\w-]+$", account):
@@ -331,16 +374,21 @@ class UfsRunner:
                 "run_dir": str(run_path),
                 "script": str(script.name),
                 "message": "Dry run — review the command above. "
-                           "Call submit_ufs_experiment again with dry_run=false to submit.",
+                "Call submit_ufs_experiment again with dry_run=false to submit.",
             }
 
         # Actually submit
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
-            raise RunnerError("sbatch not found. Are you on a Slurm login/service node?")
+            raise RunnerError(
+                "sbatch not found. Are you on a Slurm login/service node?"
+            )
         except subprocess.TimeoutExpired:
             raise RunnerError("sbatch timed out after 30s.")
 
@@ -352,12 +400,15 @@ class UfsRunner:
         job_id = match.group(1) if match else "unknown"
 
         # Update metadata
-        self._update_meta(run_path, {
-            "status": "submitted",
-            "job_id": job_id,
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
-            "sbatch_command": " ".join(cmd),
-        })
+        self._update_meta(
+            run_path,
+            {
+                "status": "submitted",
+                "job_id": job_id,
+                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                "sbatch_command": " ".join(cmd),
+            },
+        )
 
         return {
             "mode": "submitted",
@@ -371,7 +422,9 @@ class UfsRunner:
     # 4. Get run status
     # ------------------------------------------------------------------
 
-    def get_run_status(self, run_dir: str | None = None, job_id: str | None = None) -> dict:
+    def get_run_status(
+        self, run_dir: str | None = None, job_id: str | None = None
+    ) -> dict:
         """Check the status of a UFS experiment run."""
         if job_id:
             err = validate_job_id(job_id)
@@ -401,7 +454,9 @@ class UfsRunner:
         try:
             result = subprocess.run(
                 ["sacct", "-j", job_id, f"--format={fmt}", "-n", "-X"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
             raise RunnerError("sacct not found. Slurm may not be available.")
@@ -426,7 +481,9 @@ class UfsRunner:
         try:
             result = subprocess.run(
                 ["scancel", job_id],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except FileNotFoundError:
             raise RunnerError("scancel not found. Slurm may not be available.")
@@ -458,21 +515,27 @@ class UfsRunner:
             for f in run_path.glob(pattern):
                 if f.is_file():
                     stat = f.stat()
-                    found.append({
-                        "path": str(f.relative_to(run_path)),
-                        "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    })
+                    found.append(
+                        {
+                            "path": str(f.relative_to(run_path)),
+                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                            "modified": datetime.fromtimestamp(
+                                stat.st_mtime
+                            ).isoformat(),
+                        }
+                    )
 
         # Check Slurm log
         slurm_logs = list(run_path.glob("slurm-*.out"))
         for log in slurm_logs:
             stat = log.stat()
-            found.append({
-                "path": str(log.relative_to(run_path)),
-                "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            found.append(
+                {
+                    "path": str(log.relative_to(run_path)),
+                    "size_mb": round(stat.st_size / (1024 * 1024), 2),
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
 
         # Sort by modification time, newest first
         found.sort(key=lambda x: x["modified"], reverse=True)

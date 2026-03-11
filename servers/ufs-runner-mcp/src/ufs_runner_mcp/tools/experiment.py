@@ -45,6 +45,7 @@ async def ufs_create_experiment(
     """
     try:
         import json as _json
+
         override_dict = _json.loads(overrides) if overrides else None
 
         runner = _get_runner(ctx)
@@ -56,7 +57,7 @@ async def ufs_create_experiment(
         )
 
         lines = [
-            f"## Experiment Created",
+            "## Experiment Created",
             f"- **Model**: {result['model_type']}",
             f"- **Template**: {result['template']}",
             f"- **Directory**: {result['run_dir']}",
@@ -67,8 +68,10 @@ async def ufs_create_experiment(
         for f in result["files"]:
             lines.append(f"- {f}")
 
-        lines.append("\nNext: call `ufs_validate_experiment` to check the setup, "
-                     "then `ufs_submit_experiment` to submit.")
+        lines.append(
+            "\nNext: call `ufs_validate_experiment` to check the setup, "
+            "then `ufs_submit_experiment` to submit."
+        )
         return "\n".join(lines)
 
     except RunnerError as e:
@@ -101,7 +104,7 @@ async def ufs_validate_experiment(
         result = runner.validate_experiment(run_dir)
 
         lines = [
-            f"## Experiment Validation",
+            "## Experiment Validation",
             f"- **Directory**: {result['run_dir']}",
             f"- **Model**: {result['model_type']}",
             f"- **Ready**: {'YES' if result['ready'] else 'NO'}",
@@ -220,12 +223,15 @@ async def ufs_list_templates(
         return "No templates directory found. Templates need to be installed."
 
     templates = [
-        d.name for d in templates_dir.iterdir()
+        d.name
+        for d in templates_dir.iterdir()
         if d.is_dir() and not d.name.startswith(".")
     ]
 
     if not templates:
-        return "No templates available. Add template directories to the templates/ folder."
+        return (
+            "No templates available. Add template directories to the templates/ folder."
+        )
 
     lines = ["## Available Templates"]
     for t in sorted(templates):
