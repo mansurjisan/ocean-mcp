@@ -58,7 +58,7 @@ async def test_submit_dry_run_tool(mock_ctx, schism_run_dir):
 @pytest.mark.asyncio
 async def test_list_templates_tool(mock_ctx):
     result = await ufs_list_templates(mock_ctx)
-    assert "schism_default" in result
+    assert "schism_sandy_duck" in result
 
 
 @pytest.mark.asyncio

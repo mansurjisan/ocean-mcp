@@ -1,0 +1,37 @@
+Sandy Duck SCHISM + DATM (ERA5) Coupled Run Template
+=====================================================
+
+Domain: Sandy Duck, North Carolina
+Grid: 45,167 nodes, 23,018 elements, 31 vertical levels (hybrid S/Z)
+Coupling: DATM (ERA5 0.25deg) + SCHISM via CMEPS mediator
+Forecast: 6 hours (2012-10-27 00:00 - 06:00 UTC)
+MPI Tasks: 320 (160 ATM + 160 OCN) on 4 nodes
+
+Files included in template (config only):
+  param.nml        - SCHISM ocean model namelist
+  model_configure  - FV3/UFS atmosphere configuration
+  ufs.configure    - NEMS/CMEPS coupling configuration
+  datm_in          - Data atmosphere namelist
+  datm.streams     - DATM stream config (ERA5 wind/pressure)
+  vgrid.in         - Vertical grid (31-level hybrid S/Z)
+  bctides.in       - Tidal boundary conditions
+  station.in       - Output station locations (5 stations at Duck, NC)
+  run_ufs.sh       - SLURM submission script
+
+Files you must provide (domain-specific):
+  hgrid.gr3        - Horizontal grid (Cartesian)
+  hgrid.ll         - Horizontal grid (lat/lon)
+  rough.gr3        - Bottom roughness
+  diffmin.gr3      - Min horizontal diffusivity
+  diffmax.gr3      - Max horizontal diffusivity
+  windrot_geo2proj.gr3 - Wind rotation angles
+  elev.ic          - Initial elevation condition
+  wwmbnd.gr3       - Wave boundary definition
+  elev2D.th.nc     - 2D elevation time history
+  INPUT/era5_*.nc  - ERA5 atmospheric forcing data
+  INPUT/mesh_datm.nc - DATM mesh file
+
+Executables you must provide:
+  ufs_model (or fv3_coastalS_V3.exe) - Compiled UFS-Coastal binary
+  module-setup.sh  - Module loader for your platform
+  modulefiles/     - Platform module files

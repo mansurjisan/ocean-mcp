@@ -1,0 +1,7 @@
+1 1 1 1 0 0 1 1 0
+5
+1 -75.745280 36.183639 0.  !NOAA 8651370 / FRF Pier (WL, wind, pressure)
+2 -75.742884 36.187233 0.  !FRF 8m Array (waves, WL, pressure)
+3 -75.591333 36.254833 0.  !FRF Waverider 26m buoy (waves)
+4 -75.714000 36.200000 0.  !NDBC 44056 Duck 26m (waves)
+5 -75.746600 36.120000 0.  !South of Duck (no obs)

@@ -1,0 +1,40 @@
+start_year:              2012
+start_month:             10
+start_day:               27
+start_hour:              00
+start_minute:            0
+start_second:            0
+nhours_fcst:             6
+fhrot:                   0
+
+dt_atmos:                720
+restart_interval:        0
+restart_fh:               
+
+quilting:                .true.
+quilting_restart:        .false.
+write_groups:            1
+write_tasks_per_group:   6
+itasks:                  1
+output_history:          .true.
+history_file_on_native_grid: .false.
+write_dopost:            .false.
+write_nsflip:            .false.
+num_files:               2
+fv3atm_output_dir:       ./
+filename_base:           atmmesh.
+output_grid:             'cubed_sphere_grid'
+output_file:             'netcdf'
+zstandard_level:         5
+ideflate:                0
+quantize_mode:           'quantize_bitround'
+quantize_nsd:            0
+ichunk2d:                0
+jchunk2d:                0
+ichunk3d:                0
+jchunk3d:                0
+kchunk3d:                0
+imo:                     384
+jmo:                     190
+output_fh:               12 -1
+iau_offset:              0

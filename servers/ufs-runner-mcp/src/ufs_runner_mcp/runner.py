@@ -59,8 +59,8 @@ class UfsRunner:
                 f"Choose a different path or remove it first."
             )
 
-        # Find template
-        template_name = template or f"{model.value}_default"
+        # Find template — try explicit name, then model_default, then first match
+        template_name = template or self._find_default_template(model.value)
         template_path = self._templates_dir / template_name
         if not template_path.is_dir():
             available = [
@@ -103,6 +103,19 @@ class UfsRunner:
             "template": template_name,
             "files": sorted(str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()),
         }
+
+    def _find_default_template(self, model_value: str) -> str:
+        """Find the best matching template for a model type."""
+        if not self._templates_dir.exists():
+            return f"{model_value}_default"
+        # Look for exact default first, then any template starting with model name
+        default_name = f"{model_value}_default"
+        if (self._templates_dir / default_name).is_dir():
+            return default_name
+        for d in sorted(self._templates_dir.iterdir()):
+            if d.is_dir() and d.name.startswith(model_value):
+                return d.name
+        return default_name  # Will fail later with clear error
 
     def _apply_overrides(self, run_path: Path, overrides: dict) -> None:
         """Apply namelist overrides using f90nml."""
@@ -174,11 +187,17 @@ class UfsRunner:
 
     def _get_required_files(self, model_type: str) -> list[str]:
         """Return required files for a given model type."""
-        common = ["model_configure"]
+        common = ["model_configure", "ufs.configure"]
         model_specific = {
-            "schism": ["param.nml", "hgrid.gr3", "vgrid.in", "drag.gr3"],
-            "adcirc": ["fort.14", "fort.15", "fort.13"],
-            "fvcom": ["namelist.input"],
+            "schism": [
+                "param.nml", "hgrid.gr3", "hgrid.ll", "vgrid.in",
+                "rough.gr3", "bctides.in", "datm_in", "datm.streams",
+            ],
+            "adcirc": [
+                "fort.14", "fort.15", "fort.13",
+                "datm_in", "datm.streams",
+            ],
+            "fvcom": ["namelist.input", "datm_in", "datm.streams"],
         }
         return common + model_specific.get(model_type, [])
 
