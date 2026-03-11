@@ -3,7 +3,7 @@
 import math
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -120,13 +120,20 @@ class NDBCClient:
         text = await self.fetch_realtime(station_id, extension)
         columns, records = parse_realtime_text(text)
 
-        if hours is not None and hours > 0:
-            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
-                hours=hours
-            )
-            records = [
-                r for r in records if r.get("datetime") and r["datetime"] >= cutoff
-            ]
+        if hours is not None and hours > 0 and records:
+            # Filter relative to the newest record, not wall-clock time.
+            # Realtime2 files are sorted newest-first; the first record with a
+            # valid datetime is the reference point.
+            ref = None
+            for r in records:
+                if r.get("datetime"):
+                    ref = r["datetime"]
+                    break
+            if ref is not None:
+                cutoff = ref - timedelta(hours=hours)
+                records = [
+                    r for r in records if r.get("datetime") and r["datetime"] >= cutoff
+                ]
 
         return columns, records
 
