@@ -3,7 +3,7 @@
 import math
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -132,9 +132,7 @@ class NDBCClient:
             if ref is not None:
                 cutoff = ref - timedelta(hours=hours)
                 records = [
-                    r
-                    for r in records
-                    if r.get("datetime") and r["datetime"] >= cutoff
+                    r for r in records if r.get("datetime") and r["datetime"] >= cutoff
                 ]
 
         return columns, records
