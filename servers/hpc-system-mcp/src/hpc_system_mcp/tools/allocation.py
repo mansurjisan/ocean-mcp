@@ -40,8 +40,15 @@ async def hpc_allocation_usage(
     sections: list[str] = []
 
     # User utilization
-    cmd = ["sreport", "cluster", "UserUtilizationByAccount", "-t", "Hours",
-           f"Users={user}", "-n"]
+    cmd = [
+        "sreport",
+        "cluster",
+        "UserUtilizationByAccount",
+        "-t",
+        "Hours",
+        f"Users={user}",
+        "-n",
+    ]
     if cluster:
         cmd.extend(["-M", cluster])
     try:
@@ -52,8 +59,15 @@ async def hpc_allocation_usage(
 
     # Account utilization (if account specified)
     if account:
-        cmd = ["sreport", "cluster", "AccountUtilizationByUser", "-t", "Hours",
-               f"account={account}", "-n"]
+        cmd = [
+            "sreport",
+            "cluster",
+            "AccountUtilizationByUser",
+            "-t",
+            "Hours",
+            f"account={account}",
+            "-n",
+        ]
         if cluster:
             cmd.extend(["-M", cluster])
         try:
@@ -158,12 +172,17 @@ async def hpc_account_info(
     target_user = user or os.environ.get("USER", "unknown")
 
     try:
-        output = await executor.run([
-            "sacctmgr", "show", "assoc",
-            f"user={target_user}",
-            "format=Account,Partition,QOS,MaxJobs,MaxSubmit,MaxWall,GrpTRES",
-            "--parsable2", "--noheader",
-        ])
+        output = await executor.run(
+            [
+                "sacctmgr",
+                "show",
+                "assoc",
+                f"user={target_user}",
+                "format=Account,Partition,QOS,MaxJobs,MaxSubmit,MaxWall,GrpTRES",
+                "--parsable2",
+                "--noheader",
+            ]
+        )
     except ExecutorError as e:
         return f"Error: {e}"
 
@@ -172,8 +191,12 @@ async def hpc_account_info(
 
     # Parse into readable table
     lines = ["## Slurm Accounts for {}\n".format(target_user)]
-    lines.append("| Account | Partition | QOS | MaxJobs | MaxSubmit | MaxWall | GrpTRES |")
-    lines.append("|---------|-----------|-----|---------|-----------|---------|---------|")
+    lines.append(
+        "| Account | Partition | QOS | MaxJobs | MaxSubmit | MaxWall | GrpTRES |"
+    )
+    lines.append(
+        "|---------|-----------|-----|---------|-----------|---------|---------|"
+    )
     for row in output.strip().split("\n"):
         cols = row.split("|")
         if len(cols) >= 7:

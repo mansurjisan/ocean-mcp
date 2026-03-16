@@ -50,14 +50,13 @@ async def hpc_disk_quota(
         scratch_paths = [filesystem] if filesystem.startswith("/scratch") else []
 
     import os
+
     user = os.environ.get("USER", "unknown")
     for path in scratch_paths:
         if not os.path.isdir(path):
             continue
         try:
-            output = await executor.run(
-                ["lfs", "quota", "-u", user, path]
-            )
+            output = await executor.run(["lfs", "quota", "-u", user, path])
             sections.append(f"## {path} Quota\n```\n{output}\n```")
         except ExecutorError:
             pass  # Filesystem not available or not Lustre
@@ -174,6 +173,7 @@ async def hpc_df(
     cmd = ["df", "-h"]
     if filesystem:
         import re as _re
+
         if _re.search(r"[;&|`$(){}]", filesystem):
             return f"Error: Unsafe characters in path: '{filesystem}'"
         cmd.append(filesystem)

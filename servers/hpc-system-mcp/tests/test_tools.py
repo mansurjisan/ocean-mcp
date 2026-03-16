@@ -4,19 +4,28 @@ import pytest
 
 from hpc_system_mcp.tools.quota import hpc_disk_quota, hpc_df  # noqa: F401
 from hpc_system_mcp.tools.allocation import (
-    hpc_fairshare, hpc_account_info, hpc_job_priority,
+    hpc_fairshare,
+    hpc_account_info,
+    hpc_job_priority,
 )
-from hpc_system_mcp.tools.modules import hpc_module_list, hpc_module_avail, hpc_module_info
+from hpc_system_mcp.tools.modules import (
+    hpc_module_list,
+    hpc_module_avail,
+    hpc_module_info,
+)
 from hpc_system_mcp.tools.system import (
-    hpc_system_info, hpc_user_groups, hpc_recent_jobs,
+    hpc_system_info,
+    hpc_user_groups,
+    hpc_recent_jobs,
 )
 
 
 class TestQuotaTools:
-
     @pytest.mark.asyncio
     async def test_disk_quota(self, mock_ctx, mock_executor):
-        mock_executor.run.return_value = "Disk quotas for user testuser:\n  /home: 5G/10G"
+        mock_executor.run.return_value = (
+            "Disk quotas for user testuser:\n  /home: 5G/10G"
+        )
         result = await hpc_disk_quota(mock_ctx, filesystem="/home")
         assert "Home Quota" in result
         assert "5G/10G" in result
@@ -35,7 +44,6 @@ class TestQuotaTools:
 
 
 class TestAllocationTools:
-
     @pytest.mark.asyncio
     async def test_fairshare(self, mock_ctx, mock_executor):
         mock_executor.run.return_value = (
@@ -49,7 +57,9 @@ class TestAllocationTools:
 
     @pytest.mark.asyncio
     async def test_account_info(self, mock_ctx, mock_executor):
-        mock_executor.run.return_value = "coastal-act|u1-compute|batch|10|20|08:00:00|cpu=1000"
+        mock_executor.run.return_value = (
+            "coastal-act|u1-compute|batch|10|20|08:00:00|cpu=1000"
+        )
         result = await hpc_account_info(mock_ctx)
         assert "Slurm Accounts" in result
         assert "coastal-act" in result
@@ -62,14 +72,15 @@ class TestAllocationTools:
 
     @pytest.mark.asyncio
     async def test_job_priority_valid(self, mock_ctx, mock_executor):
-        mock_executor.run.return_value = "JOBID  PRIORITY  AGE  FAIRSHARE\n12345  1000  100  500"
+        mock_executor.run.return_value = (
+            "JOBID  PRIORITY  AGE  FAIRSHARE\n12345  1000  100  500"
+        )
         result = await hpc_job_priority(mock_ctx, job_id="12345")
         assert "Job Priority" in result
         assert "12345" in result
 
 
 class TestModuleTools:
-
     @pytest.mark.asyncio
     async def test_module_list(self, mock_ctx, mock_executor):
         mock_executor.run_shell.return_value = (
@@ -112,7 +123,6 @@ class TestModuleTools:
 
 
 class TestSystemTools:
-
     @pytest.mark.asyncio
     async def test_system_info(self, mock_ctx, mock_executor):
         mock_executor.run.return_value = (

@@ -14,11 +14,24 @@ class ExecutorError(Exception):
 
 # Commands that are safe to run (read-only HPC queries)
 _ALLOWED_COMMANDS = {
-    "quota", "lfs", "du", "df",
-    "sacctmgr", "sshare", "sreport", "sinfo", "squeue", "sacct",
-    "sprio", "sbatch-limits",
-    "saccount_params", "reportFSUsage", "shpcrpt",
-    "module", "id", "groups",
+    "quota",
+    "lfs",
+    "du",
+    "df",
+    "sacctmgr",
+    "sshare",
+    "sreport",
+    "sinfo",
+    "squeue",
+    "sacct",
+    "sprio",
+    "sbatch-limits",
+    "saccount_params",
+    "reportFSUsage",
+    "shpcrpt",
+    "module",
+    "id",
+    "groups",
 }
 
 
@@ -31,7 +44,9 @@ def _validate_command(cmd: list[str]) -> str | None:
         return "Empty command"
     base = os.path.basename(cmd[0])
     if base not in _ALLOWED_COMMANDS:
-        return f"Command '{base}' is not in the allowed list: {sorted(_ALLOWED_COMMANDS)}"
+        return (
+            f"Command '{base}' is not in the allowed list: {sorted(_ALLOWED_COMMANDS)}"
+        )
     # Block shell metacharacters in arguments
     for arg in cmd[1:]:
         if re.search(r"[;&|`$(){}]", arg):
@@ -75,7 +90,8 @@ class CommandExecutor:
                 env=env,
             )
             stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout,
+                proc.communicate(),
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             raise ExecutorError(f"Command timed out after {timeout}s: {' '.join(cmd)}")
@@ -112,7 +128,8 @@ class CommandExecutor:
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout,
+                proc.communicate(),
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             raise ExecutorError(f"Module command timed out: {shell_cmd}")

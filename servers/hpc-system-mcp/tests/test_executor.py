@@ -10,13 +10,18 @@ class TestValidateCommand:
 
     def test_allowed_commands(self):
         assert _validate_command(["quota", "-Qs"]) is None
-        assert _validate_command(["lfs", "quota", "-u", "testuser", "/scratch5"]) is None
+        assert (
+            _validate_command(["lfs", "quota", "-u", "testuser", "/scratch5"]) is None
+        )
         assert _validate_command(["sshare", "-A", "coastal-act"]) is None
         assert _validate_command(["du", "-h", "/scratch5/user"]) is None
         assert _validate_command(["id", "testuser"]) is None
         assert _validate_command(["groups", "testuser"]) is None
         assert _validate_command(["sacctmgr", "show", "assoc"]) is None
-        assert _validate_command(["sreport", "cluster", "UserUtilizationByAccount"]) is None
+        assert (
+            _validate_command(["sreport", "cluster", "UserUtilizationByAccount"])
+            is None
+        )
         assert _validate_command(["sinfo"]) is None
         assert _validate_command(["df", "-h"]) is None
 

@@ -37,8 +37,11 @@ async def hpc_system_info(
 
     executor = _get_executor(ctx)
 
-    cmd = ["sinfo",
-           "-O", "partition:20,available:6,nodes:8,cpus:8,memory:12,timelimit:12,statecompact:10,nodelist:30"]
+    cmd = [
+        "sinfo",
+        "-O",
+        "partition:20,available:6,nodes:8,cpus:8,memory:12,timelimit:12,statecompact:10,nodelist:30",
+    ]
     if partition:
         if re.search(r"[;&|`$(){}]", partition):
             return f"Error: Unsafe characters in partition: '{partition}'"
@@ -80,10 +83,13 @@ async def hpc_partition_limits(
 
     # Fallback to sinfo partition summary
     try:
-        output = await executor.run([
-            "sinfo", "-O",
-            "partition:20,timelimit:12,nodes:8,maxcpuspernode:8,defaulttime:12",
-        ])
+        output = await executor.run(
+            [
+                "sinfo",
+                "-O",
+                "partition:20,timelimit:12,nodes:8,maxcpuspernode:8,defaulttime:12",
+            ]
+        )
         return f"## Partition Limits (via sinfo)\n```\n{output}\n```"
     except ExecutorError as e:
         return f"Error: {e}"
@@ -159,13 +165,17 @@ async def hpc_recent_jobs(
     executor = _get_executor(ctx)
     days = min(max(1, days), 30)
 
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%d"
+    )
     user = os.environ.get("USER", "unknown")
 
     cmd = [
         "sacct",
-        "--user", user,
-        "--starttime", start_date,
+        "--user",
+        user,
+        "--starttime",
+        start_date,
         "-X",  # No job steps
         "--format=JobID,JobName%30,Partition,Account,AllocCPUS,State,Elapsed,MaxRSS,ExitCode",
     ]
@@ -182,4 +192,6 @@ async def hpc_recent_jobs(
     if not output.strip():
         return f"No jobs found in the last {days} day(s)."
 
-    return f"## Recent Jobs (last {days} day{'s' if days > 1 else ''})\n```\n{output}\n```"
+    return (
+        f"## Recent Jobs (last {days} day{'s' if days > 1 else ''})\n```\n{output}\n```"
+    )
