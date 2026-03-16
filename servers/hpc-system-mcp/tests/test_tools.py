@@ -2,13 +2,13 @@
 
 import pytest
 
-from hpc_system_mcp.tools.quota import hpc_disk_quota, hpc_storage_usage, hpc_df
+from hpc_system_mcp.tools.quota import hpc_disk_quota, hpc_df  # noqa: F401
 from hpc_system_mcp.tools.allocation import (
-    hpc_allocation_usage, hpc_fairshare, hpc_account_info, hpc_job_priority,
+    hpc_fairshare, hpc_account_info, hpc_job_priority,
 )
 from hpc_system_mcp.tools.modules import hpc_module_list, hpc_module_avail, hpc_module_info
 from hpc_system_mcp.tools.system import (
-    hpc_system_info, hpc_partition_limits, hpc_user_groups, hpc_recent_jobs,
+    hpc_system_info, hpc_user_groups, hpc_recent_jobs,
 )
 
 

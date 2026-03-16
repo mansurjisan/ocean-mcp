@@ -2,7 +2,7 @@
 
 import pytest
 
-from hpc_system_mcp.executor import CommandExecutor, ExecutorError, _validate_command
+from hpc_system_mcp.executor import ExecutorError, _validate_command
 
 
 class TestValidateCommand:
