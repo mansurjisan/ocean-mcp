@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nos-workflow-mcp"
+version = "0.1.0"
+description = "MCP server for NOS Operational Forecast System workflow management — configs, diagnostics, and monitoring"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+    {name = "Mansur Jisan", email = "mansur.jisan@gmail.com"},
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "noaa",
+    "nos",
+    "ofs",
+    "schism",
+    "stofs",
+    "secofs",
+    "workflow",
+    "ecflow",
+]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mansurjisan/ocean-mcp"
+Repository = "https://github.com/mansurjisan/ocean-mcp"
+
+[project.scripts]
+nos-workflow-mcp = "nos_workflow_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nos_workflow_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
