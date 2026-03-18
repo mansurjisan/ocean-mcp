@@ -18,6 +18,11 @@ from hpc_system_mcp.tools.system import (
     hpc_user_groups,
     hpc_recent_jobs,
 )
+from hpc_system_mcp.tools.pbs import (
+    hpc_pbs_jobs,
+    hpc_pbs_job_detail,
+    hpc_pbs_nodes,
+)
 
 
 class TestQuotaTools:
@@ -162,3 +167,56 @@ class TestSystemTools:
     async def test_recent_jobs_unsafe_account(self, mock_ctx):
         result = await hpc_recent_jobs(mock_ctx, account="test; whoami")
         assert "Error" in result
+
+
+class TestPBSTools:
+    @pytest.mark.asyncio
+    async def test_pbs_jobs(self, mock_ctx, mock_executor):
+        mock_executor.run.return_value = (
+            "                                                            Req'd  Req'd   Elap\n"
+            "Job ID          Username Queue    Jobname    SessID NDS TSK Memory Time  S Time\n"
+            "--------------- -------- -------- ---------- ------ --- --- ------ ----- - -----\n"
+            "12345.svc       testuser workq    stofs_run  10234    4  96  240gb 06:00 R 02:15"
+        )
+        result = await hpc_pbs_jobs(mock_ctx)
+        assert "PBS Jobs" in result
+        assert "12345.svc" in result
+        assert "stofs_run" in result
+
+    @pytest.mark.asyncio
+    async def test_pbs_job_detail_invalid_id(self, mock_ctx):
+        result = await hpc_pbs_job_detail(mock_ctx, job_id="abc; rm -rf /")
+        assert "Error" in result
+        assert "Invalid" in result
+
+    @pytest.mark.asyncio
+    async def test_pbs_job_detail_valid(self, mock_ctx, mock_executor):
+        mock_executor.run.return_value = (
+            "Job Id: 12345.svc\n"
+            "    Job_Name = stofs_run\n"
+            "    job_state = R\n"
+            "    queue = workq\n"
+            "    Resource_List.ncpus = 96"
+        )
+        result = await hpc_pbs_job_detail(mock_ctx, job_id="12345")
+        assert "PBS Job Detail" in result
+        assert "12345" in result
+
+    @pytest.mark.asyncio
+    async def test_pbs_job_detail_with_server_suffix(self, mock_ctx, mock_executor):
+        mock_executor.run.return_value = "Job Id: 12345.svc\n    job_state = R"
+        result = await hpc_pbs_job_detail(mock_ctx, job_id="12345.svc")
+        assert "PBS Job Detail" in result
+        assert "12345.svc" in result
+
+    @pytest.mark.asyncio
+    async def test_pbs_nodes(self, mock_ctx, mock_executor):
+        mock_executor.run.return_value = (
+            "                                                        mem   ncpus   nmics   ngpus\n"
+            "vnode           state           njobs   run   susp      f/t     f/t     f/t     f/t\n"
+            "--------------- --------------- ------ ----- ------ -------- ------- ------- -------\n"
+            "t001            free                 0     0      0  512/512 128/128     0/0     0/0"
+        )
+        result = await hpc_pbs_nodes(mock_ctx)
+        assert "PBS Node Status" in result
+        assert "t001" in result
