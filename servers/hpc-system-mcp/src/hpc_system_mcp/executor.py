@@ -32,6 +32,12 @@ _ALLOWED_COMMANDS = {
     "module",
     "id",
     "groups",
+    # PBS / WCOSS2
+    "qstat",
+    "qsub",
+    "qdel",
+    "qselect",
+    "pbsnodes",
 }
 
 
