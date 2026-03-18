@@ -210,3 +210,41 @@ async def nos_get_ensemble_config(
         return f"No ensemble configuration found for {system_name}."
 
     return f"## Ensemble Config: {system_name}\n```yaml\n{yaml.dump(ensemble, default_flow_style=False)}```"
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+async def nos_get_domain_bounds(
+    ctx: Context,
+    system_name: str,
+) -> str:
+    """Get the geographic domain bounds for an OFS system.
+
+    Returns lon/lat bounding box that can be used to find CO-OPS stations,
+    buoys, or other observation points within the model domain.
+
+    Args:
+        system_name: OFS system name (e.g. 'secofs', 'stofs_3d_atl').
+    """
+    reader = _get_reader(ctx)
+    try:
+        bounds = reader.get_domain_bounds(system_name)
+    except ConfigError as e:
+        return f"Error: {e}"
+
+    if not bounds:
+        return f"No domain bounds found in {system_name} config."
+
+    return (
+        f"## Domain Bounds: {system_name}\n\n"
+        f"- **Longitude**: {bounds['lon_min']} to {bounds['lon_max']}\n"
+        f"- **Latitude**: {bounds['lat_min']} to {bounds['lat_max']}\n\n"
+        f"Use these bounds to find CO-OPS stations in the domain:\n"
+        f"`coops_find_nearest_stations` with lat/lon within this range."
+    )

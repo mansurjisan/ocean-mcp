@@ -20,7 +20,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[dict]:
 
 mcp = FastMCP("nos_workflow_mcp", lifespan=app_lifespan)
 
-from .tools import config, diagnostics  # noqa: E402, F401
+from .tools import config, diagnostics, validation, availability  # noqa: E402, F401
 
 
 def main() -> None:

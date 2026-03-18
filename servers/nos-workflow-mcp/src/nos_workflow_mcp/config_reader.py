@@ -190,6 +190,23 @@ class ConfigReader:
             return None
         return ensemble
 
+    def get_domain_bounds(self, system_name: str) -> dict | None:
+        """Get the geographic domain bounds for an OFS system.
+
+        Returns dict with lon_min, lon_max, lat_min, lat_max or None.
+        """
+        config = self.get_config(system_name)
+        grid = config.get("grid", {})
+        domain = grid.get("domain", {})
+        if all(k in domain for k in ("lon_min", "lon_max", "lat_min", "lat_max")):
+            return {
+                "lon_min": domain["lon_min"],
+                "lon_max": domain["lon_max"],
+                "lat_min": domain["lat_min"],
+                "lat_max": domain["lat_max"],
+            }
+        return None
+
     def diagnose_log(self, log_content: str) -> dict:
         """Parse a job log or fatal.error and classify the failure."""
         lowered = log_content.lower()
