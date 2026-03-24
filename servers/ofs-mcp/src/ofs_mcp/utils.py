@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -389,11 +389,13 @@ def clean_timeseries(
             "values": [],
             "n_original": 0,
             "n_duplicates_removed": 0,
+            "n_parse_failures": 0,
             "n_segments": 0,
             "is_sparse": True,
         }
 
     # Parse times
+    n_input = len(times)
     parsed: list[tuple[datetime, float]] = []
     for t_str, v in zip(times, values):
         try:
@@ -402,31 +404,31 @@ def clean_timeseries(
         except ValueError:
             continue
 
-    n_original = len(parsed)
+    n_parse_failures = n_input - len(parsed)
 
     # Sort by time
     parsed.sort(key=lambda x: x[0])
 
-    # Deduplicate — keep last value for each timestamp
+    # Deduplicate — keep last value for each timestamp (stable sort preserves
+    # original order among entries with the same timestamp)
     seen: dict[datetime, float] = {}
     for dt, v in parsed:
         seen[dt] = v
     deduped = sorted(seen.items(), key=lambda x: x[0])
-    n_duplicates = n_original - len(deduped)
+    n_duplicates = len(parsed) - len(deduped)
 
     if len(deduped) < min_points:
         return {
             "times": [dt.strftime("%Y-%m-%d %H:%M") for dt, _ in deduped],
             "values": [v for _, v in deduped],
-            "n_original": n_original,
+            "n_original": n_input,
             "n_duplicates_removed": n_duplicates,
+            "n_parse_failures": n_parse_failures,
             "n_segments": 1 if deduped else 0,
             "is_sparse": True,
         }
 
     # Split on gaps > max_gap_hours
-    from datetime import timedelta
-
     gap_threshold = timedelta(hours=max_gap_hours)
     segments: list[list[tuple[datetime, float]]] = [[deduped[0]]]
     for i in range(1, len(deduped)):
@@ -443,8 +445,9 @@ def clean_timeseries(
     return {
         "times": result_times,
         "values": result_values,
-        "n_original": n_original,
+        "n_original": n_input,
         "n_duplicates_removed": n_duplicates,
+        "n_parse_failures": n_parse_failures,
         "n_segments": len(segments),
         "is_sparse": len(best) < min_points,
     }

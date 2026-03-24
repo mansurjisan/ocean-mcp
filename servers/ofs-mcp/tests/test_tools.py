@@ -794,6 +794,75 @@ class TestOfsCompareWithCoopsMetadata:
 
 
 # ============================================================================
+# Test: domain validation
+# ============================================================================
+
+
+class TestDomainValidation:
+    """Tests for domain validation in forecast tools."""
+
+    @respx.mock
+    async def test_compare_rejects_station_outside_domain(self, client):
+        """ofs_compare_with_coops rejects a station outside the model domain."""
+        from ofs_mcp.tools.forecast import ofs_compare_with_coops
+
+        # Fort Pulaski, GA — outside CBOFS domain
+        respx.get(url__startswith="https://api.tidesandcurrents.noaa.gov/mdapi/").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "stations": [
+                        {"name": "Fort Pulaski", "lat": 32.0367, "lng": -80.9017}
+                    ]
+                },
+            )
+        )
+
+        ctx = make_ctx(client)
+        result = await ofs_compare_with_coops(
+            ctx, station_id="8670870", model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+        assert "Chesapeake Bay OFS" in result or "cbofs" in result
+
+    async def test_forecast_rejects_point_outside_domain(self, client):
+        """ofs_get_forecast_at_point rejects a point outside the model domain."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        ctx = make_ctx(client)
+        # Fort Pulaski, GA — outside CBOFS domain (36.5–39.8°N)
+        result = await ofs_get_forecast_at_point(
+            ctx, latitude=32.0, longitude=-80.9, model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+
+    async def test_forecast_suggests_correct_models(self, client):
+        """Domain rejection should suggest models that cover the location."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        ctx = make_ctx(client)
+        # NYC area — inside NYOFS domain
+        result = await ofs_get_forecast_at_point(
+            ctx, latitude=40.7, longitude=-74.0, model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+        assert "NYOFS" in result or "nyofs" in result
+
+
+class TestOpenOpendapNoFmrc:
+    """Test that open_opendap raises for non-FMRC models."""
+
+    def test_open_opendap_raises_for_non_fmrc(self):
+        """open_opendap should raise RuntimeError for models without FMRC."""
+        c = OFSClient()
+        with pytest.raises(RuntimeError, match="does not have an FMRC"):
+            c.open_opendap("ngofs2")
+
+
+# ============================================================================
 # Test: build_s3_url
 # ============================================================================
 

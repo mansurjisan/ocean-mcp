@@ -66,6 +66,32 @@ async def ofs_get_forecast_at_point(
         model_name = model_info.get("name", model.value.upper())
         datum = model_info.get("datum", "NAVD88")
 
+        # Validate query point is within model domain
+        domain = model_info.get("domain", {})
+        if domain:
+            lat_min = domain.get("lat_min", -90)
+            lat_max = domain.get("lat_max", 90)
+            lon_min = domain.get("lon_min", -180)
+            lon_max = domain.get("lon_max", 180)
+            if not (lat_min <= latitude <= lat_max and lon_min <= longitude <= lon_max):
+                matching = []
+                for m_key, m_info in OFS_MODELS.items():
+                    d = m_info.get("domain", {})
+                    if d.get("lat_min", -90) <= latitude <= d.get(
+                        "lat_max", 90
+                    ) and d.get("lon_min", -180) <= longitude <= d.get("lon_max", 180):
+                        matching.append(f"{m_info['short_name']} ({m_key})")
+                suggestion = (
+                    f" Try: {', '.join(matching)}."
+                    if matching
+                    else " Use ofs_find_models_for_location to find a suitable model."
+                )
+                return (
+                    f"Location ({latitude:.4f}°N, {longitude:.4f}°E) is outside the "
+                    f"{model_name} domain ({lat_min}–{lat_max}°N, "
+                    f"{lon_min}–{lon_max}°E).{suggestion}"
+                )
+
         # Variable labels and units
         var_labels = {
             "water_level": ("Water Level", "m"),
@@ -81,8 +107,8 @@ async def ofs_get_forecast_at_point(
             data = extract_point_timeseries(
                 nc, model.value, variable.value, latitude, longitude, max_distance_km
             )
-            data_source = "NOAA THREDDS OPeNDAP (BEST aggregation)"
-            cycle_info = "BEST (latest nowcast + forecast)"
+            data_source = "NOAA THREDDS OPeNDAP (FMRC aggregation)"
+            cycle_info = "FMRC (latest nowcast + forecast)"
 
         except RuntimeError as e:
             opendap_error = str(e)

@@ -381,8 +381,26 @@ def test_clean_timeseries_contiguous():
     assert result["times"] == times
     assert result["values"] == values
     assert result["n_duplicates_removed"] == 0
+    assert result["n_parse_failures"] == 0
     assert result["n_segments"] == 1
     assert result["is_sparse"] is False
+
+
+def test_clean_timeseries_unparseable():
+    """Unparseable timestamps are tracked separately from duplicates."""
+    times = [
+        "2026-03-01 00:00",
+        "BADTIME",
+        "2026-03-01 01:00",
+        "NOT-A-DATE",
+        "2026-03-01 02:00",
+    ]
+    values = [1.0, 2.0, 3.0, 4.0, 5.0]
+    result = clean_timeseries(times, values)
+    assert result["n_original"] == 5
+    assert result["n_parse_failures"] == 2
+    assert result["n_duplicates_removed"] == 0
+    assert len(result["times"]) == 3
 
 
 # ---------------------------------------------------------------------------
