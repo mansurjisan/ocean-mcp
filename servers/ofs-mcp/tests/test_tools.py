@@ -175,7 +175,7 @@ class TestOfsGetModelInfo:
         data = json.loads(result)
         assert data["model_id"] == "cbofs"
         assert data["name"] == "Chesapeake Bay OFS"
-        assert "thredds_opendap_url" in data
+        assert "thredds_fmrc_url" in data or "thredds_note" in data
         assert "s3_prefix" in data
 
     async def test_get_model_info_fvcom_model(self, client):
@@ -794,6 +794,75 @@ class TestOfsCompareWithCoopsMetadata:
 
 
 # ============================================================================
+# Test: domain validation
+# ============================================================================
+
+
+class TestDomainValidation:
+    """Tests for domain validation in forecast tools."""
+
+    @respx.mock
+    async def test_compare_rejects_station_outside_domain(self, client):
+        """ofs_compare_with_coops rejects a station outside the model domain."""
+        from ofs_mcp.tools.forecast import ofs_compare_with_coops
+
+        # Fort Pulaski, GA — outside CBOFS domain
+        respx.get(url__startswith="https://api.tidesandcurrents.noaa.gov/mdapi/").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "stations": [
+                        {"name": "Fort Pulaski", "lat": 32.0367, "lng": -80.9017}
+                    ]
+                },
+            )
+        )
+
+        ctx = make_ctx(client)
+        result = await ofs_compare_with_coops(
+            ctx, station_id="8670870", model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+        assert "Chesapeake Bay OFS" in result or "cbofs" in result
+
+    async def test_forecast_rejects_point_outside_domain(self, client):
+        """ofs_get_forecast_at_point rejects a point outside the model domain."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        ctx = make_ctx(client)
+        # Fort Pulaski, GA — outside CBOFS domain (36.5–39.8°N)
+        result = await ofs_get_forecast_at_point(
+            ctx, latitude=32.0, longitude=-80.9, model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+
+    async def test_forecast_suggests_correct_models(self, client):
+        """Domain rejection should suggest models that cover the location."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        ctx = make_ctx(client)
+        # NYC area — inside NYOFS domain
+        result = await ofs_get_forecast_at_point(
+            ctx, latitude=40.7, longitude=-74.0, model=OFSModel.CBOFS
+        )
+
+        assert "outside" in result.lower()
+        assert "NYOFS" in result or "nyofs" in result
+
+
+class TestOpenOpendapNoFmrc:
+    """Test that open_opendap raises for non-FMRC models."""
+
+    def test_open_opendap_raises_for_non_fmrc(self):
+        """open_opendap should raise RuntimeError for models without FMRC."""
+        c = OFSClient()
+        with pytest.raises(RuntimeError, match="does not have an FMRC"):
+            c.open_opendap("ngofs2")
+
+
+# ============================================================================
 # Test: build_s3_url
 # ============================================================================
 
@@ -834,19 +903,22 @@ class TestBuildS3Url:
 class TestBuildThreddsUrl:
     """Tests for OFSClient.build_thredds_url."""
 
-    def test_thredds_url_uses_thredds_id(self):
-        """build_thredds_url should use the thredds_id from model config."""
+    def test_thredds_url_uses_fmrc_pattern(self):
+        """build_thredds_url should return FMRC URL for models that have it."""
         c = OFSClient()
         for model_id, info in OFS_MODELS.items():
             url = c.build_thredds_url(model_id)
-            thredds_id = info["thredds_id"]
-            assert thredds_id in url, f"URL for {model_id} missing thredds_id"
-            assert url.endswith("_BEST.nc"), (
-                f"URL for {model_id} should end with _BEST.nc"
-            )
+            if info.get("has_fmrc", False):
+                thredds_id = info["thredds_id"]
+                assert thredds_id in url, f"URL for {model_id} missing thredds_id"
+                assert url.endswith("_Forecast_best.ncd"), (
+                    f"URL for {model_id} should end with _Forecast_best.ncd"
+                )
+            else:
+                assert url is None, f"{model_id} has no FMRC, should return None"
 
     def test_thredds_url_base(self):
-        """build_thredds_url should use the correct THREDDS base URL."""
+        """build_thredds_url should use the correct THREDDS base URL for FMRC models."""
         c = OFSClient()
         url = c.build_thredds_url("cbofs")
         assert url.startswith("https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/")

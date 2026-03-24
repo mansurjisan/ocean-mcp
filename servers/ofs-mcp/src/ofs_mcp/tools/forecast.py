@@ -14,6 +14,7 @@ from ..models import OFS_MODELS, OFSModel, OFSVariable
 from ..server import mcp
 from ..utils import (
     align_timeseries,
+    clean_timeseries,
     cleanup_temp_file,
     compute_validation_stats,
     extract_point_timeseries,
@@ -65,6 +66,32 @@ async def ofs_get_forecast_at_point(
         model_name = model_info.get("name", model.value.upper())
         datum = model_info.get("datum", "NAVD88")
 
+        # Validate query point is within model domain
+        domain = model_info.get("domain", {})
+        if domain:
+            lat_min = domain.get("lat_min", -90)
+            lat_max = domain.get("lat_max", 90)
+            lon_min = domain.get("lon_min", -180)
+            lon_max = domain.get("lon_max", 180)
+            if not (lat_min <= latitude <= lat_max and lon_min <= longitude <= lon_max):
+                matching = []
+                for m_key, m_info in OFS_MODELS.items():
+                    d = m_info.get("domain", {})
+                    if d.get("lat_min", -90) <= latitude <= d.get(
+                        "lat_max", 90
+                    ) and d.get("lon_min", -180) <= longitude <= d.get("lon_max", 180):
+                        matching.append(f"{m_info['short_name']} ({m_key})")
+                suggestion = (
+                    f" Try: {', '.join(matching)}."
+                    if matching
+                    else " Use ofs_find_models_for_location to find a suitable model."
+                )
+                return (
+                    f"Location ({latitude:.4f}°N, {longitude:.4f}°E) is outside the "
+                    f"{model_name} domain ({lat_min}–{lat_max}°N, "
+                    f"{lon_min}–{lon_max}°E).{suggestion}"
+                )
+
         # Variable labels and units
         var_labels = {
             "water_level": ("Water Level", "m"),
@@ -80,8 +107,8 @@ async def ofs_get_forecast_at_point(
             data = extract_point_timeseries(
                 nc, model.value, variable.value, latitude, longitude, max_distance_km
             )
-            data_source = "NOAA THREDDS OPeNDAP (BEST aggregation)"
-            cycle_info = "BEST (latest nowcast + forecast)"
+            data_source = "NOAA THREDDS OPeNDAP (FMRC aggregation)"
+            cycle_info = "FMRC (latest nowcast + forecast)"
 
         except RuntimeError as e:
             opendap_error = str(e)
@@ -113,48 +140,66 @@ async def ofs_get_forecast_at_point(
                 f"{d_fmt} {hour_str}z (single forecast hour — limited time series)"
             )
 
-        times = data["times"]
-        values = data["values"]
+        # Clean timeseries: sort, dedup, extract longest contiguous block
+        cleaned = clean_timeseries(data["times"], data["values"])
+        times = cleaned["times"]
+        values = cleaned["values"]
 
-        if not times:
+        if not times or cleaned["is_sparse"]:
             return (
                 f"No valid {var_label} data found at "
                 f"({latitude:.4f}°N, {longitude:.4f}°E) from {model_name}. "
                 "The point may be on land or in a dry area."
             )
 
-        if response_format == "json":
-            return json.dumps(
-                {
-                    "query_lat": latitude,
-                    "query_lon": longitude,
-                    "model": model.value,
-                    "variable": variable.value,
-                    "nearest_point_lat": data["lat"],
-                    "nearest_point_lon": data["lon"],
-                    "distance_km": data["distance_km"],
-                    "datum": datum,
-                    "units": var_units,
-                    "cycle": cycle_info,
-                    "n_points": len(times),
-                    "times": times,
-                    "values": values,
-                },
-                indent=2,
+        # Build cleanup metadata for transparency
+        cleanup_notes = []
+        if cleaned["n_duplicates_removed"] > 0:
+            cleanup_notes.append(
+                f"{cleaned['n_duplicates_removed']} duplicate timestamps removed"
             )
+        if cleaned["n_segments"] > 1:
+            cleanup_notes.append(
+                f"{cleaned['n_segments']} segments found, kept longest "
+                f"({len(times)} points)"
+            )
+
+        if response_format == "json":
+            result = {
+                "query_lat": latitude,
+                "query_lon": longitude,
+                "model": model.value,
+                "variable": variable.value,
+                "nearest_point_lat": data["lat"],
+                "nearest_point_lon": data["lon"],
+                "distance_km": data["distance_km"],
+                "datum": datum,
+                "units": var_units,
+                "cycle": cycle_info,
+                "n_points": len(times),
+                "times": times,
+                "values": values,
+            }
+            if cleanup_notes:
+                result["cleanup_notes"] = cleanup_notes
+            return json.dumps(result, indent=2)
+
+        metadata = [
+            f"Query location: ({latitude:.4f}°N, {longitude:.4f}°E)",
+            f"Nearest model point: ({data['lat']:.4f}°N, {data['lon']:.4f}°E), "
+            f"{data['distance_km']:.1f} km away",
+            f"Datum: {datum}",
+            f"Cycle: {cycle_info}",
+            f"Source: {data_source}",
+        ]
+        if cleanup_notes:
+            metadata.append(f"Cleanup: {'; '.join(cleanup_notes)}")
 
         return format_timeseries_table(
             times=times,
             values=values,
             title=f"{model_name} — {var_label} Forecast",
-            metadata_lines=[
-                f"Query location: ({latitude:.4f}°N, {longitude:.4f}°E)",
-                f"Nearest model point: ({data['lat']:.4f}°N, {data['lon']:.4f}°E), "
-                f"{data['distance_km']:.1f} km away",
-                f"Datum: {datum}",
-                f"Cycle: {cycle_info}",
-                f"Source: {data_source}",
-            ],
+            metadata_lines=metadata,
             units=var_units,
         )
 
@@ -234,6 +279,38 @@ async def ofs_compare_with_coops(
                 "https://tidesandcurrents.noaa.gov/stationhome.html"
             )
 
+        # --- Step 1b: Validate station is within model domain ---
+        domain = model_info.get("domain", {})
+        if domain:
+            lat_min = domain.get("lat_min", -90)
+            lat_max = domain.get("lat_max", 90)
+            lon_min = domain.get("lon_min", -180)
+            lon_max = domain.get("lon_max", 180)
+            if not (
+                lat_min <= station_lat <= lat_max and lon_min <= station_lon <= lon_max
+            ):
+                # Find which models DO cover this location
+                matching = []
+                for m_key, m_info in OFS_MODELS.items():
+                    d = m_info.get("domain", {})
+                    if d.get("lat_min", -90) <= station_lat <= d.get(
+                        "lat_max", 90
+                    ) and d.get("lon_min", -180) <= station_lon <= d.get(
+                        "lon_max", 180
+                    ):
+                        matching.append(f"{m_info['short_name']} ({m_key})")
+                suggestion = (
+                    f" Try: {', '.join(matching)}."
+                    if matching
+                    else " Use ofs_find_models_for_location to find a suitable model."
+                )
+                return (
+                    f"Station {station_id} ({station_name}) at "
+                    f"({station_lat:.4f}°N, {station_lon:.4f}°E) is outside the "
+                    f"{model_name} domain ({lat_min}–{lat_max}°N, {lon_min}–{lon_max}°E)."
+                    f"{suggestion}"
+                )
+
         # --- Step 2: Fetch model forecast at station location ---
         opendap_error = None
         try:
@@ -263,10 +340,12 @@ async def ofs_compare_with_coops(
                 nc, model.value, "water_level", station_lat, station_lon
             )
 
-        model_times = model_data["times"]
-        model_values = model_data["values"]
+        # Clean model timeseries: dedup, sort, extract longest contiguous block
+        cleaned = clean_timeseries(model_data["times"], model_data["values"])
+        model_times = cleaned["times"]
+        model_values = cleaned["values"]
 
-        if not model_times:
+        if not model_times or cleaned["is_sparse"]:
             return (
                 f"No {model_name} water level data found near CO-OPS station {station_id} "
                 f"({station_name}) at ({station_lat:.4f}°N, {station_lon:.4f}°E)."

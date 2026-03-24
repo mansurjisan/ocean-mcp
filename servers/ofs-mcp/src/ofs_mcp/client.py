@@ -64,21 +64,30 @@ class OFSClient:
         fname = f"{model}.t{cycle}z.fields.{ftype}{fhour:03d}.nc"
         return f"{S3_BASE}/{model}/netcdf/{y}/{m}/{d}/{fname}"
 
-    def build_thredds_url(self, model: str) -> str:
-        """Build the THREDDS OPeNDAP URL for the BEST aggregation of an OFS model.
+    def build_thredds_url(self, model: str) -> str | None:
+        """Build the THREDDS OPeNDAP FMRC URL for an OFS model.
 
-        The BEST aggregation combines the most recent nowcast and forecast data
-        into a continuous time series accessible via OPeNDAP for lazy loading.
+        Uses the Forecast Model Run Collection (FMRC) "Best Time Series"
+        aggregation which combines the latest nowcast + forecast into a
+        continuous time series accessible via OPeNDAP for lazy loading.
+
+        Not all models have FMRC aggregations on THREDDS (NGOFS2, SFBOFS,
+        WCOFS do not). Returns None for models without FMRC support.
 
         Args:
             model: OFS model key (e.g., 'cbofs').
 
         Returns:
-            OPeNDAP URL for the BEST aggregation dataset.
+            OPeNDAP URL for the FMRC aggregation, or None if unavailable.
         """
         model_info = OFS_MODELS.get(model, {})
+        if not model_info.get("has_fmrc", False):
+            return None
         thredds_id = model_info.get("thredds_id", model.upper())
-        return f"{THREDDS_BASE}/{thredds_id}/{thredds_id}_BEST.nc"
+        return (
+            f"{THREDDS_BASE}/{thredds_id}/fmrc/"
+            f"Aggregated_7_day_{thredds_id}_Fields_Forecast_best.ncd"
+        )
 
     async def download_netcdf(self, url: str) -> Path:
         """Download a NetCDF file to a temporary location.
@@ -102,7 +111,7 @@ class OFSClient:
         return Path(tmp.name)
 
     def open_opendap(self, model: str):
-        """Open a THREDDS OPeNDAP dataset for lazy remote access.
+        """Open a THREDDS OPeNDAP FMRC dataset for lazy remote access.
 
         Uses netCDF4.Dataset with OPeNDAP — only loads data when variables
         are actually indexed, enabling efficient point extraction.
@@ -114,11 +123,17 @@ class OFSClient:
             netCDF4.Dataset opened via OPeNDAP.
 
         Raises:
-            RuntimeError: If OPeNDAP is not available or connection fails.
+            RuntimeError: If OPeNDAP is not available, model has no FMRC,
+                or connection fails.
         """
         import netCDF4
 
         url = self.build_thredds_url(model)
+        if url is None:
+            raise RuntimeError(
+                f"{model.upper()} does not have an FMRC aggregation on THREDDS. "
+                "Will use S3 download instead."
+            )
         try:
             nc = netCDF4.Dataset(url)
             return nc

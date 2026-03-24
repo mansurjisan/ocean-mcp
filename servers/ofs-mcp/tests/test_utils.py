@@ -8,6 +8,7 @@ from ofs_mcp.client import OFSClient
 from ofs_mcp.models import OFS_MODELS
 from ofs_mcp.utils import (
     align_timeseries,
+    clean_timeseries,
     compute_validation_stats,
     find_nearest_fvcom,
     find_nearest_roms,
@@ -155,18 +156,20 @@ def test_s3_url_wcofs():
 
 
 def test_thredds_url_cbofs():
+    """CBOFS has FMRC — should return a valid FMRC URL."""
     client = OFSClient()
     url = client.build_thredds_url("cbofs")
+    assert url is not None
     assert "opendap.co-ops.nos.noaa.gov" in url
     assert "CBOFS" in url
-    assert "CBOFS_BEST.nc" in url
+    assert "Aggregated_7_day_CBOFS_Fields_Forecast_best.ncd" in url
 
 
 def test_thredds_url_ngofs2():
+    """NGOFS2 has no FMRC — should return None."""
     client = OFSClient()
     url = client.build_thredds_url("ngofs2")
-    assert "NGOFS2" in url
-    assert "NGOFS2_BEST.nc" in url
+    assert url is None
 
 
 # ---------------------------------------------------------------------------
@@ -294,3 +297,119 @@ def test_alaska_in_ciofs_domain():
     lat, lon = 60.5, -150.8  # Kenai area
     assert domain["lat_min"] <= lat <= domain["lat_max"]
     assert domain["lon_min"] <= lon <= domain["lon_max"]
+
+
+# ---------------------------------------------------------------------------
+# clean_timeseries
+# ---------------------------------------------------------------------------
+
+
+def test_clean_timeseries_empty():
+    """Empty input returns empty result with is_sparse=True."""
+    result = clean_timeseries([], [])
+    assert result["times"] == []
+    assert result["values"] == []
+    assert result["is_sparse"] is True
+    assert result["n_original"] == 0
+
+
+def test_clean_timeseries_dedup():
+    """Duplicate timestamps are removed, keeping last value."""
+    times = [
+        "2026-03-01 00:00",
+        "2026-03-01 01:00",
+        "2026-03-01 01:00",
+        "2026-03-01 02:00",
+    ]
+    values = [1.0, 2.0, 2.5, 3.0]
+    result = clean_timeseries(times, values)
+    assert result["n_duplicates_removed"] == 1
+    assert len(result["times"]) == 3
+    # Last value for 01:00 should be 2.5
+    idx = result["times"].index("2026-03-01 01:00")
+    assert result["values"][idx] == 2.5
+
+
+def test_clean_timeseries_sorts():
+    """Out-of-order timestamps are sorted."""
+    times = [
+        "2026-03-01 02:00",
+        "2026-03-01 00:00",
+        "2026-03-01 01:00",
+    ]
+    values = [3.0, 1.0, 2.0]
+    result = clean_timeseries(times, values)
+    assert result["times"] == [
+        "2026-03-01 00:00",
+        "2026-03-01 01:00",
+        "2026-03-01 02:00",
+    ]
+    assert result["values"] == [1.0, 2.0, 3.0]
+
+
+def test_clean_timeseries_gap_split():
+    """Large time gaps split the series; longest segment is kept."""
+    times = [
+        "2026-03-01 00:00",
+        "2026-03-01 01:00",
+        # 12-hour gap
+        "2026-03-01 13:00",
+        "2026-03-01 14:00",
+        "2026-03-01 15:00",
+        "2026-03-01 16:00",
+    ]
+    values = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    result = clean_timeseries(times, values, max_gap_hours=6.0)
+    assert result["n_segments"] == 2
+    assert len(result["times"]) == 4  # Longer segment (4 pts)
+    assert result["times"][0] == "2026-03-01 13:00"
+
+
+def test_clean_timeseries_sparse_rejection():
+    """Series with fewer than min_points is flagged as sparse."""
+    times = ["2026-03-01 00:00", "2026-03-01 01:00"]
+    values = [1.0, 2.0]
+    result = clean_timeseries(times, values, min_points=5)
+    assert result["is_sparse"] is True
+
+
+def test_clean_timeseries_contiguous():
+    """A clean contiguous series passes through unchanged."""
+    times = [f"2026-03-01 {h:02d}:00" for h in range(24)]
+    values = [float(h) for h in range(24)]
+    result = clean_timeseries(times, values)
+    assert result["times"] == times
+    assert result["values"] == values
+    assert result["n_duplicates_removed"] == 0
+    assert result["n_parse_failures"] == 0
+    assert result["n_segments"] == 1
+    assert result["is_sparse"] is False
+
+
+def test_clean_timeseries_unparseable():
+    """Unparseable timestamps are tracked separately from duplicates."""
+    times = [
+        "2026-03-01 00:00",
+        "BADTIME",
+        "2026-03-01 01:00",
+        "NOT-A-DATE",
+        "2026-03-01 02:00",
+    ]
+    values = [1.0, 2.0, 3.0, 4.0, 5.0]
+    result = clean_timeseries(times, values)
+    assert result["n_original"] == 5
+    assert result["n_parse_failures"] == 2
+    assert result["n_duplicates_removed"] == 0
+    assert len(result["times"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# has_fmrc flag
+# ---------------------------------------------------------------------------
+
+
+def test_all_models_have_has_fmrc_flag():
+    """Every model in the registry should have a has_fmrc boolean."""
+    for model_id, info in OFS_MODELS.items():
+        assert "has_fmrc" in info, f"Model '{model_id}' missing has_fmrc flag"
+        assert isinstance(info["has_fmrc"], bool)
