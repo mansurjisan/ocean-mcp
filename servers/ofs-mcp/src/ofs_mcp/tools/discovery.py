@@ -119,7 +119,14 @@ async def ofs_get_model_info(
             return f"Unknown model '{model.value}'. Use ofs_list_models to see available models."
 
         thredds_id = info.get("thredds_id", model.value.upper())
-        thredds_url = f"https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/{thredds_id}/{thredds_id}_BEST.nc"
+        has_fmrc = info.get("has_fmrc", False)
+        if has_fmrc:
+            thredds_url = (
+                f"https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/"
+                f"{thredds_id}/fmrc/Aggregated_7_day_{thredds_id}_Fields_Forecast_best.ncd"
+            )
+        else:
+            thredds_url = None
         s3_prefix = f"https://noaa-nos-ofs-pds.s3.amazonaws.com/{model.value}/netcdf/YYYY/MM/DD/"
         s3_example = (
             f"https://noaa-nos-ofs-pds.s3.amazonaws.com/{model.value}/netcdf/"
@@ -129,16 +136,17 @@ async def ofs_get_model_info(
         nc_vars = info.get("nc_vars", {})
 
         if response_format == "json":
-            return json.dumps(
-                {
-                    "model_id": model.value,
-                    **info,
-                    "thredds_opendap_url": thredds_url,
-                    "s3_prefix": s3_prefix,
-                    "s3_example": s3_example,
-                },
-                indent=2,
-            )
+            result = {
+                "model_id": model.value,
+                **info,
+                "s3_prefix": s3_prefix,
+                "s3_example": s3_example,
+            }
+            if thredds_url:
+                result["thredds_fmrc_url"] = thredds_url
+            else:
+                result["thredds_note"] = "No FMRC aggregation; use S3 for data access"
+            return json.dumps(result, indent=2)
 
         domain = info["domain"]
         lines = [
@@ -171,7 +179,14 @@ async def ofs_get_model_info(
             "",
             "### Data Access",
             "",
-            f"- **THREDDS OPeNDAP (BEST)**: `{thredds_url}`",
+        ]
+        if thredds_url:
+            lines.append(f"- **THREDDS OPeNDAP (FMRC)**: `{thredds_url}`")
+        else:
+            lines.append(
+                "- **THREDDS OPeNDAP**: *No FMRC aggregation available — use S3*"
+            )
+        lines += [
             f"- **S3 prefix**: `{s3_prefix}`",
             f"- **S3 example**: `{s3_example}`",
             "",

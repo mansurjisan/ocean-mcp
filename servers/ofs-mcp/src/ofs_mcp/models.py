@@ -72,6 +72,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat_rho",
         },
         "thredds_id": "CBOFS",
+        "has_fmrc": True,
     },
     "dbofs": {
         "name": "Delaware Bay OFS",
@@ -100,6 +101,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat_rho",
         },
         "thredds_id": "DBOFS",
+        "has_fmrc": True,
     },
     "gomofs": {
         "name": "Gulf of Maine OFS",
@@ -128,6 +130,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat_rho",
         },
         "thredds_id": "GOMOFS",
+        "has_fmrc": True,
     },
     "ngofs2": {
         "name": "Northern Gulf of Mexico OFS v2",
@@ -156,6 +159,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat",
         },
         "thredds_id": "NGOFS2",
+        "has_fmrc": False,
     },
     "nyofs": {
         "name": "New York / NJ Harbor OFS",
@@ -184,6 +188,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat",
         },
         "thredds_id": "NYOFS",
+        "has_fmrc": True,
     },
     "sfbofs": {
         "name": "San Francisco Bay OFS",
@@ -212,6 +217,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat",
         },
         "thredds_id": "SFBOFS",
+        "has_fmrc": False,
     },
     "tbofs": {
         "name": "Tampa Bay OFS",
@@ -240,6 +246,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat",
         },
         "thredds_id": "TBOFS",
+        "has_fmrc": True,
     },
     "wcofs": {
         "name": "West Coast OFS",
@@ -268,6 +275,7 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat_rho",
         },
         "thredds_id": "WCOFS",
+        "has_fmrc": False,
     },
     "ciofs": {
         "name": "Cook Inlet OFS",
@@ -296,5 +304,6 @@ OFS_MODELS: dict[str, dict] = {
             "lat": "lat",
         },
         "thredds_id": "CIOFS",
+        "has_fmrc": True,
     },
 }

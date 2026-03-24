@@ -352,6 +352,105 @@ def extract_point_timeseries(
 
 
 # ---------------------------------------------------------------------------
+# Time series cleanup — dedup, sort, gap detection, contiguous block
+# ---------------------------------------------------------------------------
+
+
+def clean_timeseries(
+    times: list[str],
+    values: list[float],
+    max_gap_hours: float = 6.0,
+    min_points: int = 3,
+) -> dict[str, list[str] | list[float] | int | bool]:
+    """Sort, deduplicate, and extract the longest contiguous block.
+
+    OFS FMRC data can contain duplicate timestamps, out-of-order entries,
+    and large time gaps from stitching multiple forecast runs. This function
+    cleans the series into a usable contiguous block.
+
+    Args:
+        times: Time strings in 'YYYY-MM-DD HH:MM' format.
+        values: Corresponding values.
+        max_gap_hours: Maximum gap (hours) before splitting into segments.
+        min_points: Minimum points for a valid segment.
+
+    Returns:
+        Dict with:
+            - 'times': cleaned time strings
+            - 'values': cleaned values
+            - 'n_original': original point count
+            - 'n_duplicates_removed': duplicate timestamps removed
+            - 'n_segments': number of contiguous segments found
+            - 'is_sparse': True if result has fewer than min_points
+    """
+    if not times or not values:
+        return {
+            "times": [],
+            "values": [],
+            "n_original": 0,
+            "n_duplicates_removed": 0,
+            "n_segments": 0,
+            "is_sparse": True,
+        }
+
+    # Parse times
+    parsed: list[tuple[datetime, float]] = []
+    for t_str, v in zip(times, values):
+        try:
+            dt = datetime.strptime(t_str[:16], "%Y-%m-%d %H:%M")
+            parsed.append((dt, v))
+        except ValueError:
+            continue
+
+    n_original = len(parsed)
+
+    # Sort by time
+    parsed.sort(key=lambda x: x[0])
+
+    # Deduplicate — keep last value for each timestamp
+    seen: dict[datetime, float] = {}
+    for dt, v in parsed:
+        seen[dt] = v
+    deduped = sorted(seen.items(), key=lambda x: x[0])
+    n_duplicates = n_original - len(deduped)
+
+    if len(deduped) < min_points:
+        return {
+            "times": [dt.strftime("%Y-%m-%d %H:%M") for dt, _ in deduped],
+            "values": [v for _, v in deduped],
+            "n_original": n_original,
+            "n_duplicates_removed": n_duplicates,
+            "n_segments": 1 if deduped else 0,
+            "is_sparse": True,
+        }
+
+    # Split on gaps > max_gap_hours
+    from datetime import timedelta
+
+    gap_threshold = timedelta(hours=max_gap_hours)
+    segments: list[list[tuple[datetime, float]]] = [[deduped[0]]]
+    for i in range(1, len(deduped)):
+        if deduped[i][0] - deduped[i - 1][0] > gap_threshold:
+            segments.append([])
+        segments[-1].append(deduped[i])
+
+    # Keep longest contiguous segment
+    best = max(segments, key=len)
+
+    result_times = [dt.strftime("%Y-%m-%d %H:%M") for dt, _ in best]
+    result_values = [v for _, v in best]
+
+    return {
+        "times": result_times,
+        "values": result_values,
+        "n_original": n_original,
+        "n_duplicates_removed": n_duplicates,
+        "n_segments": len(segments),
+        "is_sparse": len(best) < min_points,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Validation statistics
 # ---------------------------------------------------------------------------
 

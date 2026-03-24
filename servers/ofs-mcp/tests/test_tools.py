@@ -175,7 +175,7 @@ class TestOfsGetModelInfo:
         data = json.loads(result)
         assert data["model_id"] == "cbofs"
         assert data["name"] == "Chesapeake Bay OFS"
-        assert "thredds_opendap_url" in data
+        assert "thredds_fmrc_url" in data or "thredds_note" in data
         assert "s3_prefix" in data
 
     async def test_get_model_info_fvcom_model(self, client):
@@ -834,19 +834,22 @@ class TestBuildS3Url:
 class TestBuildThreddsUrl:
     """Tests for OFSClient.build_thredds_url."""
 
-    def test_thredds_url_uses_thredds_id(self):
-        """build_thredds_url should use the thredds_id from model config."""
+    def test_thredds_url_uses_fmrc_pattern(self):
+        """build_thredds_url should return FMRC URL for models that have it."""
         c = OFSClient()
         for model_id, info in OFS_MODELS.items():
             url = c.build_thredds_url(model_id)
-            thredds_id = info["thredds_id"]
-            assert thredds_id in url, f"URL for {model_id} missing thredds_id"
-            assert url.endswith("_BEST.nc"), (
-                f"URL for {model_id} should end with _BEST.nc"
-            )
+            if info.get("has_fmrc", False):
+                thredds_id = info["thredds_id"]
+                assert thredds_id in url, f"URL for {model_id} missing thredds_id"
+                assert url.endswith("_Forecast_best.ncd"), (
+                    f"URL for {model_id} should end with _Forecast_best.ncd"
+                )
+            else:
+                assert url is None, f"{model_id} has no FMRC, should return None"
 
     def test_thredds_url_base(self):
-        """build_thredds_url should use the correct THREDDS base URL."""
+        """build_thredds_url should use the correct THREDDS base URL for FMRC models."""
         c = OFSClient()
         url = c.build_thredds_url("cbofs")
         assert url.startswith("https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/")
