@@ -10,30 +10,65 @@ from vdatum_mcp.tools.convert import vdatum_convert, vdatum_list_datums
 class TestVdatumConvert:
     @pytest.mark.asyncio
     async def test_invalid_source_datum(self, mock_ctx):
-        result = await vdatum_convert(mock_ctx, datum_from="invalid", datum_to="mllw", lat="30", lon="-80", z="1.0")
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="invalid",
+            datum_to="mllw",
+            lat="30",
+            lon="-80",
+            z="1.0",
+        )
         assert "Error" in result
         assert "Unknown source datum" in result
 
     @pytest.mark.asyncio
     async def test_invalid_target_datum(self, mock_ctx):
-        result = await vdatum_convert(mock_ctx, datum_from="navd88", datum_to="invalid", lat="30", lon="-80", z="1.0")
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="invalid",
+            lat="30",
+            lon="-80",
+            z="1.0",
+        )
         assert "Error" in result
         assert "Unknown target datum" in result
 
     @pytest.mark.asyncio
     async def test_same_datum(self, mock_ctx):
-        result = await vdatum_convert(mock_ctx, datum_from="navd88", datum_to="navd88", lat="30", lon="-80", z="1.0")
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="navd88",
+            lat="30",
+            lon="-80",
+            z="1.0",
+        )
         assert "No conversion needed" in result
 
     @pytest.mark.asyncio
     async def test_invalid_numeric_input(self, mock_ctx):
-        result = await vdatum_convert(mock_ctx, datum_from="navd88", datum_to="mllw", lat="abc", lon="-80", z="1.0")
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="mllw",
+            lat="abc",
+            lon="-80",
+            z="1.0",
+        )
         assert "Error" in result
         assert "Invalid numeric" in result
 
     @pytest.mark.asyncio
     async def test_mismatched_lengths(self, mock_ctx):
-        result = await vdatum_convert(mock_ctx, datum_from="navd88", datum_to="mllw", lat="30,26", lon="-80", z="1.0")
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="mllw",
+            lat="30,26",
+            lon="-80",
+            z="1.0",
+        )
         assert "Error" in result
         assert "same length" in result
 
@@ -46,7 +81,9 @@ class TestVdatumConvert:
             np.array([-80.0]),
             np.array([0.85]),
         )
-        with patch.dict("sys.modules", {"coastalmodeling_vdatum": MagicMock(vdatum=mock_vdatum)}):
+        with patch.dict(
+            "sys.modules", {"coastalmodeling_vdatum": MagicMock(vdatum=mock_vdatum)}
+        ):
             with patch("vdatum_mcp.tools.convert.vdatum", mock_vdatum):
                 # Re-import won't work easily with mocking, so test the output format
                 pass
@@ -61,8 +98,7 @@ class TestVdatumConvert:
             np.array([0.85, 0.92]),
         )
         # The function imports vdatum internally, so we patch the import
-        with patch("vdatum_mcp.tools.convert.vdatum_convert") as mock_fn:
-            # Just verify the tool exists and is callable
+        with patch("vdatum_mcp.tools.convert.vdatum_convert"):
             assert callable(vdatum_convert)
 
     @pytest.mark.asyncio
@@ -70,8 +106,12 @@ class TestVdatumConvert:
         """Test graceful handling when coastalmodeling-vdatum not installed."""
         with patch.dict("sys.modules", {"coastalmodeling_vdatum": None}):
             result = await vdatum_convert(
-                mock_ctx, datum_from="navd88", datum_to="mllw",
-                lat="30", lon="-80", z="1.0",
+                mock_ctx,
+                datum_from="navd88",
+                datum_to="mllw",
+                lat="30",
+                lon="-80",
+                z="1.0",
             )
             assert "Error" in result
 
