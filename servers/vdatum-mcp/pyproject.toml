@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vdatum-mcp"
+version = "0.1.0"
+description = "MCP server for vertical datum conversions using coastalmodeling-vdatum"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [
+    {name = "Mansur Jisan", email = "mansur.jisan@gmail.com"},
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "noaa",
+    "vdatum",
+    "vertical-datum",
+    "navd88",
+    "mllw",
+    "coastal",
+]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "coastalmodeling-vdatum @ git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git",
+    "numpy>=1.26",
+]
+
+[project.urls]
+Homepage = "https://github.com/mansurjisan/ocean-mcp"
+Repository = "https://github.com/mansurjisan/ocean-mcp"
+
+[project.scripts]
+vdatum-mcp = "vdatum_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vdatum_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+]
