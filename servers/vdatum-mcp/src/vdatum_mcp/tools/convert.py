@@ -1,8 +1,5 @@
 """Tools for vertical datum conversion."""
 
-import json
-import re
-
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -76,7 +73,9 @@ async def vdatum_convert(
     if vd_to not in _SUPPORTED_DATUMS:
         return f"**Error:** Unknown target datum '{datum_to}'. Supported: {', '.join(_SUPPORTED_DATUMS)}"
     if vd_from == vd_to:
-        return f"Source and target datums are the same ({vd_from}). No conversion needed."
+        return (
+            f"Source and target datums are the same ({vd_from}). No conversion needed."
+        )
 
     # Parse numeric inputs
     try:
@@ -112,7 +111,7 @@ async def vdatum_convert(
     cz_list = cz.tolist() if hasattr(cz, "tolist") else [float(cz)]
 
     lines = [
-        f"## Vertical Datum Conversion",
+        "## Vertical Datum Conversion",
         f"**From:** {vd_from.upper()} ({_DATUM_DESCRIPTIONS.get(vd_from, '')})",
         f"**To:** {vd_to.upper()} ({_DATUM_DESCRIPTIONS.get(vd_to, '')})\n",
     ]
@@ -120,7 +119,9 @@ async def vdatum_convert(
     if len(lats) == 1:
         converted = cz_list[0]
         if np.isinf(converted):
-            lines.append(f"**Result:** Point ({lats[0]}, {lons[0]}) is outside the conversion domain.")
+            lines.append(
+                f"**Result:** Point ({lats[0]}, {lons[0]}) is outside the conversion domain."
+            )
         else:
             lines.append(f"**Input:** {zs[0]:.4f} m ({vd_from.upper()})")
             lines.append(f"**Output:** {converted:.4f} m ({vd_to.upper()})")
@@ -131,10 +132,14 @@ async def vdatum_convert(
         for i in range(len(lats)):
             converted = cz_list[i]
             if np.isinf(converted):
-                lines.append(f"| {lats[i]:.4f} | {lons[i]:.4f} | {zs[i]:.4f} | outside domain | — |")
+                lines.append(
+                    f"| {lats[i]:.4f} | {lons[i]:.4f} | {zs[i]:.4f} | outside domain | — |"
+                )
             else:
                 diff = converted - zs[i]
-                lines.append(f"| {lats[i]:.4f} | {lons[i]:.4f} | {zs[i]:.4f} | {converted:.4f} | {diff:+.4f} |")
+                lines.append(
+                    f"| {lats[i]:.4f} | {lons[i]:.4f} | {zs[i]:.4f} | {converted:.4f} | {diff:+.4f} |"
+                )
 
     return "\n".join(lines)
 
