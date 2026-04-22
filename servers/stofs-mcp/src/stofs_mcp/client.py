@@ -202,7 +202,12 @@ class STOFSClient:
             body = response.text.strip()
             # NOMADS OPeNDAP was retired Oct 2025 (SCN 25-81). The domain now
             # returns an HTML error page (sometimes via 301) for any /dods/ path.
-            if body.startswith("<!doctype html") or body.startswith("<html") or "OpenDAP" in body[:200] and "retired" in body:
+            if (
+                body.startswith("<!doctype html")
+                or body.startswith("<html")
+                or "OpenDAP" in body[:200]
+                and "retired" in body
+            ):
                 return False, "retired"
             if response.status_code != 200:
                 return False, "http_error"
