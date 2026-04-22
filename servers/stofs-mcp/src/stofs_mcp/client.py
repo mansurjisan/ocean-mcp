@@ -179,28 +179,43 @@ class STOFSClient:
                 f"Unknown model '{model}'. Use '2d_global' or '3d_atlantic'."
             )
 
-    async def check_opendap_available(self, url: str) -> bool:
+    async def check_opendap_available(self, url: str) -> tuple[bool, str]:
         """Check if a NOMADS OPeNDAP dataset endpoint is available.
 
-        Fetches the .das (Dataset Attribute Structure). NOMADS returns HTTP 200
-        for both available and unavailable datasets, but unavailable ones return
-        a body starting with ``Error {``. This method checks the response content.
+        Fetches the .das (Dataset Attribute Structure). Three outcomes:
+          - Service retired: NOMADS redirects to an HTML page announcing that
+            OPeNDAP has been retired (Service Change Notice 25-81, Oct 2025).
+          - Dataset missing: NOMADS returns 200 with a body starting with ``Error {``.
+          - Dataset available: NOMADS returns 200 with a plain-text .das response.
 
         Args:
             url: Base OPeNDAP URL (without .das extension).
 
         Returns:
-            True only if the dataset exists and is accessible, False otherwise.
+            (available, reason) — ``available`` is True only when the dataset
+            is accessible. ``reason`` is one of: 'ok', 'retired', 'missing',
+            'http_error', 'network_error'.
         """
         client = await self._get_client()
         try:
             response = await client.get(f"{url}.das", timeout=15.0)
+            body = response.text.strip()
+            # NOMADS OPeNDAP was retired Oct 2025 (SCN 25-81). The domain now
+            # returns an HTML error page (sometimes via 301) for any /dods/ path.
+            if (
+                body.startswith("<!doctype html")
+                or body.startswith("<html")
+                or "OpenDAP" in body[:200]
+                and "retired" in body
+            ):
+                return False, "retired"
             if response.status_code != 200:
-                return False
-            # NOMADS returns 200 with "Error { ... }" body for missing datasets
-            return not response.text.strip().startswith("Error {")
+                return False, "http_error"
+            if body.startswith("Error {"):
+                return False, "missing"
+            return True, "ok"
         except Exception:
-            return False
+            return False, "network_error"
 
     async def close(self) -> None:
         """Close the HTTP client."""

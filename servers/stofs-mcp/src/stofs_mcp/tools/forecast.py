@@ -34,18 +34,39 @@ async def _resolve_cycle(
     cycle_date: str | None,
     cycle_hour: str | None,
 ) -> tuple[str, str] | None:
-    """Resolve cycle date/hour, finding latest if not specified."""
+    """Resolve cycle date/hour, finding latest if not specified.
+
+    If only one of ``cycle_date`` / ``cycle_hour`` is provided, the other
+    defaults to the first configured cycle hour for the model (typically
+    '12' for 2D-Global) rather than silently falling back to the latest
+    available cycle — that silent fallback previously hid user errors when
+    requesting historical data.
+    """
     from datetime import datetime
 
-    if cycle_date and cycle_hour:
-        # Normalize date
-        for fmt in ("%Y-%m-%d", "%Y%m%d"):
-            try:
-                date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
-                return date_str, cycle_hour.zfill(2)
-            except ValueError:
-                continue
-        return None
+    from ..models import MODEL_CYCLES
+
+    if cycle_date or cycle_hour:
+        # Normalize provided date (or use today if only hour was given)
+        if cycle_date:
+            date_str: str | None = None
+            for fmt in ("%Y-%m-%d", "%Y%m%d"):
+                try:
+                    date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
+                    break
+                except ValueError:
+                    continue
+            if date_str is None:
+                return None
+        else:
+            date_str = datetime.utcnow().strftime("%Y%m%d")
+
+        if cycle_hour:
+            hour_str = cycle_hour.zfill(2)
+        else:
+            # Default to the model's first listed cycle hour
+            hour_str = (MODEL_CYCLES.get(model) or ["12"])[0]
+        return date_str, hour_str
 
     return await resolve_latest_cycle(client, model)
 
@@ -524,12 +545,24 @@ async def stofs_get_gridded_forecast(
         opendap_url = client.build_opendap_url(model.value, date_str, hour_str, region)
 
         # Check NOMADS availability (fast .das request)
-        available = await client.check_opendap_available(opendap_url)
+        available, reason = await client.check_opendap_available(opendap_url)
         if not available:
+            if reason == "retired":
+                return (
+                    "NOMADS OPeNDAP has been retired (NWS Service Change Notice "
+                    "25-81, effective October 2025). All `/dods/` endpoints now "
+                    "return an HTML error page, so this tool cannot retrieve data "
+                    "until it is migrated to a replacement backend.\n\n"
+                    "Alternatives:\n"
+                    "- Use `stofs_get_station_forecast` or `stofs_get_point_forecast` "
+                    "(AWS S3 station files — supports historical cycles and works today).\n"
+                    "- For actual observed historical water levels, use the coops-mcp "
+                    "tool `coops_get_water_levels` with a CO-OPS station ID."
+                )
             return (
                 f"NOMADS OPeNDAP endpoint not available for cycle "
-                f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z.\n\n"
-                "NOMADS keeps only a ~2-day rolling window and can be intermittently down. "
+                f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {hour_str}z "
+                f"(reason: {reason}).\n\n"
                 "Alternatives:\n"
                 "- Try a different cycle with stofs_list_cycles\n"
                 "- Use stofs_get_point_forecast (station-based, uses reliable AWS S3)"

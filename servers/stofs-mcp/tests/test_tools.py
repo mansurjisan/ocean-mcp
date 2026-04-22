@@ -631,7 +631,7 @@ class TestCheckOpendapAvailable:
     @pytest.mark.asyncio
     @respx.mock
     async def test_opendap_available_returns_true_on_valid_response(self):
-        """check_opendap_available should return True when .das returns valid content."""
+        """check_opendap_available should return (True, 'ok') for valid .das content."""
         base_url = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/20260303/stofs_2d_glo_conus.east_12z"
         respx.get(f"{base_url}.das").mock(
             return_value=httpx.Response(
@@ -640,14 +640,15 @@ class TestCheckOpendapAvailable:
         )
 
         client = STOFSClient()
-        result = await client.check_opendap_available(base_url)
-        assert result is True
+        available, reason = await client.check_opendap_available(base_url)
+        assert available is True
+        assert reason == "ok"
         await client.close()
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_opendap_available_returns_false_on_error_body(self):
-        """check_opendap_available should return False when .das returns 'Error {' body."""
+        """check_opendap_available should return (False, 'missing') when .das body starts with 'Error {'."""
         base_url = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/20260303/stofs_2d_glo_conus.east_12z"
         respx.get(f"{base_url}.das").mock(
             return_value=httpx.Response(
@@ -656,36 +657,53 @@ class TestCheckOpendapAvailable:
         )
 
         client = STOFSClient()
-        result = await client.check_opendap_available(base_url)
-        assert result is False
+        available, reason = await client.check_opendap_available(base_url)
+        assert available is False
+        assert reason == "missing"
         await client.close()
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_opendap_available_returns_false_on_http_error(self):
-        """check_opendap_available should return False when .das returns HTTP 500."""
+        """check_opendap_available should return (False, 'http_error') on HTTP 500."""
         base_url = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/20260303/stofs_2d_glo_conus.east_12z"
         respx.get(f"{base_url}.das").mock(
             return_value=httpx.Response(500, text="Server Error")
         )
 
         client = STOFSClient()
-        result = await client.check_opendap_available(base_url)
-        assert result is False
+        available, reason = await client.check_opendap_available(base_url)
+        assert available is False
+        assert reason == "http_error"
         await client.close()
 
     @pytest.mark.asyncio
     @respx.mock
     async def test_opendap_available_returns_false_on_connection_error(self):
-        """check_opendap_available should return False on connection failure."""
+        """check_opendap_available should return (False, 'network_error') on connection failure."""
         base_url = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/20260303/stofs_2d_glo_conus.east_12z"
         respx.get(f"{base_url}.das").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
 
         client = STOFSClient()
-        result = await client.check_opendap_available(base_url)
-        assert result is False
+        available, reason = await client.check_opendap_available(base_url)
+        assert available is False
+        assert reason == "network_error"
+        await client.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_opendap_available_detects_nomads_retirement(self):
+        """check_opendap_available should flag NOMADS retirement HTML as (False, 'retired')."""
+        base_url = "https://nomads.ncep.noaa.gov/dods/stofs_2d_glo/20260303/stofs_2d_glo_conus.east_12z"
+        html = "<!doctype html><html><head><title>Request for OpenDAP Data</title>"
+        respx.get(f"{base_url}.das").mock(return_value=httpx.Response(200, text=html))
+
+        client = STOFSClient()
+        available, reason = await client.check_opendap_available(base_url)
+        assert available is False
+        assert reason == "retired"
         await client.close()
 
 

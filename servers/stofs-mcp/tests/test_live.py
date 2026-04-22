@@ -134,11 +134,12 @@ async def test_opendap_endpoint_reachable(client):
     # The Battery, NY → conus.east region
     region = get_opendap_region(40.7, -74.0)
     url = client.build_opendap_url("2d_global", date_str, hour_str, region)
-    available = await client.check_opendap_available(url)
+    available, reason = await client.check_opendap_available(url)
 
     if not available:
         pytest.skip(
-            "NOMADS OPeNDAP not reachable (may be temporarily down or outside 2-day window)"
+            f"NOMADS OPeNDAP not reachable (reason: {reason}). "
+            "Note: NOMADS /dods/ was retired in SCN 25-81 (Oct 2025)."
         )
 
     print(f"\nOPeNDAP reachable: {url}")
@@ -158,9 +159,9 @@ async def test_opendap_point_extraction(client):
     # The Battery, NY — conus.east region
     region = get_opendap_region(40.7, -74.0)
     url = client.build_opendap_url("2d_global", date_str, hour_str, region)
-    available = await client.check_opendap_available(url)
+    available, reason = await client.check_opendap_available(url)
     if not available:
-        pytest.skip("NOMADS OPeNDAP not reachable")
+        pytest.skip(f"NOMADS OPeNDAP not reachable (reason: {reason})")
 
     data = extract_point_from_opendap(url, 40.7, -74.0)
 
