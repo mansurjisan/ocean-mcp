@@ -3,6 +3,7 @@
 import pytest
 
 from recon_mcp.utils import (
+    _parse_hdob_latlon,
     format_tabular_data,
     parse_atcf_fix_record,
     parse_atcf_latlon,
@@ -81,6 +82,22 @@ def test_parse_hdob_latlon():
     assert obs[0]["lat"] == pytest.approx(26.1, abs=0.01)
     # 08015W = 80 degrees, 15 minutes = -80.25
     assert obs[0]["lon"] == pytest.approx(-80.25, abs=0.01)
+
+
+def test_parse_hdob_latlon_rejects_wrong_length():
+    # Wrong-length values (column-shifted or malformed input) must return None
+    # rather than silently producing bogus coordinates.
+    assert _parse_hdob_latlon("12345N", is_lat=True) is None  # 5 digits in lat slot
+    assert _parse_hdob_latlon("260N", is_lat=True) is None  # 3 digits in lat slot
+    assert _parse_hdob_latlon("0801W", is_lat=False) is None  # 4 digits in lon slot
+    assert _parse_hdob_latlon("099999W", is_lat=False) is None  # 6 digits in lon slot
+    # Minutes >= 60 are invalid.
+    assert _parse_hdob_latlon("2660N", is_lat=True) is None
+    # Non-digit body must be rejected.
+    assert _parse_hdob_latlon("AB12N", is_lat=True) is None
+    # Valid inputs still parse.
+    assert _parse_hdob_latlon("2606N", is_lat=True) == pytest.approx(26.1, abs=0.01)
+    assert _parse_hdob_latlon("08015W", is_lat=False) == pytest.approx(-80.25, abs=0.01)
 
 
 def test_parse_hdob_pressure():

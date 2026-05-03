@@ -188,8 +188,8 @@ def parse_station_netcdf(
                 times_out.append(t_str)
                 values_out.append(round(float(v), 4))
 
-        station_lat = lats[station_idx] if lats else None
-        station_lon = lons[station_idx] if lons else None
+        station_lat = lats[station_idx] if station_idx < len(lats) else None
+        station_lon = lons[station_idx] if station_idx < len(lons) else None
 
         result.update(
             {
