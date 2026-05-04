@@ -5,6 +5,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-8_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![SafeSkill 30/100](https://img.shields.io/badge/SafeSkill-30%2F100_Blocked-red)](https://safeskill.dev/scan/mansurjisan-ocean-mcp)
 
 ## Servers
 
