@@ -185,14 +185,17 @@ def _parse_hdob_latlon(value: str, is_lat: bool) -> float | None:
         hemi = value[-1].upper()
         numeric = value[:-1]
 
-        if is_lat:
-            # DDMM format
-            degrees = int(numeric[:-2])
-            minutes = int(numeric[-2:])
-        else:
-            # DDDMM format
-            degrees = int(numeric[:-2])
-            minutes = int(numeric[-2:])
+        # HDOB lat is exactly DDMM (4 digits); lon is exactly DDDMM (5 digits).
+        # Reject off-spec lengths so wrong-column data parses to None instead of
+        # silently producing bogus coordinates.
+        expected_len = 4 if is_lat else 5
+        if len(numeric) != expected_len or not numeric.isdigit():
+            return None
+
+        degrees = int(numeric[:-2])
+        minutes = int(numeric[-2:])
+        if minutes >= 60:
+            return None
 
         result = degrees + minutes / 60.0
         if hemi in ("S", "W"):

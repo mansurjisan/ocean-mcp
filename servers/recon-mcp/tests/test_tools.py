@@ -292,8 +292,8 @@ class TestGetHdobs:
         obs = parsed["data"][0]
         # First HDOB record: lat=2557N → 25 deg 57 min N = 25.95
         assert obs["lat"] == pytest.approx(25.95, abs=0.01)
-        # lon=08482W → 84 deg 82 min W (parsed as -85.3667)
-        assert obs["lon"] is not None and obs["lon"] < 0
+        # lon=08450W → 84 deg 50 min W = -84.8333
+        assert obs["lon"] == pytest.approx(-84.8333, abs=0.001)
         # Check that wind fields are populated
         assert obs["fl_wind_speed_kt"] == pytest.approx(80.0)
         assert obs["sfmr_sfc_wind_kt"] == pytest.approx(60.0)
