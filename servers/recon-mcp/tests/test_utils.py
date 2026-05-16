@@ -3,7 +3,9 @@
 import pytest
 
 from recon_mcp.utils import (
+    _parse_atcf_fix_latlon,
     _parse_hdob_latlon,
+    _parse_vdm_latlon,
     format_tabular_data,
     parse_atcf_fix_record,
     parse_atcf_latlon,
@@ -189,11 +191,29 @@ def test_parse_vdm_flight_level():
     assert result["fl_height"] == 3050
 
 
+def test_parse_vdm_latlon_rejects_wrong_length():
+    # Same silent-corruption class as HDOB: a wrong-column or garbled VDM
+    # B-field value must return None, not a bogus storm-center fix.
+    assert _parse_vdm_latlon("12345N", is_lat=True) is None  # 5 digits in lat
+    assert _parse_vdm_latlon("260N", is_lat=True) is None  # 3 digits in lat
+    assert _parse_vdm_latlon("0801W", is_lat=False) is None  # 4 digits in lon
+    assert _parse_vdm_latlon("099999W", is_lat=False) is None  # 6 digits in lon
+    # Minutes >= 60 are invalid.
+    assert _parse_vdm_latlon("2660N", is_lat=True) is None
+    # Non-digit body must be rejected.
+    assert _parse_vdm_latlon("AB12N", is_lat=True) is None
+    assert _parse_vdm_latlon("", is_lat=True) is None
+    # Valid DDMM / DDDMM inputs still parse (matches the docstring examples).
+    assert _parse_vdm_latlon("2606N", is_lat=True) == pytest.approx(26.1, abs=0.01)
+    assert _parse_vdm_latlon("08015W", is_lat=False) == pytest.approx(-80.25, abs=0.01)
+
+
 # ---------------------------------------------------------------------------
 # ATCF f-deck parser
 # ---------------------------------------------------------------------------
 
-SAMPLE_FDECK_LINE = "AL, 14, 2024100712,   , AIRC,   ,  281N,  0801W,  120,  950,"
+# Real f-deck: lat is 4-digit, lon 5-digit, both hundredths of a degree.
+SAMPLE_FDECK_LINE = "AL, 14, 2024100712,   , AIRC,   ,  2810N,  08010W,  120,  950,"
 
 
 def test_parse_atcf_fix_record():
@@ -202,8 +222,9 @@ def test_parse_atcf_fix_record():
     assert record["basin"] == "AL"
     assert record["cyclone_num"] == 14
     assert record["datetime"] == "2024100712"
-    assert record["lat"] == pytest.approx(28.1, abs=0.1)
-    assert record["lon"] == pytest.approx(-80.1, abs=0.1)
+    # Hundredths, not tenths: 2810N → 28.10, 08010W → -80.10.
+    assert record["lat"] == pytest.approx(28.10, abs=0.001)
+    assert record["lon"] == pytest.approx(-80.10, abs=0.001)
     assert record["max_wind_kt"] == 120
     assert record["min_pressure_mb"] == 950
 
@@ -232,6 +253,35 @@ def test_parse_atcf_latlon_southern():
     lat, lon = parse_atcf_latlon("125S", "1700E")
     assert lat == pytest.approx(-12.5)
     assert lon == pytest.approx(170.0)
+
+
+# The two tests above also guard against a regression: parse_atcf_latlon is
+# TENTHS-of-a-degree and is shared by the b-deck best-track parser. The f-deck
+# fix parser must NOT reuse it (f-deck is hundredths) — see below.
+
+
+def test_parse_atcf_fix_latlon_hundredths():
+    # F-deck is hundredths of a degree, 4-digit lat / 5-digit lon.
+    assert _parse_atcf_fix_latlon("2557N", is_lat=True) == pytest.approx(25.57)
+    assert _parse_atcf_fix_latlon("08015W", is_lat=False) == pytest.approx(-80.15)
+    assert _parse_atcf_fix_latlon("1250S", is_lat=True) == pytest.approx(-12.50)
+    assert _parse_atcf_fix_latlon("17000E", is_lat=False) == pytest.approx(170.0)
+
+
+def test_parse_atcf_fix_latlon_rejects_wrong_format():
+    # Tenths-format (b-deck) values fed to the f-deck parser are wrong-length
+    # and must return None instead of a silently 10x-wrong coordinate.
+    assert _parse_atcf_fix_latlon("281N", is_lat=True) is None  # 3-digit (tenths)
+    assert _parse_atcf_fix_latlon("0940W", is_lat=False) is None  # 4-digit (tenths)
+    # Other off-spec / wrong-column inputs.
+    assert _parse_atcf_fix_latlon("12345N", is_lat=True) is None  # 5 digits in lat
+    assert _parse_atcf_fix_latlon("099999W", is_lat=False) is None  # 6 in lon
+    assert _parse_atcf_fix_latlon("9500N", is_lat=True) is None  # > 90.00 deg
+    assert _parse_atcf_fix_latlon("18500W", is_lat=False) is None  # > 180.00 deg
+    assert _parse_atcf_fix_latlon("202308061200", is_lat=False) is None  # datetime
+    assert _parse_atcf_fix_latlon("AB12N", is_lat=True) is None  # non-digit body
+    assert _parse_atcf_fix_latlon("2557X", is_lat=True) is None  # bad hemisphere
+    assert _parse_atcf_fix_latlon("", is_lat=True) is None
 
 
 # ---------------------------------------------------------------------------
