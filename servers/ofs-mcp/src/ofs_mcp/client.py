@@ -61,7 +61,13 @@ class OFSClient:
             Full HTTPS URL to the NetCDF file on S3.
         """
         y, m, d = date[:4], date[4:6], date[6:8]
-        fname = f"{model}.t{cycle}z.fields.{ftype}{fhour:03d}.nc"
+        # Real NOS OFS S3 objects embed the YYYYMMDD date in the filename and
+        # use a model-dependent file-type infix (ROMS bay models = "fields",
+        # large/2-D models = "2ds"); the previous template hardcoded "fields"
+        # and omitted the date, so every S3 URL 404'd.
+        # e.g. cbofs/netcdf/2026/05/16/cbofs.t00z.20260516.fields.f001.nc
+        file_type = OFS_MODELS.get(model, {}).get("s3_file_type", "fields")
+        fname = f"{model}.t{cycle}z.{date}.{file_type}.{ftype}{fhour:03d}.nc"
         return f"{S3_BASE}/{model}/netcdf/{y}/{m}/{d}/{fname}"
 
     def build_thredds_url(self, model: str) -> str | None:

@@ -868,31 +868,76 @@ class TestOpenOpendapNoFmrc:
 
 
 class TestBuildS3Url:
-    """Tests for OFSClient.build_s3_url with various models and parameters."""
+    """Tests for OFSClient.build_s3_url with various models and parameters.
+
+    Regression: the real NOS OFS S3 object name embeds the YYYYMMDD date and
+    a model-dependent file-type infix. The previous template hardcoded
+    ``fields`` and omitted the date (``cbofs.t06z.fields.f001.nc``), so every
+    S3 URL 404'd and the entire OFS pipeline returned no data.
+    """
 
     def test_forecast_url_format(self):
-        """build_s3_url should produce correctly formatted forecast URLs."""
+        """A ROMS bay model (cbofs) uses the 'fields' infix and includes the date."""
         c = OFSClient()
         url = c.build_s3_url("cbofs", "20260301", "06", "f", 1)
         assert url == (
             "https://noaa-nos-ofs-pds.s3.amazonaws.com/"
-            "cbofs/netcdf/2026/03/01/cbofs.t06z.fields.f001.nc"
+            "cbofs/netcdf/2026/03/01/cbofs.t06z.20260301.fields.f001.nc"
         )
 
     def test_nowcast_url_format(self):
-        """build_s3_url should produce correctly formatted nowcast URLs."""
+        """ngofs2 uses the '2ds' infix (not 'fields') and includes the date."""
         c = OFSClient()
         url = c.build_s3_url("ngofs2", "20260301", "12", "n", 3)
         assert url == (
             "https://noaa-nos-ofs-pds.s3.amazonaws.com/"
-            "ngofs2/netcdf/2026/03/01/ngofs2.t12z.fields.n003.nc"
+            "ngofs2/netcdf/2026/03/01/ngofs2.t12z.20260301.2ds.n003.nc"
         )
 
     def test_large_forecast_hour(self):
         """build_s3_url with a large forecast hour should zero-pad to 3 digits."""
         c = OFSClient()
         url = c.build_s3_url("wcofs", "20260301", "03", "f", 72)
-        assert "fields.f072.nc" in url
+        # wcofs is a 2ds model.
+        assert "wcofs.t03z.20260301.2ds.f072.nc" in url
+
+    def test_url_always_contains_date_segment(self):
+        """Every model's filename must contain the YYYYMMDD date (the bug)."""
+        c = OFSClient()
+        for model_id in OFS_MODELS:
+            url = c.build_s3_url(model_id, "20260516", "00", "f", 1)
+            fname = url.rsplit("/", 1)[1]
+            assert ".20260516." in fname, (
+                f"{model_id} filename {fname!r} is missing the date segment"
+            )
+            assert fname.startswith(f"{model_id}.t00z.20260516.")
+
+    def test_per_model_file_type_infix(self):
+        """The file-type infix matches the empirically verified S3 layout."""
+        c = OFSClient()
+        # Verified live against noaa-nos-ofs-pds on 2026-05-16.
+        expected = {
+            "cbofs": "fields",
+            "dbofs": "fields",
+            "gomofs": "2ds",
+            "ngofs2": "2ds",
+            "sfbofs": "fields",
+            "tbofs": "fields",
+            "wcofs": "2ds",
+            "ciofs": "fields",
+        }
+        for model_id, infix in expected.items():
+            url = c.build_s3_url(model_id, "20260516", "00", "f", 1)
+            assert f".{infix}.f001.nc" in url, f"{model_id} should use .{infix}."
+            other = "2ds" if infix == "fields" else "fields"
+            assert f".{other}.f001.nc" not in url
+
+    def test_ngofs2_sfbofs_cycle_schedule(self):
+        """ngofs2/sfbofs run at 03/09/15/21 UTC, not 00/06/12/18 (regression)."""
+        assert OFS_MODELS["ngofs2"]["cycles"] == ["03", "09", "15", "21"]
+        assert OFS_MODELS["sfbofs"]["cycles"] == ["03", "09", "15", "21"]
+        # Models that genuinely run on the even schedule are unchanged.
+        assert OFS_MODELS["cbofs"]["cycles"] == ["00", "06", "12", "18"]
 
 
 # ============================================================================

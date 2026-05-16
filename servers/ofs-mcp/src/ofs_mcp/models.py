@@ -73,6 +73,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "CBOFS",
         "has_fmrc": True,
+        "s3_file_type": "fields",
     },
     "dbofs": {
         "name": "Delaware Bay OFS",
@@ -102,6 +103,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "DBOFS",
         "has_fmrc": True,
+        "s3_file_type": "fields",
     },
     "gomofs": {
         "name": "Gulf of Maine OFS",
@@ -131,6 +133,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "GOMOFS",
         "has_fmrc": True,
+        "s3_file_type": "2ds",
     },
     "ngofs2": {
         "name": "Northern Gulf of Mexico OFS v2",
@@ -144,7 +147,8 @@ OFS_MODELS: dict[str, dict] = {
             "lon_max": -85.0,
         },
         "states": ["LA", "MS", "AL", "FL", "TX"],
-        "cycles": ["00", "06", "12", "18"],
+        # NGOFS2 runs at 03/09/15/21 UTC (verified on S3), not 00/06/12/18.
+        "cycles": ["03", "09", "15", "21"],
         "forecast_hours": 48,
         "nowcast_hours": 6,
         "grid_size": "~700k nodes",
@@ -160,6 +164,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "NGOFS2",
         "has_fmrc": False,
+        "s3_file_type": "2ds",
     },
     "nyofs": {
         "name": "New York / NJ Harbor OFS",
@@ -189,6 +194,11 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "NYOFS",
         "has_fmrc": True,
+        # NOTE: NYOFS publishes a single non-hourly forecast/nowcast file
+        # (nyofs.t{cc}z.{date}.fields.forecast.nc), not per-hour files. The
+        # standard hourly S3 scheme below does not apply to it; NYOFS S3
+        # retrieval remains a separate, unsolved case.
+        "s3_file_type": "fields",
     },
     "sfbofs": {
         "name": "San Francisco Bay OFS",
@@ -202,7 +212,8 @@ OFS_MODELS: dict[str, dict] = {
             "lon_max": -121.5,
         },
         "states": ["CA"],
-        "cycles": ["00", "06", "12", "18"],
+        # SFBOFS runs at 03/09/15/21 UTC (verified on S3), not 00/06/12/18.
+        "cycles": ["03", "09", "15", "21"],
         "forecast_hours": 48,
         "nowcast_hours": 6,
         "grid_size": "~52k nodes",
@@ -218,6 +229,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "SFBOFS",
         "has_fmrc": False,
+        "s3_file_type": "fields",
     },
     "tbofs": {
         "name": "Tampa Bay OFS",
@@ -247,6 +259,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "TBOFS",
         "has_fmrc": True,
+        "s3_file_type": "fields",
     },
     "wcofs": {
         "name": "West Coast OFS",
@@ -276,6 +289,7 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "WCOFS",
         "has_fmrc": False,
+        "s3_file_type": "2ds",
     },
     "ciofs": {
         "name": "Cook Inlet OFS",
@@ -305,5 +319,6 @@ OFS_MODELS: dict[str, dict] = {
         },
         "thredds_id": "CIOFS",
         "has_fmrc": True,
+        "s3_file_type": "fields",
     },
 }

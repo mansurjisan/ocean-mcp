@@ -13,6 +13,25 @@ def _get_client(ctx: Context) -> COOPSClient:
     return ctx.request_context.lifespan_context["coops_client"]
 
 
+def _expanded_resource(value):
+    """Return expanded sub-resource data, or None if it is only a ref stub.
+
+    The CO-OPS mdapi returns sub-resources (details, sensors, datums,
+    floodlevels) as a bare reference object ``{"self": "<url>"}`` unless the
+    request passes ``?expand=<resource>``. Iterating a stub as if it were real
+    data raised ``AttributeError: 'str' object has no attribute 'get'``
+    (iterating a dict yields its string keys). Treat a stub (nothing beyond
+    ``self``) as absent, and strip the ``self`` key from real payloads so it
+    is never rendered as data.
+    """
+    if isinstance(value, list):
+        return value or None
+    if isinstance(value, dict):
+        meaningful = {k: v for k, v in value.items() if k != "self"}
+        return meaningful or None
+    return None
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
@@ -127,48 +146,78 @@ async def coops_get_station(
         if station.get("timezonecorr"):
             lines.append(f"**Timezone Offset**: {station['timezonecorr']} hours")
 
-        # Expanded details
-        if station.get("details"):
-            details = station["details"]
-            lines.append("\n### Details")
-            for key in (
-                "accepted",
-                "epoch",
-                "origyear",
-                "meridian",
-                "datum",
-                "timezonecorr",
-            ):
-                if details.get(key):
-                    lines.append(f"- **{key}**: {details[key]}")
-
-        if station.get("sensors"):
-            sensors = station["sensors"]
-            lines.append("\n### Sensors")
-            for sensor in sensors:
-                lines.append(f"- {sensor.get('name', sensor.get('id', '?'))}")
-
-        if station.get("datums"):
-            datums = station["datums"]
-            lines.append("\n### Datums")
-            datum_list = (
-                datums if isinstance(datums, list) else datums.get("datums", [])
-            )
-            for d in datum_list:
-                lines.append(
-                    f"- **{d.get('name', '?')}**: {d.get('value', '?')} {units.value}"
+        # Expanded sub-resources. Each is only present as real data when the
+        # caller passed expand=<resource>; otherwise the mdapi returns a
+        # {"self": url} stub which _expanded_resource() filters to None.
+        details = _expanded_resource(station.get("details"))
+        if details:
+            detail_lines = [
+                f"- **{key}**: {details[key]}"
+                for key in (
+                    "accepted",
+                    "epoch",
+                    "origyear",
+                    "meridian",
+                    "datum",
+                    "timezonecorr",
                 )
+                if details.get(key)
+            ]
+            if detail_lines:
+                lines.append("\n### Details")
+                lines.extend(detail_lines)
 
-        if station.get("floodlevels"):
-            flood = station["floodlevels"]
-            lines.append("\n### Flood Levels")
+        sensors_data = _expanded_resource(station.get("sensors"))
+        if sensors_data:
+            # Expanded shape is {"units": ..., "sensors": [...]}; be tolerant
+            # of a bare list too.
+            sensor_list = (
+                sensors_data.get("sensors")
+                if isinstance(sensors_data, dict)
+                else sensors_data
+            )
+            if isinstance(sensor_list, list):
+                rendered = [
+                    f"- {s.get('name', s.get('id', '?'))}"
+                    for s in sensor_list
+                    if isinstance(s, dict)
+                ]
+                if rendered:
+                    lines.append("\n### Sensors")
+                    lines.extend(rendered)
+
+        datums_data = _expanded_resource(station.get("datums"))
+        if datums_data:
+            if isinstance(datums_data, list):
+                datum_list = datums_data
+            elif isinstance(datums_data, dict):
+                datum_list = datums_data.get("datums", [])
+            else:
+                datum_list = []
+            rendered = [
+                f"- **{d.get('name', '?')}**: {d.get('value', '?')} {units.value}"
+                for d in datum_list
+                if isinstance(d, dict)
+            ]
+            if rendered:
+                lines.append("\n### Datums")
+                lines.extend(rendered)
+
+        flood = _expanded_resource(station.get("floodlevels"))
+        if flood:
             if isinstance(flood, list):
-                for f in flood:
-                    lines.append(f"- **{f.get('name', '?')}**: {f.get('value', '?')}")
+                rendered = [
+                    f"- **{f.get('name', '?')}**: {f.get('value', '?')}"
+                    for f in flood
+                    if isinstance(f, dict)
+                ]
             elif isinstance(flood, dict):
-                for key, val in flood.items():
-                    if val:
-                        lines.append(f"- **{key}**: {val}")
+                rendered = [f"- **{key}**: {val}" for key, val in flood.items() if val]
+            else:
+                rendered = []
+            if rendered:
+                lines.append("\n### Flood Levels")
+                lines.extend(rendered)
 
         return "\n".join(lines)
     except Exception as e:
