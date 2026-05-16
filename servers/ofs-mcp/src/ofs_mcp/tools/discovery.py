@@ -128,9 +128,11 @@ async def ofs_get_model_info(
         else:
             thredds_url = None
         s3_prefix = f"https://noaa-nos-ofs-pds.s3.amazonaws.com/{model.value}/netcdf/YYYY/MM/DD/"
+        s3_file_type = info.get("s3_file_type", "fields")
         s3_example = (
             f"https://noaa-nos-ofs-pds.s3.amazonaws.com/{model.value}/netcdf/"
-            f"YYYY/MM/DD/{model.value}.t{info['cycles'][0]}z.fields.f001.nc"
+            f"YYYY/MM/DD/{model.value}.t{info['cycles'][0]}z."
+            f"YYYYMMDD.{s3_file_type}.f001.nc"
         )
 
         nc_vars = info.get("nc_vars", {})

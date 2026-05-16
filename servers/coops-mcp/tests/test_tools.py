@@ -332,6 +332,117 @@ class TestStationTools:
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_get_station_unexpanded_ref_stubs(self, ctx: MagicMock) -> None:
+        """Regression: without expand, mdapi returns {"self": url} stubs.
+
+        Previously coops_get_station iterated the sensors stub as a list,
+        hitting ``AttributeError: 'str' object has no attribute 'get'``
+        (iterating a dict yields its string keys). It must now render the
+        base fields, skip the stub sections, and never leak the ref URL.
+        """
+        from coops_mcp.tools.stations import coops_get_station
+
+        stub = "REFSTUB://should-not-be-rendered"
+        fixture = {
+            "stations": [
+                {
+                    "id": "8518750",
+                    "name": "The Battery",
+                    "state": "NY",
+                    "lat": 40.700554,
+                    "lng": -74.01417,
+                    "affiliations": "NWLORTS",
+                    "timezonecorr": -5,
+                    "details": {"self": stub},
+                    "sensors": {"self": stub},
+                    "datums": {"self": stub},
+                    "floodlevels": {"self": stub},
+                    "self": stub,
+                }
+            ]
+        }
+        respx.get(f"{METADATA_API_BASE}/stations/8518750.json").mock(
+            return_value=httpx.Response(200, json=fixture)
+        )
+
+        result = await coops_get_station(ctx, station_id="8518750")
+
+        assert "AttributeError" not in result
+        assert "Unexpected error" not in result
+        assert "The Battery" in result and "40.700554" in result
+        # Stub-only sub-resources must be skipped, not rendered.
+        assert stub not in result
+        assert "### Sensors" not in result
+        assert "### Datums" not in result
+        assert "### Flood Levels" not in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_station_expanded_resources(self, ctx: MagicMock) -> None:
+        """Regression: with expand, sensors is {"units","sensors":[...],"self"}.
+
+        The old code did ``for sensor in station["sensors"]`` which iterated
+        the dict keys even when expanded, so the expand path was broken too.
+        Verify real expanded shapes render and the ``self`` URL never leaks.
+        """
+        from coops_mcp.tools.stations import coops_get_station
+
+        stub = "REFSTUB://self-url"
+        fixture = {
+            "stations": [
+                {
+                    "id": "8518750",
+                    "name": "The Battery",
+                    "state": "NY",
+                    "lat": 40.7,
+                    "lng": -74.0,
+                    "details": {"origyear": "1989-09-12 00:00:00", "self": stub},
+                    "sensors": {
+                        "units": "metric",
+                        "sensors": [
+                            {"id": "A1", "name": "Primary Water Level"},
+                            {"id": "B1", "name": "Backup Water Level"},
+                        ],
+                        "self": stub,
+                    },
+                    "datums": {
+                        "epoch": "1983-2001",
+                        "datums": [
+                            {"name": "MLLW", "value": 0.0},
+                            {"name": "MHHW", "value": 1.52},
+                        ],
+                        "self": stub,
+                    },
+                    "floodlevels": {
+                        "nos_minor": 1.2,
+                        "nos_major": 2.5,
+                        "self": stub,
+                    },
+                    "self": stub,
+                }
+            ]
+        }
+        respx.get(f"{METADATA_API_BASE}/stations/8518750.json").mock(
+            return_value=httpx.Response(200, json=fixture)
+        )
+
+        result = await coops_get_station(
+            ctx,
+            station_id="8518750",
+            expand=["details", "sensors", "datums", "floodlevels"],
+        )
+
+        assert "AttributeError" not in result and "Unexpected error" not in result
+        assert "### Sensors" in result
+        assert "Primary Water Level" in result and "Backup Water Level" in result
+        assert "### Datums" in result and "MLLW" in result
+        assert "### Flood Levels" in result and "nos_minor" in result
+        assert "### Details" in result and "1989-09-12" in result
+        # The reference URL must never appear as rendered data.
+        assert stub not in result
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_find_nearest_stations(self, ctx: MagicMock) -> None:
         """Find nearest stations and verify distance-sorted output."""
         from coops_mcp.tools.stations import coops_find_nearest_stations

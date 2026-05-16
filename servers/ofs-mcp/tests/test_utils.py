@@ -133,21 +133,24 @@ def test_s3_url_cbofs_forecast():
     url = client.build_s3_url("cbofs", "20260219", "06", "f", 1)
     assert "noaa-nos-ofs-pds" in url
     assert "cbofs/netcdf/2026/02/19" in url
-    assert "cbofs.t06z.fields.f001.nc" in url
+    # Real S3 object embeds the YYYYMMDD date; cbofs uses the 'fields' infix.
+    assert "cbofs.t06z.20260219.fields.f001.nc" in url
 
 
 def test_s3_url_ngofs2_nowcast():
     client = OFSClient()
     url = client.build_s3_url("ngofs2", "20260219", "12", "n", 3)
     assert "ngofs2/netcdf/2026/02/19" in url
-    assert "ngofs2.t12z.fields.n003.nc" in url
+    # ngofs2 uses the '2ds' infix, not 'fields'.
+    assert "ngofs2.t12z.20260219.2ds.n003.nc" in url
 
 
 def test_s3_url_wcofs():
     client = OFSClient()
     url = client.build_s3_url("wcofs", "20260219", "03", "f", 48)
     assert "wcofs/netcdf/2026/02/19" in url
-    assert "wcofs.t03z.fields.f048.nc" in url
+    # wcofs uses the '2ds' infix, not 'fields'.
+    assert "wcofs.t03z.20260219.2ds.f048.nc" in url
 
 
 # ---------------------------------------------------------------------------
