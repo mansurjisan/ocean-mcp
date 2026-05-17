@@ -940,3 +940,51 @@ class TestHtmlErrorDetection:
         )
 
         assert "error" in result.lower() or "html" in result.lower()
+
+
+class TestSSRFGuard:
+    """The SSRF guard must also re-check redirect hops, not just the input URL."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_redirect_to_internal_is_blocked(
+        self, ctx: MagicMock, monkeypatch
+    ) -> None:
+        """An allowed host that 302-redirects to cloud metadata is blocked."""
+        import erddap_mcp.client as c
+
+        def fake_gai(host, port, *a, **k):
+            import ipaddress
+
+            try:
+                ip = str(ipaddress.ip_address(host))
+            except ValueError:
+                ip = "93.184.216.34"  # public
+            return [(2, 1, 6, "", (ip, port or 0))]
+
+        # Hermetic DNS: hostnames -> public, IP literals -> themselves
+        # (so 169.254.169.254 is still classified link-local and blocked).
+        monkeypatch.setattr(c.socket, "getaddrinfo", fake_gai)
+
+        respx.get(url__startswith=f"{COASTWATCH}/search/index.json").mock(
+            return_value=httpx.Response(
+                302,
+                headers={"location": "http://169.254.169.254/latest/meta-data/"},
+            )
+        )
+
+        result = await erddap_search_datasets(ctx, search_for="sst")
+
+        assert "Blocked for security" in result
+        assert "169.254.169.254" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_user_supplied_internal_server_url_is_blocked(
+        self, ctx: MagicMock
+    ) -> None:
+        """A caller pointing server_url straight at an internal IP is blocked."""
+        result = await erddap_search_datasets(
+            ctx, search_for="x", server_url="http://169.254.169.254"
+        )
+        assert "Blocked for security" in result

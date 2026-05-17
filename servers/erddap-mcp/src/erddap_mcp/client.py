@@ -2,9 +2,58 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote
+import ipaddress
+import socket
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
+
+# A caller supplies `server_url` to every tool, so an unguarded client is an
+# SSRF primitive: `http://169.254.169.254/` (cloud metadata), `http://localhost`,
+# or any RFC1918 address would be fetched. We allow only http(s) to hosts that
+# resolve exclusively to public IPs, and re-check every redirect hop.
+_MAX_REDIRECTS = 5
+
+
+class ERDDAPSecurityError(ValueError):
+    """Raised when a request URL is blocked by the SSRF guard."""
+
+
+def _validate_public_http_url(url: str) -> None:
+    """Reject non-HTTP(S) schemes and hosts resolving to non-public IPs.
+
+    Raises ERDDAPSecurityError if the URL is unsafe to fetch. DNS is resolved
+    and *every* returned address is checked, so a name that resolves to a mix
+    of public and private addresses is still rejected.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ERDDAPSecurityError(
+            f"Blocked URL scheme {parsed.scheme or '(none)'!r}; "
+            f"only http/https are allowed: {url}"
+        )
+    host = parsed.hostname
+    if not host:
+        raise ERDDAPSecurityError(f"URL has no host: {url}")
+    try:
+        infos = socket.getaddrinfo(host, parsed.port, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        raise ERDDAPSecurityError(f"Could not resolve host {host!r}: {e}") from e
+    for info in infos:
+        addr = info[4][0].split("%")[0]  # strip IPv6 zone id
+        ip = ipaddress.ip_address(addr)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise ERDDAPSecurityError(
+                f"Blocked request to non-public address {ip} "
+                f"(host {host!r}): refusing potential SSRF."
+            )
 
 
 class ERDDAPClient:
@@ -15,16 +64,32 @@ class ERDDAPClient:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
+            # Redirects are followed manually so each hop is SSRF-checked;
+            # httpx auto-redirect would let an allowed host bounce us to an
+            # internal address.
             self._client = httpx.AsyncClient(
                 timeout=60.0,
-                follow_redirects=True,
+                follow_redirects=False,
             )
         return self._client
 
     async def _get_json(self, url: str) -> dict:
         """Fetch a URL and return parsed JSON, handling ERDDAP error responses."""
         client = await self._get_client()
-        response = await client.get(url)
+        redirects = 0
+        while True:
+            _validate_public_http_url(url)
+            response = await client.get(url)
+            if response.is_redirect and response.headers.get("location"):
+                redirects += 1
+                if redirects > _MAX_REDIRECTS:
+                    raise ERDDAPSecurityError(
+                        f"Too many redirects (>{_MAX_REDIRECTS}) starting from {url}"
+                    )
+                url = urljoin(url, response.headers["location"])
+                continue
+            break
+
         response.raise_for_status()
 
         content_type = response.headers.get("content-type", "")

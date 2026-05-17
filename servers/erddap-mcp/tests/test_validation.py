@@ -136,3 +136,82 @@ class TestServerRegistry:
         """get_servers returns empty list when nothing matches."""
         result = get_servers(keyword="zzz_nonexistent_zzz")
         assert result == []
+
+
+class TestSSRFGuard:
+    """SSRF guard for the caller-supplied server_url (_validate_public_http_url)."""
+
+    def test_security_error_is_value_error(self):
+        """ERDDAPSecurityError is a ValueError so existing handlers catch it."""
+        from erddap_mcp.client import ERDDAPSecurityError
+
+        assert issubclass(ERDDAPSecurityError, ValueError)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "file:///etc/passwd",
+            "ftp://example.com/x",
+            "gopher://example.com/",
+            "dict://example.com:11211/",
+            "//example.com/no-scheme",
+            "ssh://example.com",
+        ],
+    )
+    def test_blocks_non_http_schemes(self, url):
+        """Non-http(s) schemes are rejected."""
+        from erddap_mcp.client import ERDDAPSecurityError, _validate_public_http_url
+
+        with pytest.raises(ERDDAPSecurityError):
+            _validate_public_http_url(url)
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1/erddap",
+            "http://localhost/erddap",
+            "http://169.254.169.254/latest/meta-data/",  # cloud metadata
+            "http://10.0.0.5/erddap",
+            "http://192.168.1.10/erddap",
+            "http://172.16.0.1/erddap",
+            "http://[::1]/erddap",
+            "http://0.0.0.0/erddap",
+        ],
+    )
+    def test_blocks_private_and_internal_hosts(self, url):
+        """Loopback, RFC1918, link-local (incl. 169.254.169.254) are rejected."""
+        from erddap_mcp.client import ERDDAPSecurityError, _validate_public_http_url
+
+        with pytest.raises(ERDDAPSecurityError):
+            _validate_public_http_url(url)
+
+    def test_allows_public_host(self, monkeypatch):
+        """A host resolving only to public IPs passes (DNS stubbed: hermetic)."""
+        import erddap_mcp.client as c
+        from erddap_mcp.client import _validate_public_http_url
+
+        def fake_gai(host, port, *a, **k):
+            import ipaddress
+
+            try:
+                ip = str(ipaddress.ip_address(host))
+            except ValueError:
+                ip = "93.184.216.34"  # public (example.com range)
+            return [(2, 1, 6, "", (ip, port or 0))]
+
+        monkeypatch.setattr(c.socket, "getaddrinfo", fake_gai)
+        # Should not raise.
+        _validate_public_http_url("https://coastwatch.pfeg.noaa.gov/erddap")
+
+    def test_blocks_public_name_resolving_to_private(self, monkeypatch):
+        """DNS-rebinding style: a name resolving to a private IP is rejected."""
+        import erddap_mcp.client as c
+        from erddap_mcp.client import ERDDAPSecurityError, _validate_public_http_url
+
+        monkeypatch.setattr(
+            c.socket,
+            "getaddrinfo",
+            lambda *a, **k: [(2, 1, 6, "", ("10.0.0.1", 0))],
+        )
+        with pytest.raises(ERDDAPSecurityError):
+            _validate_public_http_url("https://innocent.example.com/erddap")

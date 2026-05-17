@@ -174,7 +174,16 @@ def handle_erddap_error(e: Exception, server_url: str = "") -> str:
     """
     import httpx
 
+    from .client import ERDDAPSecurityError
+
     msg = str(e)
+
+    if isinstance(e, ERDDAPSecurityError):
+        return (
+            f"Blocked for security: {msg} "
+            "Only public http(s) ERDDAP servers are allowed; "
+            "use erddap_list_servers to see known servers."
+        )
 
     if isinstance(e, httpx.HTTPStatusError):
         status = e.response.status_code
