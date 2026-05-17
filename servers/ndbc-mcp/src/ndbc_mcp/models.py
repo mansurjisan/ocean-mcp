@@ -16,7 +16,17 @@ STATION_CACHE_TTL = 600
 # Missing value sentinels used in NDBC fixed-width text files
 # ---------------------------------------------------------------------------
 
-MISSING_VALUES = {"MM", "99.0", "99.00", "999", "999.0", "9999", "9999.0"}
+# NDBC realtime2 products (.txt/.spec/.cwind/.ocean — the only files this
+# server fetches) denote missing data with the text token "MM", or "N/A" for
+# non-computable derived fields (e.g. wave STEEPNESS). The numeric all-9s
+# codes (99.0 / 999.0 / 9999.0 ...) are a HISTORICAL-archive convention this
+# server never reads, AND they are field-specific: 999.0 means "missing" for
+# a °C temperature but is a perfectly valid sea-level PRESSURE (hPa) and a
+# common one in any low-pressure system. Treating them as a global string set
+# silently nulled real pressure readings (verified: live buoys routinely
+# report 985–999 hPa). Only the realtime2 text sentinels belong here;
+# comparison is whitespace-stripped and case-insensitive.
+MISSING_VALUES = {"MM", "N/A"}
 
 # ---------------------------------------------------------------------------
 # Standard meteorological columns in realtime2 .txt files

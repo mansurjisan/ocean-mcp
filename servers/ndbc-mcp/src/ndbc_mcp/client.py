@@ -233,7 +233,10 @@ def parse_realtime_text(text: str) -> tuple[list[str], list[dict[str, Any]]]:
         for j, col in enumerate(columns):
             if j < len(parts):
                 raw = parts[j]
-                if raw in MISSING_VALUES:
+                # Only the realtime2 text sentinels (or blank) are missing;
+                # never treat a numeric value as missing — that silently
+                # dropped real readings like a 999.0 hPa pressure.
+                if not raw.strip() or raw.strip().upper() in MISSING_VALUES:
                     record[col] = None
                 else:
                     try:

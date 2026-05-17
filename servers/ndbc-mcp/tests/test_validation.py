@@ -145,6 +145,42 @@ class TestParseRealtimeText:
         assert records[0]["WSPD"] == 2.0
         assert records[0]["PRES"] == 1025.4
 
+    # Regression: a global string set treated "999.0" (and 99.0/9999.0...)
+    # as missing for EVERY column, so real low-pressure readings — routine
+    # in any low / tropical system — were silently nulled. Only realtime2
+    # text sentinels are missing; numeric values are always kept.
+    PRESSURE_TEXT = """\
+#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE
+2026 03 07 11 30 160  2.0  3.0   1.0     8   6.0 100  999.0  12.3  14.0  10.0   MM   MM    MM
+2026 03 07 11 20 170  1.0  2.0   1.9     9   6.5 100  985.8  12.3  14.0  10.0   MM   mm    MM
+2026 03 07 11 10  MM   MM   MM    MM    MM    MM  MM 1013.0  12.3  14.0  10.0  N/A   MM    MM
+"""
+
+    def test_valid_low_pressure_not_dropped(self):
+        """Real 999.0 / 985.8 hPa pressures must be preserved, not nulled."""
+        _, recs = parse_realtime_text(self.PRESSURE_TEXT)
+        assert recs[0]["PRES"] == 999.0
+        assert recs[1]["PRES"] == 985.8
+
+    def test_text_sentinels_still_missing(self):
+        """MM (any case), N/A, and blank remain missing."""
+        _, recs = parse_realtime_text(self.PRESSURE_TEXT)
+        assert recs[0]["VIS"] is None  # MM
+        assert recs[1]["PTDY"] is None  # lowercase mm
+        assert recs[2]["VIS"] is None  # N/A
+        assert recs[2]["WDIR"] is None  # MM in a numeric column
+
+    def test_string_columns_preserved(self):
+        """Non-numeric realtime2 values (e.g. .spec SwD='NW') stay as text."""
+        spec = (
+            "#YY  MM DD hh mm WVHT SwD  STEEPNESS  APD\n"
+            "2026 03 07 11 30  5.4 NW   AVERAGE    8.7\n"
+        )
+        _, recs = parse_realtime_text(spec)
+        assert recs[0]["SwD"] == "NW"
+        assert recs[0]["STEEPNESS"] == "AVERAGE"
+        assert recs[0]["WVHT"] == 5.4
+
     def test_empty_text_returns_empty(self):
         """Empty input should return empty lists."""
         columns, records = parse_realtime_text("")
@@ -223,6 +259,11 @@ class TestConstants:
             assert v in data_cols, f"{v} not in standard columns"
 
     def test_missing_values_set(self):
-        """MM should be in the missing values set."""
+        """Only realtime2 text sentinels are 'missing'. Numeric all-9s codes
+        must NOT be: 999.0 is a valid sea-level pressure (hPa)."""
         assert "MM" in MISSING_VALUES
-        assert "999.0" in MISSING_VALUES
+        assert "N/A" in MISSING_VALUES
+        assert "999.0" not in MISSING_VALUES
+        assert "9999.0" not in MISSING_VALUES
+        assert "99.0" not in MISSING_VALUES
+        assert "999" not in MISSING_VALUES
