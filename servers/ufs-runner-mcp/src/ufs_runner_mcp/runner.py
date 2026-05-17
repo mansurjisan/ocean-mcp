@@ -22,6 +22,7 @@ from .models import (
     validate_job_id,
     validate_path,
     validate_run_dir,
+    validate_shell_safe_values,
     validate_template_variables,
 )
 
@@ -147,10 +148,17 @@ class UfsRunner:
                 user_flat_keys.add(key)
         variables = _compute_derived_vars(variables, user_overrides=user_flat_keys)
 
-        # Validate variables that will be interpolated into shell contexts
+        # Validate variables that will be interpolated into shell contexts.
+        # validate_template_variables guards the known derived shell vars;
+        # validate_shell_safe_values additionally guards EVERY user-supplied
+        # flat override, since any of them can be rendered into run_*.sh /
+        # *.slurm by _render_template (command-injection surface).
         shell_err = validate_template_variables(variables)
         if shell_err:
             raise RunnerError(shell_err)
+        user_err = validate_shell_safe_values(variables, user_flat_keys)
+        if user_err:
+            raise RunnerError(user_err)
 
         # Copy template to run directory, rendering {{var}} placeholders
         run_path.mkdir(parents=True, exist_ok=True)
@@ -684,9 +692,23 @@ class UfsRunner:
         patterns = self._STAGE_PATTERNS.get(model_type, [])
         staged: list[str] = []
 
+        input_root = input_dir.resolve()
         for pattern in patterns:
             for src in input_dir.glob(pattern):
                 if not src.is_file():
+                    continue
+                # input_dir is validated, but glob/is_file follow symlinks:
+                # a symlink like INPUT/x.nc -> /etc/shadow would otherwise be
+                # staged (or its content copied) into the run dir. Require the
+                # real target to stay within the validated input dir.
+                try:
+                    src.resolve().relative_to(input_root)
+                except ValueError:
+                    logger.warning(
+                        "Skipping %s: real path escapes input dir %s",
+                        src,
+                        input_dir,
+                    )
                     continue
                 rel = src.relative_to(input_dir)
                 dest = run_path / rel
