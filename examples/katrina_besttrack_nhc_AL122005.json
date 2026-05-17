@@ -1,0 +1,315 @@
+{
+  "storm_id": "AL122005",
+  "name": "KATRINA",
+  "source": "HURDAT2",
+  "peak_wind_kt": 150,
+  "min_pressure_mb": 902,
+  "track_points": [
+    {
+      "datetime": "20050823 1800 UTC",
+      "lat": 23.1,
+      "lon": -75.1,
+      "max_wind": 30,
+      "min_pressure": 1008,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050824 0000 UTC",
+      "lat": 23.4,
+      "lon": -75.7,
+      "max_wind": 30,
+      "min_pressure": 1007,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050824 0600 UTC",
+      "lat": 23.8,
+      "lon": -76.2,
+      "max_wind": 30,
+      "min_pressure": 1007,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050824 1200 UTC",
+      "lat": 24.5,
+      "lon": -76.5,
+      "max_wind": 35,
+      "min_pressure": 1006,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050824 1800 UTC",
+      "lat": 25.4,
+      "lon": -76.9,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050825 0000 UTC",
+      "lat": 26.0,
+      "lon": -77.7,
+      "max_wind": 45,
+      "min_pressure": 1000,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050825 0600 UTC",
+      "lat": 26.1,
+      "lon": -78.4,
+      "max_wind": 50,
+      "min_pressure": 997,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050825 1200 UTC",
+      "lat": 26.2,
+      "lon": -79.0,
+      "max_wind": 55,
+      "min_pressure": 994,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050825 1800 UTC",
+      "lat": 26.2,
+      "lon": -79.6,
+      "max_wind": 60,
+      "min_pressure": 988,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050825 2230 UTC",
+      "lat": 26.0,
+      "lon": -80.1,
+      "max_wind": 70,
+      "min_pressure": 984,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20050826 0000 UTC",
+      "lat": 25.9,
+      "lon": -80.3,
+      "max_wind": 70,
+      "min_pressure": 983,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20050826 0600 UTC",
+      "lat": 25.4,
+      "lon": -81.3,
+      "max_wind": 65,
+      "min_pressure": 987,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20050826 1200 UTC",
+      "lat": 25.1,
+      "lon": -82.0,
+      "max_wind": 75,
+      "min_pressure": 979,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20050826 1800 UTC",
+      "lat": 24.9,
+      "lon": -82.6,
+      "max_wind": 85,
+      "min_pressure": 968,
+      "status": "HU",
+      "category": "Category 2"
+    },
+    {
+      "datetime": "20050827 0000 UTC",
+      "lat": 24.6,
+      "lon": -83.3,
+      "max_wind": 90,
+      "min_pressure": 959,
+      "status": "HU",
+      "category": "Category 2"
+    },
+    {
+      "datetime": "20050827 0600 UTC",
+      "lat": 24.4,
+      "lon": -84.0,
+      "max_wind": 95,
+      "min_pressure": 950,
+      "status": "HU",
+      "category": "Category 2"
+    },
+    {
+      "datetime": "20050827 1200 UTC",
+      "lat": 24.4,
+      "lon": -84.7,
+      "max_wind": 100,
+      "min_pressure": 942,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050827 1800 UTC",
+      "lat": 24.5,
+      "lon": -85.3,
+      "max_wind": 100,
+      "min_pressure": 948,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050828 0000 UTC",
+      "lat": 24.8,
+      "lon": -85.9,
+      "max_wind": 100,
+      "min_pressure": 941,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050828 0600 UTC",
+      "lat": 25.2,
+      "lon": -86.7,
+      "max_wind": 125,
+      "min_pressure": 930,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20050828 1200 UTC",
+      "lat": 25.7,
+      "lon": -87.7,
+      "max_wind": 145,
+      "min_pressure": 909,
+      "status": "HU",
+      "category": "Category 5"
+    },
+    {
+      "datetime": "20050828 1800 UTC",
+      "lat": 26.3,
+      "lon": -88.6,
+      "max_wind": 150,
+      "min_pressure": 902,
+      "status": "HU",
+      "category": "Category 5"
+    },
+    {
+      "datetime": "20050829 0000 UTC",
+      "lat": 27.2,
+      "lon": -89.2,
+      "max_wind": 140,
+      "min_pressure": 905,
+      "status": "HU",
+      "category": "Category 5"
+    },
+    {
+      "datetime": "20050829 0600 UTC",
+      "lat": 28.2,
+      "lon": -89.6,
+      "max_wind": 125,
+      "min_pressure": 913,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20050829 1110 UTC",
+      "lat": 29.3,
+      "lon": -89.6,
+      "max_wind": 110,
+      "min_pressure": 920,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050829 1200 UTC",
+      "lat": 29.5,
+      "lon": -89.6,
+      "max_wind": 110,
+      "min_pressure": 923,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050829 1445 UTC",
+      "lat": 30.2,
+      "lon": -89.6,
+      "max_wind": 105,
+      "min_pressure": 928,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20050829 1800 UTC",
+      "lat": 31.1,
+      "lon": -89.6,
+      "max_wind": 80,
+      "min_pressure": 948,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20050830 0000 UTC",
+      "lat": 32.6,
+      "lon": -89.1,
+      "max_wind": 50,
+      "min_pressure": 961,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050830 0600 UTC",
+      "lat": 34.1,
+      "lon": -88.6,
+      "max_wind": 40,
+      "min_pressure": 978,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20050830 1200 UTC",
+      "lat": 35.6,
+      "lon": -88.0,
+      "max_wind": 30,
+      "min_pressure": 985,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050830 1800 UTC",
+      "lat": 37.0,
+      "lon": -87.0,
+      "max_wind": 30,
+      "min_pressure": 990,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050831 0000 UTC",
+      "lat": 38.6,
+      "lon": -85.3,
+      "max_wind": 30,
+      "min_pressure": 994,
+      "status": "EX",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20050831 0600 UTC",
+      "lat": 40.1,
+      "lon": -82.9,
+      "max_wind": 25,
+      "min_pressure": 996,
+      "status": "EX",
+      "category": "Tropical Depression"
+    }
+  ]
+}
