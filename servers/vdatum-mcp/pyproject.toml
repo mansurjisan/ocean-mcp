@@ -36,6 +36,13 @@ Repository = "https://github.com/mansurjisan/ocean-mcp"
 [project.scripts]
 vdatum-mcp = "vdatum_mcp.server:main"
 
+[tool.hatch.metadata]
+# coastalmodeling-vdatum is a NOAA library not published to PyPI, so it is a
+# git direct reference. Hatchling rejects direct references in
+# project.dependencies unless this is set, which made `uv sync`/`uv build`
+# (and therefore any CI coverage) fail outright.
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/vdatum_mcp"]
 

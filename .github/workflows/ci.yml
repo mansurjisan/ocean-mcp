@@ -27,6 +27,10 @@ jobs:
       ww3-mcp: ${{ steps.filter.outputs.ww3-mcp }}
       rtofs-mcp: ${{ steps.filter.outputs.rtofs-mcp }}
       ndbc-mcp: ${{ steps.filter.outputs.ndbc-mcp }}
+      alert-mcp: ${{ steps.filter.outputs.alert-mcp }}
+      hpc-system-mcp: ${{ steps.filter.outputs.hpc-system-mcp }}
+      ufs-runner-mcp: ${{ steps.filter.outputs.ufs-runner-mcp }}
+      vdatum-mcp: ${{ steps.filter.outputs.vdatum-mcp }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -61,6 +65,14 @@ jobs:
               - 'servers/rtofs-mcp/**'
             ndbc-mcp:
               - 'servers/ndbc-mcp/**'
+            alert-mcp:
+              - 'servers/alert-mcp/**'
+            hpc-system-mcp:
+              - 'servers/hpc-system-mcp/**'
+            ufs-runner-mcp:
+              - 'servers/ufs-runner-mcp/**'
+            vdatum-mcp:
+              - 'servers/vdatum-mcp/**'
 
   lint:
     runs-on: ubuntu-latest
@@ -79,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [adcirc-mcp, coops-mcp, erddap-mcp, goes-mcp, ndbc-mcp, nhc-mcp, ofs-mcp, recon-mcp, rtofs-mcp, schism-mcp, stofs-mcp, usgs-mcp, winds-mcp, ww3-mcp]
+        server: [adcirc-mcp, alert-mcp, coops-mcp, erddap-mcp, goes-mcp, hpc-system-mcp, ndbc-mcp, nhc-mcp, ofs-mcp, recon-mcp, rtofs-mcp, schism-mcp, stofs-mcp, ufs-runner-mcp, usgs-mcp, vdatum-mcp, winds-mcp, ww3-mcp]
     # On PRs, skip unchanged servers. On push to main, run all.
     if: always()
     steps:
