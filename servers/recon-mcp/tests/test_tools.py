@@ -558,9 +558,10 @@ class TestGetFixes:
 
         parsed = json.loads(result)
         first = parsed["data"][0]
-        # 256N → 25.6, 0848W → -84.8
-        assert first["lat"] == pytest.approx(25.6, abs=0.1)
-        assert first["lon"] == pytest.approx(-84.8, abs=0.1)
+        # F-deck encodes position in hundredths of a degree:
+        # 2560N → 25.60, 08480W → -84.80 (not tenths → 256.0/-848.0).
+        assert first["lat"] == pytest.approx(25.60, abs=0.001)
+        assert first["lon"] == pytest.approx(-84.80, abs=0.001)
         assert first["max_wind_kt"] == 80
         assert first["min_pressure_mb"] == 968
 

@@ -346,8 +346,20 @@ def _parse_vdm_latlon(value: str, is_lat: bool) -> float | None:
     try:
         hemi = value[-1].upper()
         numeric = value[:-1]
+
+        # VDM lat is exactly DDMM (4 digits); lon is exactly DDDMM (5 digits).
+        # Reject off-spec lengths/non-digits so wrong-column or garbled bulletin
+        # data parses to None instead of a silently bogus storm-center fix.
+        # Mirrors the guard in _parse_hdob_latlon.
+        expected_len = 4 if is_lat else 5
+        if len(numeric) != expected_len or not numeric.isdigit():
+            return None
+
         degrees = int(numeric[:-2])
         minutes = int(numeric[-2:])
+        if minutes >= 60:
+            return None
+
         result = degrees + minutes / 60.0
         if hemi in ("S", "W"):
             result = -result
@@ -359,6 +371,45 @@ def _parse_vdm_latlon(value: str, is_lat: bool) -> float | None:
 # ---------------------------------------------------------------------------
 # ATCF f-deck parser
 # ---------------------------------------------------------------------------
+
+
+def _parse_atcf_fix_latlon(value: str, is_lat: bool) -> float | None:
+    """Parse an ATCF f-deck (fix) lat/lon in hundredths of a degree.
+
+    F-deck records encode position in HUNDREDTHS of a degree with a trailing
+    hemisphere character — distinct from b-deck/a-deck best-track records,
+    which use TENTHS (see ``parse_atcf_latlon``). Latitude is exactly 4 digits
+    (0-9000 → 0-90.00°); longitude is exactly 5 digits (0-18000 → 0-180.00°).
+
+    Off-spec lengths, non-digit bodies, a missing hemisphere, or out-of-range
+    magnitudes return None so wrong-column or tenths-format data parses to None
+    instead of a silently 10x-wrong coordinate.
+
+    Examples:
+        '2557N'  -> 25.57
+        '08015W' -> -80.15
+    """
+    if not value:
+        return None
+    try:
+        hemi = value[-1].upper()
+        if hemi not in ("N", "S", "E", "W"):
+            return None
+        numeric = value[:-1]
+
+        expected_len = 4 if is_lat else 5
+        if len(numeric) != expected_len or not numeric.isdigit():
+            return None
+
+        result = int(numeric) / 100.0
+        if (is_lat and result > 90.0) or (not is_lat and result > 180.0):
+            return None
+
+        if hemi in ("S", "W"):
+            result = -result
+        return round(result, 4)
+    except (ValueError, IndexError):
+        return None
 
 
 def parse_atcf_fix_record(line: str) -> dict | None:
@@ -389,13 +440,14 @@ def parse_atcf_fix_record(line: str) -> dict | None:
     date_str = fields[2]  # YYYYMMDDHH
     fix_type = fields[3] if len(fields) > 3 else ""
 
-    # Parse lat/lon (fields 6 and 7 in standard f-deck)
+    # Parse lat/lon (fields 6 and 7 in standard f-deck). F-deck encodes
+    # position in HUNDREDTHS of a degree, unlike b-deck/a-deck which use
+    # TENTHS — using the tenths parser here silently produced 10x-wrong
+    # coordinates for every fix record.
     lat, lon = None, None
-    if len(fields) > 7 and fields[6] and fields[7]:
-        try:
-            lat, lon = parse_atcf_latlon(fields[6], fields[7])
-        except (ValueError, IndexError):
-            pass
+    if len(fields) > 7:
+        lat = _parse_atcf_fix_latlon(fields[6], is_lat=True)
+        lon = _parse_atcf_fix_latlon(fields[7], is_lat=False)
 
     # Wind and pressure
     max_wind = None
