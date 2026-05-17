@@ -88,7 +88,7 @@ class TestAllocationTools:
 class TestModuleTools:
     @pytest.mark.asyncio
     async def test_module_list(self, mock_ctx, mock_executor):
-        mock_executor.run_shell.return_value = (
+        mock_executor.run_module.return_value = (
             "Currently Loaded Modules:\n"
             "  1) intel/2023.2.0  2) impi/2023.2.0  3) netcdf-c/4.9.2"
         )
@@ -98,13 +98,13 @@ class TestModuleTools:
 
     @pytest.mark.asyncio
     async def test_module_list_empty(self, mock_ctx, mock_executor):
-        mock_executor.run_shell.return_value = "No modules loaded"
+        mock_executor.run_module.return_value = "No modules loaded"
         result = await hpc_module_list(mock_ctx)
         assert "No modules" in result
 
     @pytest.mark.asyncio
     async def test_module_avail_search(self, mock_ctx, mock_executor):
-        mock_executor.run_shell.return_value = (
+        mock_executor.run_module.return_value = (
             "netcdf-c:\n  netcdf-c/4.9.2\n  netcdf-c/4.9.0"
         )
         result = await hpc_module_avail(mock_ctx, search="netcdf")
@@ -118,7 +118,7 @@ class TestModuleTools:
 
     @pytest.mark.asyncio
     async def test_module_info(self, mock_ctx, mock_executor):
-        mock_executor.run_shell.return_value = (
+        mock_executor.run_module.return_value = (
             "/apps/modules/netcdf-c/4.9.2.lua:\n"
             'setenv("NETCDF_C_ROOT", "/apps/spack/netcdf-c-4.9.2")'
         )

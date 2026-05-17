@@ -41,6 +41,33 @@ _ALLOWED_COMMANDS = {
 }
 
 
+# Lmod subcommands the module tools are allowed to invoke (not user input,
+# but validated defensively).
+_ALLOWED_MODULE_ACTIONS = {"list", "avail", "spider", "show"}
+
+# A user-supplied module name / search token. Real names look like
+# 'netcdf-c/4.9.2', 'intel/2023.2.0', 'cray-mpich/8.1.25', 'netcdf-c@4.9.2'.
+# Allow only word chars, dot, slash, plus, at, hyphen — NO whitespace,
+# shell metacharacters, redirection, newline, or glob. (The previous
+# per-tool denylist `[;&|` $(){}]` missed `>`, spaces, newlines, `*?` ...)
+_MODULE_TOKEN_RE = re.compile(r"^[\w.+@/-]+$")
+
+
+def validate_module_token(value: str) -> str | None:
+    """Validate a user-supplied module name/search token.
+
+    Returns None if safe, else an error message. Defense in depth: even an
+    invalid token cannot inject, because run_module passes it as a bash
+    positional parameter, never interpolated into the script.
+    """
+    if not value or not _MODULE_TOKEN_RE.match(value):
+        return (
+            f"Invalid module token '{value}': only letters, digits, and "
+            f"'. / + @ -' are allowed (no spaces or shell metacharacters)."
+        )
+    return None
+
+
 def _validate_command(cmd: list[str]) -> str | None:
     """Check that the command is in the allowlist.
 
@@ -116,20 +143,45 @@ class CommandExecutor:
             output = output[:10000] + "\n... (truncated)"
         return output
 
-    async def run_shell(self, shell_cmd: str, timeout: int = 30) -> str:
-        """Run a shell command string (for module commands that need shell eval).
+    async def run_module(
+        self, action: str, target: str | None = None, timeout: int = 30
+    ) -> str:
+        """Run an Lmod `module` subcommand safely.
 
-        Only used internally for module commands which require shell sourcing.
+        `module` is a shell function (from sourcing modules.sh), so it needs a
+        shell — but the *fixed* script below references the user value only as
+        the positional parameter "$1", which bash never re-parses as code.
+        Combined with validate_module_token(), this closes the previous
+        shell-injection hole (run_shell built `source …; module <user>` and
+        ran it through create_subprocess_shell with only an incomplete
+        `[;&|` $(){}]` denylist — `>`, whitespace, newline, globs all slipped
+        through).
         """
-        # Extra safety: only allow module-related shell commands
-        if not shell_cmd.startswith("module "):
-            raise ExecutorError("run_shell only supports 'module' commands")
+        if action not in _ALLOWED_MODULE_ACTIONS:
+            raise ExecutorError(
+                f"Unsupported module action '{action}'. "
+                f"Allowed: {sorted(_ALLOWED_MODULE_ACTIONS)}"
+            )
+        args: list[str] = []
+        if target is not None:
+            err = validate_module_token(target)
+            if err:
+                raise ExecutorError(err)
+            args = [target]
 
-        bash_cmd = f"source /etc/profile.d/modules.sh 2>/dev/null; {shell_cmd}"
+        # action is from the internal allowlist above (never user input), so
+        # interpolating it is safe; the untrusted value is passed as $1.
+        script = (
+            f'source /etc/profile.d/modules.sh 2>/dev/null; module {action} "$@" 2>&1'
+        )
 
         try:
-            proc = await asyncio.create_subprocess_shell(
-                bash_cmd,
+            proc = await asyncio.create_subprocess_exec(
+                "bash",
+                "-c",
+                script,
+                "bash",  # $0
+                *args,  # $1.. — never shell-parsed
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -138,7 +190,7 @@ class CommandExecutor:
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
-            raise ExecutorError(f"Module command timed out: {shell_cmd}")
+            raise ExecutorError(f"Module command timed out: module {action}")
 
         # module list/avail write to stderr
         output = stdout.decode(errors="replace").strip()

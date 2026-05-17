@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..executor import CommandExecutor, ExecutorError
+from ..executor import CommandExecutor, ExecutorError, validate_module_token
 from ..server import mcp
 
 
@@ -30,7 +30,7 @@ async def hpc_module_list(
     executor = _get_executor(ctx)
 
     try:
-        output = await executor.run_shell("module list 2>&1")
+        output = await executor.run_module("list")
     except ExecutorError as e:
         return f"Error: {e}"
 
@@ -61,18 +61,18 @@ async def hpc_module_avail(
         search: Module name or pattern to search for (e.g. 'netcdf',
             'intel', 'hdf5'). If not provided, lists all available.
     """
-    import re
-
     executor = _get_executor(ctx)
 
-    # Validate search term
-    if search and re.search(r"[;&|`$(){}]", search):
-        return f"Error: Unsafe characters in search: '{search}'"
+    # Validate search term (shared strict allowlist — single source of truth)
+    if search:
+        token_err = validate_module_token(search)
+        if token_err:
+            return f"Error: {token_err}"
 
     # Use spider for search (finds all modules regardless of hierarchy)
     if search:
         try:
-            output = await executor.run_shell(f"module spider {search} 2>&1")
+            output = await executor.run_module("spider", search)
         except ExecutorError as e:
             return f"Error: {e}"
 
@@ -83,7 +83,7 @@ async def hpc_module_avail(
 
     # No search term — list all available
     try:
-        output = await executor.run_shell("module avail 2>&1")
+        output = await executor.run_module("avail")
     except ExecutorError as e:
         return f"Error: {e}"
 
@@ -113,15 +113,14 @@ async def hpc_module_info(
     Args:
         module_name: Full module name (e.g. 'netcdf-c/4.9.2', 'intel/2023.2.0').
     """
-    import re
-
     executor = _get_executor(ctx)
 
-    if re.search(r"[;&|`$(){}]", module_name):
-        return f"Error: Unsafe characters in module name: '{module_name}'"
+    token_err = validate_module_token(module_name)
+    if token_err:
+        return f"Error: {token_err}"
 
     try:
-        output = await executor.run_shell(f"module show {module_name} 2>&1")
+        output = await executor.run_module("show", module_name)
     except ExecutorError as e:
         return f"Error: {e}"
 

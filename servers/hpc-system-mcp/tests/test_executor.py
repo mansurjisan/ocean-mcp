@@ -2,7 +2,11 @@
 
 import pytest
 
-from hpc_system_mcp.executor import ExecutorError, _validate_command
+from hpc_system_mcp.executor import (
+    ExecutorError,
+    _validate_command,
+    validate_module_token,
+)
 
 
 class TestValidateCommand:
@@ -73,10 +77,57 @@ class TestCommandExecutor:
             await executor.run(["id", "user; rm -rf /"])
 
     @pytest.mark.asyncio
-    async def test_run_shell_only_module(self, executor):
-        """run_shell should reject non-module commands."""
-        with pytest.raises(ExecutorError, match="only supports 'module'"):
-            await executor.run_shell("rm -rf /")
+    async def test_run_module_rejects_unknown_action(self, executor):
+        """Only the internal action allowlist is permitted."""
+        with pytest.raises(ExecutorError, match="Unsupported module action"):
+            await executor.run_module("load")  # load could mutate env
+        with pytest.raises(ExecutorError, match="Unsupported module action"):
+            await executor.run_module("rm -rf /")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "evil",
+        [
+            "netcdf; rm -rf /",  # blocked by old denylist too
+            "x > /home/victim/.bashrc",  # redirection — old denylist MISSED
+            "x -c 'id'",  # space/quote — old denylist MISSED
+            "a\nrm -rf ~",  # newline — old denylist MISSED
+            "net*",  # glob — old denylist MISSED
+            "`id`",
+            "$(whoami)",
+            "a|b",
+        ],
+    )
+    async def test_run_module_rejects_injection_token(self, executor, evil):
+        """Every injection/redirection/glob token is rejected (strict allowlist)."""
+        with pytest.raises(ExecutorError, match="Invalid module token"):
+            await executor.run_module("show", evil)
+
+    @pytest.mark.asyncio
+    async def test_run_module_valid_token_does_not_raise(self, executor):
+        """A valid token passes validation and runs (no Lmod -> empty, no crash)."""
+        # Should not raise on validation; module may be absent on the test host.
+        result = await executor.run_module("show", "netcdf-c/4.9.2")
+        assert isinstance(result, str)
+
+    def test_validate_module_token(self):
+        """The shared token validator: strict allowlist."""
+        assert validate_module_token("netcdf-c/4.9.2") is None
+        assert validate_module_token("intel/2023.2.0") is None
+        assert validate_module_token("netcdf-c@4.9.2") is None
+        assert validate_module_token("gcc+mpi") is None
+        for bad in [
+            "x; rm -rf /",
+            "x > /etc/passwd",
+            "a b",
+            "a\nb",
+            "net*",
+            "`id`",
+            "$(id)",
+            "a|b",
+            "",
+        ]:
+            assert validate_module_token(bad) is not None, bad
 
     @pytest.mark.asyncio
     async def test_not_found_command(self, executor):
