@@ -4,6 +4,7 @@ import pytest
 
 from nhc_mcp.models import classify_wind_speed
 from nhc_mcp.utils import (
+    _positive_int_or_none,
     build_arcgis_query_url,
     format_tabular_data,
     get_arcgis_layer_id,
@@ -413,3 +414,83 @@ class TestHandleNhcError:
         result = handle_nhc_error(err, "test operation")
         assert "404" in result
         assert "nhc_get_active_storms" in result
+
+
+# ---------------------------------------------------------------------------
+# Missing-value sentinels (wind/pressure)  -- regression
+# ---------------------------------------------------------------------------
+
+# Real HURDAT2 uses -99 for missing max wind (~57 records in the 1851-2024
+# file) and -999 for missing pressure; ATCF b-deck uses 0. The parser
+# previously only filtered -999 (HURDAT2) / empty (b-deck), so -99 and 0
+# leaked into output and into classify_wind_speed (which mapped -99 to
+# "Tropical Depression").
+
+SENTINEL_HURDAT2 = """AL011900,            UNNAMED,      3,
+19000901, 0000,  , HU, 28.0N,  94.8W,  80,  973,    0,    0,    0,    0,
+19000901, 0600,  , HU, 28.0N,  95.4W, -99, -999,    0,    0,    0,    0,
+19000901, 1200,  , TD, 28.1N,  96.5W,  30, -999,    0,    0,    0,    0,
+"""
+
+SENTINEL_BDECK = """AL, 01, 2005082318,   , BEST,   0, 238N,  757W,  30, 1008, TD,   0,
+AL, 01, 2005082400,   , BEST,   0, 242N,  763W,   0,    0, DB,   0,
+"""
+
+
+class TestPositiveIntOrNone:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("80", 80),
+            (" 902 ", 902),
+            ("-99", None),  # HURDAT2 missing max wind
+            ("-999", None),  # HURDAT2 missing pressure
+            ("0", None),  # ATCF b-deck missing
+            ("", None),
+            ("   ", None),
+            ("abc", None),
+            ("-1", None),
+        ],
+    )
+    def test_values(self, raw, expected):
+        assert _positive_int_or_none(raw) == expected
+
+
+class TestHurdat2MissingSentinels:
+    def test_minus99_wind_becomes_none(self):
+        """-99 max wind -> None (was leaking as -99)."""
+        storm = parse_hurdat2(SENTINEL_HURDAT2)[0]
+        bad = storm["track"][1]  # the -99 / -999 record
+        assert bad["max_wind"] is None
+        assert bad["min_pressure"] is None
+
+    def test_minus999_pressure_becomes_none(self):
+        storm = parse_hurdat2(SENTINEL_HURDAT2)[0]
+        assert storm["track"][2]["min_pressure"] is None
+        assert storm["track"][2]["max_wind"] == 30  # valid value kept
+
+    def test_valid_values_unaffected(self):
+        storm = parse_hurdat2(SENTINEL_HURDAT2)[0]
+        good = storm["track"][0]
+        assert good["max_wind"] == 80
+        assert good["min_pressure"] == 973
+
+    def test_missing_wind_not_classified_as_td(self):
+        """The visible bug: classify_wind_speed(-99) returned 'Tropical
+        Depression'. With None, callers (history.py) emit '' instead."""
+        storm = parse_hurdat2(SENTINEL_HURDAT2)[0]
+        assert storm["track"][1]["max_wind"] is None
+        # Sanity: the old leaked value would have misclassified.
+        assert classify_wind_speed(-99) == "Tropical Depression"
+
+
+class TestBdeckMissingSentinels:
+    def test_zero_wind_and_pressure_become_none(self):
+        points = parse_atcf_bdeck(SENTINEL_BDECK)
+        assert points[1]["max_wind"] is None
+        assert points[1]["min_pressure"] is None
+
+    def test_valid_bdeck_values_kept(self):
+        points = parse_atcf_bdeck(SENTINEL_BDECK)
+        assert points[0]["max_wind"] == 30
+        assert points[0]["min_pressure"] == 1008

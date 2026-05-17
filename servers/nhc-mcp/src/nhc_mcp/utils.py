@@ -194,6 +194,29 @@ def parse_storm_id(storm_id: str) -> tuple[str, int, int]:
 # ---------------------------------------------------------------------------
 
 
+def _positive_int_or_none(value: str) -> int | None:
+    """Parse a wind (kt) or pressure (mb) field; non-positive == missing.
+
+    Max sustained wind and minimum central pressure are physically strictly
+    positive, so every missing-data sentinel is non-positive: HURDAT2 uses
+    ``-99`` for missing max wind (~57 records in the 1851-2024 file) and
+    ``-999`` for missing pressure; ATCF b-deck uses ``0``. The previous code
+    only special-cased ``-999`` (HURDAT2) / empty (b-deck), so ``-99`` and
+    ``0`` leaked through — e.g. classify_wind_speed(-99) returned
+    "Tropical Depression" and ``min_pressure: -99``/``0`` displayed as real
+    values. Treating any non-positive (or empty/non-numeric) value as missing
+    handles all sentinels via the physical invariant.
+    """
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        n = int(value)
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
 def parse_hurdat2(text: str) -> list[dict]:
     """Parse HURDAT2-format text into a list of storm dictionaries.
 
@@ -258,19 +281,8 @@ def parse_hurdat2(text: str) -> list[dict]:
             except (ValueError, IndexError):
                 lat, lon = None, None
 
-            try:
-                max_wind = (
-                    int(fields[6]) if fields[6].strip() not in ("", "-999") else None
-                )
-            except ValueError:
-                max_wind = None
-
-            try:
-                min_pressure = (
-                    int(fields[7]) if fields[7].strip() not in ("", "-999") else None
-                )
-            except ValueError:
-                min_pressure = None
+            max_wind = _positive_int_or_none(fields[6])
+            min_pressure = _positive_int_or_none(fields[7])
 
             point = {
                 "date": date_str,
@@ -345,15 +357,8 @@ def parse_atcf_bdeck(text: str) -> list[dict]:
         except (ValueError, IndexError):
             continue
 
-        try:
-            max_wind = int(fields[8]) if fields[8].strip() else None
-        except ValueError:
-            max_wind = None
-
-        try:
-            min_pressure = int(fields[9]) if fields[9].strip() else None
-        except ValueError:
-            min_pressure = None
+        max_wind = _positive_int_or_none(fields[8])
+        min_pressure = _positive_int_or_none(fields[9])
 
         status = fields[10].strip() if len(fields) > 10 else ""
 
