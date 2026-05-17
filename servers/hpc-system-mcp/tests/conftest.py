@@ -17,7 +17,7 @@ def mock_executor():
     """Create a mock executor for tool tests."""
     ex = MagicMock(spec=CommandExecutor)
     ex.run = AsyncMock()
-    ex.run_shell = AsyncMock()
+    ex.run_module = AsyncMock()
     return ex
 
 
