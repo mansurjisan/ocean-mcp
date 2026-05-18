@@ -775,53 +775,55 @@ class TestResolveLatestCycle:
 
 
 # ---------------------------------------------------------------------------
-# Test: _resolve_cycle from forecast.py — explicit date/hour path
+# Test: resolve_cycle (centralized in utils.py) — explicit date/hour path.
+# The per-tool _resolve_cycle copies were removed; both forecast and
+# validation now share stofs_mcp.utils.resolve_cycle.
 # ---------------------------------------------------------------------------
 
 
 class TestResolveCycleExplicit:
-    """Tests for the _resolve_cycle helper that handles explicit date/hour inputs."""
+    """Tests for the shared resolve_cycle helper (explicit date/hour inputs)."""
 
     @pytest.mark.asyncio
     async def test_explicit_date_and_hour(self):
-        """_resolve_cycle should return the parsed date and hour when both are provided."""
-        from stofs_mcp.tools.forecast import _resolve_cycle
+        """resolve_cycle should return the parsed date and hour when both are provided."""
+        from stofs_mcp.utils import resolve_cycle
 
         client = STOFSClient()
-        result = await _resolve_cycle(client, "2d_global", "2026-03-03", "12")
+        result = await resolve_cycle(client, "2d_global", "2026-03-03", "12")
 
         assert result == ("20260303", "12")
         await client.close()
 
     @pytest.mark.asyncio
     async def test_explicit_date_yyyymmdd_format(self):
-        """_resolve_cycle should accept YYYYMMDD format for the date."""
-        from stofs_mcp.tools.forecast import _resolve_cycle
+        """resolve_cycle should accept YYYYMMDD format for the date."""
+        from stofs_mcp.utils import resolve_cycle
 
         client = STOFSClient()
-        result = await _resolve_cycle(client, "2d_global", "20260303", "06")
+        result = await resolve_cycle(client, "2d_global", "20260303", "06")
 
         assert result == ("20260303", "06")
         await client.close()
 
     @pytest.mark.asyncio
     async def test_explicit_date_zero_pads_hour(self):
-        """_resolve_cycle should zero-pad a single-digit hour string."""
-        from stofs_mcp.tools.forecast import _resolve_cycle
+        """resolve_cycle should zero-pad a single-digit hour string."""
+        from stofs_mcp.utils import resolve_cycle
 
         client = STOFSClient()
-        result = await _resolve_cycle(client, "2d_global", "2026-03-03", "6")
+        result = await resolve_cycle(client, "2d_global", "2026-03-03", "6")
 
         assert result == ("20260303", "06")
         await client.close()
 
     @pytest.mark.asyncio
     async def test_invalid_date_returns_none(self):
-        """_resolve_cycle should return None for an unparseable date."""
-        from stofs_mcp.tools.forecast import _resolve_cycle
+        """resolve_cycle should return None for an unparseable date."""
+        from stofs_mcp.utils import resolve_cycle
 
         client = STOFSClient()
-        result = await _resolve_cycle(client, "2d_global", "bad-date", "12")
+        result = await resolve_cycle(client, "2d_global", "bad-date", "12")
 
         assert result is None
         await client.close()
