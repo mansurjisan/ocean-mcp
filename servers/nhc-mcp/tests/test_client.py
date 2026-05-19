@@ -4,7 +4,13 @@ import httpx
 import pytest
 import respx
 
-from nhc_mcp.client import NHCClient, CURRENT_STORMS_URL, HURDAT2_URLS, NHCAPIError
+from nhc_mcp.client import (
+    NHCClient,
+    CURRENT_STORMS_URL,
+    HURDAT2_INDEX_URL,
+    HURDAT2_URLS,
+    NHCAPIError,
+)
 from nhc_mcp.utils import ARCGIS_BASE_URL
 
 
@@ -162,3 +168,76 @@ async def test_client_close_idempotent(client):
     """Test that closing an already-closed client doesn't error."""
     await client.close()
     await client.close()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# HURDAT2 URL resolution (regression: client hard-coded the 2024 archive file
+# so every new season was silently missing. The URL is now discovered from
+# the NHC data index — newest season — with a graceful fallback.)
+# ---------------------------------------------------------------------------
+
+# Two AL files on the index: an older 2024 and the current 2025. The resolver
+# must pick 2025, not whichever appears first.
+_INDEX_HTML = """<html><body>
+<a href="/data/hurdat/hurdat2-1851-2024-040425.txt">atl 2024</a>
+<a href="/data/hurdat/hurdat2-1851-2025-02272026.txt">atl 2025</a>
+<a href="/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt">nepac 2025</a>
+</body></html>"""
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_hurdat2_url_resolves_newest_year(client):
+    """Resolver picks the newest 'data-through' year, not the 2024 file."""
+    respx.get(HURDAT2_INDEX_URL).mock(
+        return_value=httpx.Response(200, text=_INDEX_HTML)
+    )
+    url = await client._resolve_hurdat2_url("al")
+    assert url.endswith("/data/hurdat/hurdat2-1851-2025-02272026.txt")
+
+    ep = await client._resolve_hurdat2_url("ep")
+    assert ep.endswith("/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_hurdat2_url_falls_back_on_index_failure(client):
+    """If the index is unreachable, fall back to the known-good constant —
+    discovery must never make the tool fail when a usable URL is known."""
+    respx.get(HURDAT2_INDEX_URL).mock(return_value=httpx.Response(503))
+    url = await client._resolve_hurdat2_url("al")
+    assert url == HURDAT2_URLS["al"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_hurdat2_uses_resolved_url_and_caches(client):
+    """get_hurdat2 fetches the discovered URL and caches the body."""
+    resolved = "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt"
+    respx.get(HURDAT2_INDEX_URL).mock(
+        return_value=httpx.Response(200, text=_INDEX_HTML)
+    )
+    body_route = respx.get(resolved).mock(
+        return_value=httpx.Response(200, text="HEADER\nAL122005,...")
+    )
+
+    text = await client.get_hurdat2("al")
+    assert text.startswith("HEADER")
+
+    # Second call served from cache — no extra HTTP to the data file.
+    text2 = await client.get_hurdat2("al")
+    assert text2 == text
+    assert body_route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_hurdat2_cp_maps_to_ep(client):
+    """'cp' (Central Pacific) resolves via the East Pacific nepac file."""
+    ep_url = "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt"
+    respx.get(HURDAT2_INDEX_URL).mock(
+        return_value=httpx.Response(200, text=_INDEX_HTML)
+    )
+    respx.get(ep_url).mock(return_value=httpx.Response(200, text="EP BODY"))
+    text = await client.get_hurdat2("cp")
+    assert text == "EP BODY"

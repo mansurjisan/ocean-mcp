@@ -18,29 +18,12 @@ from ..utils import (
     compute_validation_stats,
     handle_stofs_error,
     parse_station_netcdf,
-    resolve_latest_cycle,
+    resolve_cycle,
 )
 
 
 def _get_client(ctx: Context) -> STOFSClient:
     return ctx.request_context.lifespan_context["stofs_client"]
-
-
-async def _resolve_cycle(
-    client: STOFSClient,
-    model: str,
-    cycle_date: str | None,
-    cycle_hour: str | None,
-) -> tuple[str, str] | None:
-    if cycle_date and cycle_hour:
-        for fmt in ("%Y-%m-%d", "%Y%m%d"):
-            try:
-                date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
-                return date_str, cycle_hour.zfill(2)
-            except ValueError:
-                continue
-        return None
-    return await resolve_latest_cycle(client, model)
 
 
 @mcp.tool(
@@ -79,8 +62,8 @@ async def stofs_compare_with_observations(
         client = _get_client(ctx)
         hours_to_compare = max(1, min(96, hours_to_compare))
 
-        # Resolve cycle
-        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        # Resolve cycle (shared resolver — honours a date even without an hour)
+        cycle = await resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
             return (
                 "No STOFS cycles found. Use stofs_list_cycles to check available data."

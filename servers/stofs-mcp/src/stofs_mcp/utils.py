@@ -535,6 +535,52 @@ async def resolve_latest_cycle(
     return None
 
 
+async def resolve_cycle(
+    client,
+    model: str,
+    cycle_date: str | None,
+    cycle_hour: str | None,
+) -> tuple[str, str] | None:
+    """Resolve a STOFS cycle (date, hour), finding the latest if unspecified.
+
+    Single source of truth shared by every STOFS tool. If only one of
+    ``cycle_date`` / ``cycle_hour`` is given, the other defaults sensibly
+    (date → today; hour → the model's first configured cycle) **and the
+    provided value is honoured**. The validation tool previously had its own
+    copy that required *both* and silently fell back to the latest cycle when
+    only a date was given — so a historical ``cycle_date`` was ignored and the
+    comparison ran against the wrong (latest) cycle with no error. Centralized
+    here to keep that from happening again.
+
+    Returns:
+        (YYYYMMDD, HH) or None if a provided ``cycle_date`` is unparseable.
+    """
+    from .models import MODEL_CYCLES
+
+    if cycle_date or cycle_hour:
+        if cycle_date:
+            date_str: str | None = None
+            for fmt in ("%Y-%m-%d", "%Y%m%d"):
+                try:
+                    date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
+                    break
+                except ValueError:
+                    continue
+            if date_str is None:
+                return None
+        else:
+            date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+
+        if cycle_hour:
+            hour_str = cycle_hour.zfill(2)
+        else:
+            # Default to the model's first listed cycle hour.
+            hour_str = (MODEL_CYCLES.get(model) or ["12"])[0]
+        return date_str, hour_str
+
+    return await resolve_latest_cycle(client, model)
+
+
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------

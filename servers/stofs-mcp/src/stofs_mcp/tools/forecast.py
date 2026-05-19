@@ -20,55 +20,12 @@ from ..utils import (
     get_opendap_region,
     handle_stofs_error,
     parse_station_netcdf,
-    resolve_latest_cycle,
+    resolve_cycle,
 )
 
 
 def _get_client(ctx: Context) -> STOFSClient:
     return ctx.request_context.lifespan_context["stofs_client"]
-
-
-async def _resolve_cycle(
-    client: STOFSClient,
-    model: str,
-    cycle_date: str | None,
-    cycle_hour: str | None,
-) -> tuple[str, str] | None:
-    """Resolve cycle date/hour, finding latest if not specified.
-
-    If only one of ``cycle_date`` / ``cycle_hour`` is provided, the other
-    defaults to the first configured cycle hour for the model (typically
-    '12' for 2D-Global) rather than silently falling back to the latest
-    available cycle — that silent fallback previously hid user errors when
-    requesting historical data.
-    """
-    from datetime import datetime
-
-    from ..models import MODEL_CYCLES
-
-    if cycle_date or cycle_hour:
-        # Normalize provided date (or use today if only hour was given)
-        if cycle_date:
-            date_str: str | None = None
-            for fmt in ("%Y-%m-%d", "%Y%m%d"):
-                try:
-                    date_str = datetime.strptime(cycle_date, fmt).strftime("%Y%m%d")
-                    break
-                except ValueError:
-                    continue
-            if date_str is None:
-                return None
-        else:
-            date_str = datetime.utcnow().strftime("%Y%m%d")
-
-        if cycle_hour:
-            hour_str = cycle_hour.zfill(2)
-        else:
-            # Default to the model's first listed cycle hour
-            hour_str = (MODEL_CYCLES.get(model) or ["12"])[0]
-        return date_str, hour_str
-
-    return await resolve_latest_cycle(client, model)
 
 
 @mcp.tool(
@@ -114,7 +71,7 @@ async def stofs_get_station_forecast(
             )
 
         # Resolve cycle
-        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        cycle = await resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
             return (
                 f"No STOFS-{'2D-Global' if model.value == '2d_global' else '3D-Atlantic'} "
@@ -229,7 +186,7 @@ async def stofs_get_point_forecast(
         if model.value == "3d_atlantic" and product.value != "cwl":
             return "STOFS-3D-Atlantic only supports product='cwl'."
 
-        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        cycle = await resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
             return (
                 "No STOFS cycles found. Use stofs_list_cycles to check available data."
@@ -347,7 +304,7 @@ async def stofs_get_max_water_level(
 
         client = _get_client(ctx)
 
-        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        cycle = await resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
             return (
                 "No STOFS cycles found. Use stofs_list_cycles to check available data."
@@ -531,7 +488,7 @@ async def stofs_get_gridded_forecast(
         client = _get_client(ctx)
 
         # Resolve cycle
-        cycle = await _resolve_cycle(client, model.value, cycle_date, cycle_hour)
+        cycle = await resolve_cycle(client, model.value, cycle_date, cycle_hour)
         if not cycle:
             return (
                 "No STOFS cycles found. Use stofs_list_cycles to check available data."

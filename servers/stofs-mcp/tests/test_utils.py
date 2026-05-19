@@ -19,6 +19,7 @@ from stofs_mcp.utils import (
     format_timeseries_table,
     get_opendap_region,
     handle_stofs_error,
+    resolve_cycle,
 )
 
 
@@ -363,3 +364,44 @@ class TestHandleStofsError:
     def test_generic_error(self):
         result = handle_stofs_error(RuntimeError("unexpected"))
         assert "RuntimeError" in result
+
+
+# ---------------------------------------------------------------------------
+# Centralized cycle resolution (regression: validation.py used to silently
+# ignore a provided cycle_date when cycle_hour was omitted and compare the
+# WRONG, latest cycle. The shared resolver must honour a date alone.)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveCycle:
+    @pytest.mark.asyncio
+    async def test_date_only_honours_date_not_latest(self):
+        """A date with no hour must keep the date (regression for the
+        validation tool's old silent fallback to the latest cycle)."""
+        # client=None proves these branches never touch S3 / resolve_latest.
+        out = await resolve_cycle(None, "2d_global", "2026-05-15", None)
+        assert out == ("20260515", "18")  # first MODEL_CYCLES["2d_global"] hour
+
+    @pytest.mark.asyncio
+    async def test_date_and_hour(self):
+        """Both provided → that exact cycle, hour zero-padded."""
+        out = await resolve_cycle(None, "2d_global", "2026-05-15", "6")
+        assert out == ("20260515", "06")
+
+    @pytest.mark.asyncio
+    async def test_yyyymmdd_form_accepted(self):
+        """Compact YYYYMMDD dates resolve the same as YYYY-MM-DD."""
+        out = await resolve_cycle(None, "2d_global", "20260515", "12")
+        assert out == ("20260515", "12")
+
+    @pytest.mark.asyncio
+    async def test_3d_atlantic_default_hour(self):
+        """Date-only uses the model's own first cycle (3D-Atlantic = 12z)."""
+        out = await resolve_cycle(None, "3d_atlantic", "2026-05-15", None)
+        assert out == ("20260515", "12")
+
+    @pytest.mark.asyncio
+    async def test_unparseable_date_returns_none(self):
+        """A bad date returns None rather than silently using another cycle."""
+        out = await resolve_cycle(None, "2d_global", "not-a-date", "00")
+        assert out is None
