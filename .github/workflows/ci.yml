@@ -123,10 +123,10 @@ jobs:
         working-directory: servers/${{ matrix.server }}
         run: uv sync --group dev
 
-      - name: Run unit tests
+      - name: Run unit + MCP protocol tests
         if: steps.should-run.outputs.run == 'true'
         working-directory: servers/${{ matrix.server }}
-        run: uv run pytest tests/ --ignore=tests/test_live.py --ignore=tests/test_mcp_protocol.py -v --tb=short
+        run: uv run pytest tests/ --ignore=tests/test_live.py -v --tb=short
 
       - name: Verify package builds
         if: steps.should-run.outputs.run == 'true'
