@@ -11,6 +11,69 @@ def _get_client(ctx: Context) -> USGSClient:
     return ctx.request_context.lifespan_context["usgs_client"]
 
 
+# NWS flood-category labels, in ascending severity.
+_NWS_CAT_LABEL = {
+    "no_flooding": "No Flooding",
+    "action": "Action Stage",
+    "minor": "Minor Flood",
+    "moderate": "Moderate Flood",
+    "major": "Major Flood",
+}
+_NWS_CAT_ORDER = ["action", "minor", "moderate", "major"]
+
+
+def _valid_threshold(x: object) -> float | None:
+    """NWPS encodes an undefined stage/flow threshold as -9999."""
+    try:
+        v = float(x)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if v <= -9990 else v
+
+
+def _nwps_flood(nwps: dict) -> dict | None:
+    """Extract NWS flood-stage classification from an NWPS gauge record.
+
+    Returns ``None`` when the site has no usable stage thresholds — i.e. it
+    is not a real NWS flood-forecast point — so the caller falls back to a
+    clearly-labelled streamflow anomaly rather than inventing flood categories.
+    """
+    flood = nwps.get("flood") or {}
+    cats = flood.get("categories") or {}
+    thresholds: dict[str, dict[str, float | None]] = {}
+    for name in _NWS_CAT_ORDER:
+        c = cats.get(name) or {}
+        thresholds[name] = {
+            "stage": _valid_threshold(c.get("stage")),
+            "flow": _valid_threshold(c.get("flow")),
+        }
+    if not any(thresholds[n]["stage"] is not None for n in _NWS_CAT_ORDER):
+        return None  # no official NWS stage thresholds
+
+    obs = (nwps.get("status") or {}).get("observed") or {}
+    obs_stage = _valid_threshold(obs.get("primary"))
+    obs_cat = (nwps.get("ObservedFloodCategory") or "").strip().lower()
+    if obs_cat not in _NWS_CAT_LABEL:
+        # NWPS didn't label it → derive from observed stage vs thresholds.
+        obs_cat = "no_flooding"
+        if obs_stage is not None:
+            for name in _NWS_CAT_ORDER:  # ascending severity
+                s = thresholds[name]["stage"]
+                if s is not None and obs_stage >= s:
+                    obs_cat = name
+    fcst_cat = (nwps.get("ForecastFloodCategory") or "").strip().lower()
+    return {
+        "lid": nwps.get("lid") or "",
+        "category": obs_cat,
+        "label": _NWS_CAT_LABEL.get(obs_cat, obs_cat or "Unknown"),
+        "forecast_category": fcst_cat if fcst_cat in _NWS_CAT_LABEL else "",
+        "observed_stage": obs_stage,
+        "stage_unit": flood.get("stageUnits") or obs.get("primaryUnit") or "ft",
+        "flow_unit": flood.get("flowUnits") or "cfs",
+        "thresholds": thresholds,
+    }
+
+
 def _handle_error(e: Exception) -> str:
     """Format an exception into a user-friendly error message."""
     import httpx
@@ -215,20 +278,34 @@ async def usgs_get_flood_status(
         except Exception:
             pass
 
-        # Determine status
-        status = "Normal"
+        # --- Official NWS flood stage (NWPS), when this site is a forecast point ---
+        nwps_raw = await client.get_nwps_gauge(site_number)
+        nws = _nwps_flood(nwps_raw) if nwps_raw else None
+
+        # Streamflow anomaly vs the daily median — context in both paths, and
+        # the *labelled status only* when the site has no NWS flood stage.
+        anomaly = None
         if median_flow and median_flow > 0:
             ratio = current_flow / median_flow
             if ratio > 5.0:
-                status = "Major Flood"
+                anomaly = "Much Above Normal"
             elif ratio > 3.0:
-                status = "Moderate Flood"
+                anomaly = "Well Above Normal"
             elif ratio > 2.0:
-                status = "Flood"
+                anomaly = "Above Normal"
             elif ratio > 1.5:
-                status = "Above Normal"
+                anomaly = "Slightly Above Normal"
             elif ratio < 0.5:
-                status = "Below Normal"
+                anomaly = "Below Normal"
+            else:
+                anomaly = "Normal"
+
+        if nws is not None:
+            status = nws["label"]
+            flood_source = "NWS/NWPS"
+        else:
+            status = anomaly or "Unknown"
+            flood_source = "USGS flow anomaly (not NWS flood stage)"
 
         pct_of_peak = None
         if peak_flow and peak_flow > 0:
@@ -240,7 +317,25 @@ async def usgs_get_flood_status(
             "current_flow_cfs": current_flow,
             "current_time": current_time,
             "status": status,
+            "flood_source": flood_source,
         }
+        if nws is not None:
+            result["nws_lid"] = nws["lid"]
+            result["nws_flood_category"] = nws["category"]
+            if nws["forecast_category"]:
+                result["nws_forecast_category"] = nws["forecast_category"]
+            result["observed_stage"] = nws["observed_stage"]
+            result["stage_unit"] = nws["stage_unit"]
+            result["flood_thresholds"] = nws["thresholds"]
+        else:
+            result["note"] = (
+                "No NWS flood thresholds for this site (not an NWS forecast "
+                "point). 'status' is a streamflow anomaly vs the daily median, "
+                "not flood stage."
+            )
+            if median_flow and median_flow > 0:
+                result["flow_vs_median_ratio"] = round(current_flow / median_flow, 2)
+
         if median_flow is not None:
             result["median_flow_cfs"] = median_flow
             result["pct_of_median"] = (
@@ -258,10 +353,32 @@ async def usgs_get_flood_status(
 
         lines = [f"## Flood Status — {site_name}"]
         lines.append(f"**Site**: {site_number}")
-        lines.append(f"**Status**: **{status}**")
+        if nws is not None:
+            lid = f" {nws['lid']}" if nws["lid"] else ""
+            lines.append(f"**Status**: **{status}** (NWS{lid} flood category)")
+            if nws["observed_stage"] is not None:
+                lines.append(
+                    f"**Observed Stage**: {nws['observed_stage']:.2f} "
+                    f"{nws['stage_unit']}"
+                )
+            if nws["forecast_category"]:
+                lines.append(
+                    f"**Forecast Flood Category**: "
+                    f"{_NWS_CAT_LABEL.get(nws['forecast_category'], nws['forecast_category'])}"
+                )
+        else:
+            lines.append(f"**Status**: **{status}**")
         lines.append(f"**Current Flow**: {current_flow:,.1f} {unit}")
         lines.append(f"**As of**: {current_time}")
         lines.append("")
+
+        if nws is None:
+            lines.append(
+                "> ⚠️ Not an NWS flood-forecast point — no official flood "
+                "thresholds. The status above is a **streamflow anomaly** vs "
+                "the daily median, *not* flood stage."
+            )
+            lines.append("")
 
         if median_flow is not None:
             pct = result.get("pct_of_median")
@@ -275,17 +392,41 @@ async def usgs_get_flood_status(
                 lines.append(f"**Current vs Peak**: {pct_of_peak:.1f}%")
 
         lines.append("")
-        lines.append("### Status Categories")
-        lines.append("- **Normal**: Within typical range for this time of year")
-        lines.append("- **Above Normal**: 1.5–2x median flow")
-        lines.append("- **Flood**: 2–3x median flow")
-        lines.append("- **Moderate Flood**: 3–5x median flow")
-        lines.append("- **Major Flood**: >5x median flow")
-
-        lines.append("")
-        lines.append(
-            "*Data from USGS Water Services. Flood status is approximate and based on historical statistics.*"
-        )
+        if nws is not None:
+            lines.append("### NWS Flood Categories")
+            lines.append("| Category | Stage | Flow |")
+            lines.append("| --- | --- | --- |")
+            for name in _NWS_CAT_ORDER:
+                t = nws["thresholds"][name]
+                s = (
+                    f"{t['stage']:.2f} {nws['stage_unit']}"
+                    if t["stage"] is not None
+                    else "—"
+                )
+                fl = (
+                    f"{t['flow']:,.0f} {nws['flow_unit']}"
+                    if t["flow"] is not None
+                    else "—"
+                )
+                lines.append(f"| {_NWS_CAT_LABEL[name]} | {s} | {fl} |")
+            lines.append("")
+            lines.append(
+                "*Flood categories from NWS/NWPS; observations from USGS. "
+                "Stage compared to official NWS flood-stage thresholds.*"
+            )
+        else:
+            lines.append("### Streamflow Anomaly Tiers (not flood stage)")
+            lines.append("- **Normal**: 0.5–1.5x daily median")
+            lines.append("- **Slightly Above Normal**: 1.5–2x")
+            lines.append("- **Above Normal**: 2–3x")
+            lines.append("- **Well Above Normal**: 3–5x")
+            lines.append("- **Much Above Normal**: >5x")
+            lines.append("- **Below Normal**: <0.5x")
+            lines.append("")
+            lines.append(
+                "*Data from USGS Water Services. This site is not an NWS "
+                "flood-forecast point, so no official flood stage is available.*"
+            )
         return "\n".join(lines)
     except Exception as e:
         return _handle_error(e)
