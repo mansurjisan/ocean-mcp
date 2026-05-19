@@ -1,5 +1,7 @@
 """Mocked HTTP tests for NHCClient using respx."""
 
+import time
+
 import httpx
 import pytest
 import respx
@@ -7,6 +9,7 @@ import respx
 from nhc_mcp.client import (
     NHCClient,
     CURRENT_STORMS_URL,
+    HURDAT2_CACHE_TTL_S,
     HURDAT2_INDEX_URL,
     HURDAT2_URLS,
     NHCAPIError,
@@ -241,3 +244,37 @@ async def test_get_hurdat2_cp_maps_to_ep(client):
     respx.get(ep_url).mock(return_value=httpx.Response(200, text="EP BODY"))
     text = await client.get_hurdat2("cp")
     assert text == "EP BODY"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_hurdat2_cache_expires_and_rediscovers_reissue(client):
+    """Past the TTL, a long-running process must re-resolve the index and
+    pick up an annual reissue under a *new* filename — not serve the stale
+    body forever (the non-blocking caveat from PR #45)."""
+    old_file = "/data/hurdat/hurdat2-1851-2024-040425.txt"
+    new_file = "/data/hurdat/hurdat2-1851-2026-02272027.txt"
+    old_url = f"https://www.nhc.noaa.gov{old_file}"
+    new_url = f"https://www.nhc.noaa.gov{new_file}"
+
+    # Index returns the 2024 file first, then a 2026 reissue on the next look.
+    respx.get(HURDAT2_INDEX_URL).mock(
+        side_effect=[
+            httpx.Response(200, text=f'<a href="{old_file}">old</a>'),
+            httpx.Response(200, text=f'<a href="{new_file}">new</a>'),
+        ]
+    )
+    respx.get(old_url).mock(return_value=httpx.Response(200, text="HURDAT2 2024"))
+    respx.get(new_url).mock(return_value=httpx.Response(200, text="HURDAT2 2026"))
+
+    first = await client.get_hurdat2("al")
+    assert first == "HURDAT2 2024"
+
+    # Within TTL: served from cache, index/body not hit again.
+    again = await client.get_hurdat2("al")
+    assert again == "HURDAT2 2024"
+
+    # Force expiry → re-resolve (new filename) + refetch.
+    client._hurdat2_cache_time["al"] = time.time() - (HURDAT2_CACHE_TTL_S + 1)
+    refreshed = await client.get_hurdat2("al")
+    assert refreshed == "HURDAT2 2026"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 import httpx
@@ -31,6 +32,11 @@ _HURDAT2_PATTERNS = {
     "al": re.compile(r"/data/hurdat/(hurdat2-1851-(\d{4})-\d{4,8}\.txt)"),
     "ep": re.compile(r"/data/hurdat/(hurdat2-nepac-1949-(\d{4})-\d{4,8}\.txt)"),
 }
+# Cached HURDAT2 (resolved URL + multi-MB body) is refreshed past this age so
+# a long-running MCP process picks up an annual reissue without a restart.
+# 12 h bounds the staleness window while keeping refetches of a several-MB
+# file rare (the archive changes ~once a year).
+HURDAT2_CACHE_TTL_S = 12 * 60 * 60
 
 
 class NHCAPIError(Exception):
@@ -46,6 +52,7 @@ class NHCClient:
         self._client: httpx.AsyncClient | None = None
         self._hurdat2_cache: dict[str, str] = {}
         self._hurdat2_url_cache: dict[str, str] = {}
+        self._hurdat2_cache_time: dict[str, float] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -144,9 +151,17 @@ class NHCClient:
         # Central Pacific storms are in the East Pacific HURDAT2 file
         lookup_basin = "ep" if basin == "cp" else basin
 
-        if lookup_basin in self._hurdat2_cache:
+        cached_at = self._hurdat2_cache_time.get(lookup_basin)
+        if (
+            lookup_basin in self._hurdat2_cache
+            and cached_at is not None
+            and (time.time() - cached_at) < HURDAT2_CACHE_TTL_S
+        ):
             return self._hurdat2_cache[lookup_basin]
 
+        # Stale (or first fetch): drop the resolved-URL cache too so an annual
+        # reissue under a *new* filename is re-discovered, not just refetched.
+        self._hurdat2_url_cache.pop(lookup_basin, None)
         url = await self._resolve_hurdat2_url(lookup_basin)
 
         client = await self._get_client()
@@ -154,6 +169,7 @@ class NHCClient:
         response.raise_for_status()
         text = response.text
         self._hurdat2_cache[lookup_basin] = text
+        self._hurdat2_cache_time[lookup_basin] = time.time()
         return text
 
     async def query_arcgis_layer(
