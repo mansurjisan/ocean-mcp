@@ -967,3 +967,132 @@ class TestBuildThreddsUrl:
         c = OFSClient()
         url = c.build_thredds_url("cbofs")
         assert url.startswith("https://opendap.co-ops.nos.noaa.gov/thredds/dodsC/")
+
+
+# ============================================================================
+# Test: S3 single-hour fallback (regression)
+#
+# One OFS file is a single forecast hour and 50–120 MB; models without an
+# FMRC aggregation can only serve that. Previously the f001-only fallback ran
+# through clean_timeseries' min_points=3 gate, so a perfectly valid single
+# hour was rejected as "No valid data ... on land" — turning good S3 data
+# into a dead end for every non-FMRC model. The fallback must now surface the
+# snapshot, while genuinely-empty extractions still report on-land.
+# ============================================================================
+
+
+def _force_s3_fallback(monkeypatch, client, extracted):
+    """Make OPeNDAP fail and the S3 path return a controlled extraction."""
+    import tempfile
+
+    def _raise_opendap(_model):
+        raise RuntimeError("no FMRC aggregation")
+
+    async def _cycle(_model, num_days=2):
+        return ("20260519", "03")
+
+    async def _download(_url):
+        f = tempfile.NamedTemporaryFile(suffix=".nc", delete=False)
+        f.close()
+        return Path(f.name)
+
+    monkeypatch.setattr(client, "open_opendap", _raise_opendap)
+    monkeypatch.setattr(client, "resolve_latest_cycle", _cycle)
+    monkeypatch.setattr(client, "download_netcdf", _download)
+    monkeypatch.setattr("netCDF4.Dataset", lambda *a, **k: MagicMock())
+    monkeypatch.setattr(
+        "ofs_mcp.tools.forecast.extract_point_timeseries",
+        lambda *a, **k: extracted,
+    )
+
+
+class TestS3SingleHourFallback:
+    """ofs S3 fallback must not discard a valid single forecast hour."""
+
+    async def test_point_forecast_single_hour_is_returned(self, client, monkeypatch):
+        """A valid 1-hour S3 snapshot is surfaced, not called 'on land'."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        _force_s3_fallback(
+            monkeypatch,
+            client,
+            {
+                "times": ["2026-05-19 04:00"],
+                "values": [0.42],
+                "lat": 38.57,
+                "lon": -76.07,
+                "distance_km": 1.2,
+                "variable": "zeta",
+                "units": "m",
+                "fill_count": 0,
+            },
+        )
+        ctx = make_ctx(client)
+        result = await ofs_get_forecast_at_point(
+            ctx,
+            latitude=38.57,
+            longitude=-76.07,
+            model=OFSModel.CBOFS,
+            response_format="json",
+        )
+        data = json.loads(result)
+        assert data["n_points"] == 1
+        assert data["times"] == ["2026-05-19 04:00"]
+        assert "single forecast hour" in data["cycle"]
+
+    async def test_point_forecast_empty_is_on_land(self, client, monkeypatch):
+        """Zero valid points still reports on-land / off-grid (not data)."""
+        from ofs_mcp.tools.forecast import ofs_get_forecast_at_point
+
+        _force_s3_fallback(
+            monkeypatch,
+            client,
+            {
+                "times": [],
+                "values": [],
+                "lat": 38.57,
+                "lon": -76.07,
+                "distance_km": 1.2,
+                "variable": "zeta",
+                "units": "m",
+                "fill_count": 0,
+            },
+        )
+        ctx = make_ctx(client)
+        result = await ofs_get_forecast_at_point(
+            ctx, latitude=38.57, longitude=-76.07, model=OFSModel.CBOFS
+        )
+        assert (
+            "on land" in result.lower() or "outside the model domain" in result.lower()
+        )
+        assert "single forecast hour" not in result
+
+    @respx.mock
+    async def test_compare_single_hour_explains_no_fmrc(self, client, monkeypatch):
+        """Compare can't use one hour — say why (no FMRC), not 'no data'."""
+        from ofs_mcp.tools.forecast import ofs_compare_with_coops
+
+        respx.get(url__startswith="https://api.tidesandcurrents.noaa.gov/mdapi/").mock(
+            return_value=httpx.Response(200, json=load_fixture("station_metadata.json"))
+        )
+        _force_s3_fallback(
+            monkeypatch,
+            client,
+            {
+                "times": ["2026-05-19 04:00"],
+                "values": [0.42],
+                "lat": 38.57,
+                "lon": -76.07,
+                "distance_km": 1.0,
+                "variable": "zeta",
+                "units": "m",
+                "fill_count": 0,
+            },
+        )
+        ctx = make_ctx(client)
+        result = await ofs_compare_with_coops(
+            ctx, station_id="8571892", model=OFSModel.CBOFS
+        )
+        assert "no FMRC aggregation" in result
+        assert "single forecast hour" in result
+        assert "No CBOFS" not in result and "on land" not in result.lower()
