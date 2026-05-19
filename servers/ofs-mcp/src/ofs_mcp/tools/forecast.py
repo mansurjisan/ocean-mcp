@@ -102,6 +102,7 @@ async def ofs_get_forecast_at_point(
 
         # --- Try OPeNDAP first (lazy loading — most efficient) ---
         opendap_error = None
+        from_s3_fallback = False
         try:
             nc = client.open_opendap(model.value)
             data = extract_point_timeseries(
@@ -124,10 +125,14 @@ async def ofs_get_forecast_at_point(
                     f"OPeNDAP error: {opendap_error}"
                 )
             date_str, hour_str = cycle
+            from_s3_fallback = True
 
             import netCDF4
 
-            # Download single forecast file (one time step, smaller than full series)
+            # One S3 file is a single forecast hour and 50–120 MB; models
+            # without an FMRC aggregation have no practical way to serve a
+            # continuous series, so we fetch one hour and return it as an
+            # explicit limited snapshot rather than 404-looping gigabytes.
             url = client.build_s3_url(model.value, date_str, hour_str, "f", 1)
             tmp_path = await client.download_netcdf(url)
             nc = netCDF4.Dataset(str(tmp_path), "r")
@@ -145,12 +150,24 @@ async def ofs_get_forecast_at_point(
         times = cleaned["times"]
         values = cleaned["values"]
 
-        if not times or cleaned["is_sparse"]:
+        if not times:
+            # Zero valid points = genuinely on land / dry-masked / off-grid.
             return (
-                f"No valid {var_label} data found at "
+                f"No valid {var_label} data at "
                 f"({latitude:.4f}°N, {longitude:.4f}°E) from {model_name}. "
-                "The point may be on land or in a dry area."
+                "The nearest grid cell may be on land, dry/masked, or outside "
+                "the model domain."
             )
+        if cleaned["is_sparse"] and not from_s3_fallback:
+            # FMRC stitched series too fragmented to be useful (not "on land").
+            return (
+                f"{model_name} returned only a sparse, fragmented series at "
+                f"({latitude:.4f}°N, {longitude:.4f}°E) "
+                f"({len(times)} point(s)) — not enough for a reliable time "
+                "series. Try another cycle or model."
+            )
+        # Otherwise: a valid series, or a legitimate single-hour S3 snapshot
+        # (cycle_info already flags the limitation). Don't discard real data.
 
         # Build cleanup metadata for transparency
         cleanup_notes = []
@@ -313,6 +330,7 @@ async def ofs_compare_with_coops(
 
         # --- Step 2: Fetch model forecast at station location ---
         opendap_error = None
+        from_s3_fallback = False
         try:
             nc = client.open_opendap(model.value)
             model_data = extract_point_timeseries(
@@ -331,6 +349,7 @@ async def ofs_compare_with_coops(
                     f"OPeNDAP error: {opendap_error}"
                 )
             date_str, hour_str = cycle
+            from_s3_fallback = True
             import netCDF4
 
             url = client.build_s3_url(model.value, date_str, hour_str, "f", 1)
@@ -345,10 +364,29 @@ async def ofs_compare_with_coops(
         model_times = cleaned["times"]
         model_values = cleaned["values"]
 
-        if not model_times or cleaned["is_sparse"]:
+        if not model_times:
             return (
-                f"No {model_name} water level data found near CO-OPS station {station_id} "
-                f"({station_name}) at ({station_lat:.4f}°N, {station_lon:.4f}°E)."
+                f"No {model_name} water level data near CO-OPS station "
+                f"{station_id} ({station_name}) at ({station_lat:.4f}°N, "
+                f"{station_lon:.4f}°E) — the nearest grid cell may be on "
+                "land/masked or outside the model domain."
+            )
+        if from_s3_fallback and cleaned["is_sparse"]:
+            # One S3 hour can't be compared to an observation time series, and
+            # this model has no FMRC aggregation to provide a continuous one.
+            return (
+                f"{model_name} has no FMRC aggregation, so only a single "
+                f"forecast hour is retrievable from S3 (files are 50–120 MB "
+                f"each) — not enough to validate against the CO-OPS series at "
+                f"{station_name}. Use an FMRC-backed model (e.g. cbofs, dbofs, "
+                f"gomofs) for this station, or query the model point directly "
+                f"with ofs_get_forecast_at_point."
+            )
+        if cleaned["is_sparse"]:
+            return (
+                f"{model_name} returned too sparse/fragmented a series near "
+                f"CO-OPS station {station_id} ({len(model_times)} point(s)) "
+                "to validate reliably."
             )
 
         # --- Step 3: Determine comparison time window ---
