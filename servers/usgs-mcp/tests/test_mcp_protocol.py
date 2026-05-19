@@ -1,5 +1,6 @@
 """MCP protocol tests for usgs-mcp server lifecycle."""
 
+import sys
 import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -21,7 +22,9 @@ EXPECTED_TOOLS = {
 @pytest.mark.asyncio
 async def test_server_starts_and_lists_tools():
     """Verify usgs-mcp server starts and registers all 10 tools."""
-    server_params = StdioServerParameters(command="python", args=["-m", "usgs_mcp"])
+    server_params = StdioServerParameters(
+        command=sys.executable, args=["-m", "usgs_mcp"]
+    )
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()

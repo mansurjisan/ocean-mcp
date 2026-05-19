@@ -1,5 +1,6 @@
 """MCP protocol tests for adcirc-mcp server."""
 
+import sys
 import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -8,7 +9,9 @@ from mcp.client.stdio import stdio_client
 @pytest.mark.asyncio
 async def test_server_starts_and_lists_tools():
     """Verify the MCP server starts and registers all 10 expected tools."""
-    server_params = StdioServerParameters(command="python", args=["-m", "adcirc_mcp"])
+    server_params = StdioServerParameters(
+        command=sys.executable, args=["-m", "adcirc_mcp"]
+    )
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
