@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from .models import USGS_BASE_URL, USGS_PEAK_URL, USER_AGENT
+from .models import NWPS_GAUGE_URL, USGS_BASE_URL, USGS_PEAK_URL, USER_AGENT
 
 
 class USGSAPIError(Exception):
@@ -72,6 +72,24 @@ class USGSClient:
         response = await client.get(USGS_PEAK_URL, params=params)
         response.raise_for_status()
         return parse_rdb(response.text)
+
+    async def get_nwps_gauge(self, site_number: str) -> dict[str, Any] | None:
+        """Fetch NWS/NWPS gauge metadata for a USGS site.
+
+        The NWPS gauges endpoint accepts a USGS site number directly. Returns
+        the parsed gauge JSON, or ``None`` if the site is not an NWS forecast
+        point (404) or NWPS is unreachable — this augmentation must never make
+        the flood-status tool fail, so all errors degrade to ``None``.
+        """
+        try:
+            client = await self._get_client()
+            response = await client.get(f"{NWPS_GAUGE_URL}/{site_number}")
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return response.json()
+        except Exception:
+            return None
 
     async def close(self) -> None:
         if self._client and not self._client.is_closed:

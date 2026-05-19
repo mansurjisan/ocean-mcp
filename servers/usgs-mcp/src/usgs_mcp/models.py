@@ -2,6 +2,9 @@
 
 USGS_BASE_URL = "https://waterservices.usgs.gov/nwis"
 USGS_PEAK_URL = "https://nwis.waterdata.usgs.gov/nwis/peak"
+# NWS National Water Prediction Service — its gauges endpoint accepts a USGS
+# site number directly and returns official flood-stage thresholds.
+NWPS_GAUGE_URL = "https://api.water.noaa.gov/nwps/v1/gauges"
 
 USER_AGENT = "usgs-mcp/0.1.0 (https://github.com/mansurjisan/ocean-mcp)"
 

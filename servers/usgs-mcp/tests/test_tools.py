@@ -8,7 +8,7 @@ import pytest
 import respx
 
 from usgs_mcp.client import USGSClient
-from usgs_mcp.models import USGS_BASE_URL, USGS_PEAK_URL
+from usgs_mcp.models import NWPS_GAUGE_URL, USGS_BASE_URL, USGS_PEAK_URL
 from usgs_mcp.tools.flood import usgs_get_flood_status, usgs_get_peak_streamflow
 from usgs_mcp.tools.sites import (
     usgs_find_nearest_sites,
@@ -248,26 +248,95 @@ class TestGetPeakStreamflow:
         assert "Validation Error" in result
 
 
+def _nwps_gauge(observed_stage, observed_cat, *, lid="BRKM2"):
+    """Minimal NWPS gauge record with real (stage) flood thresholds."""
+    return {
+        "lid": lid,
+        "name": "Potomac River near Washington",
+        "flood": {
+            "stageUnits": "ft",
+            "flowUnits": "cfs",
+            "categories": {
+                "action": {"stage": 7.0, "flow": -9999},
+                "minor": {"stage": 10.0, "flow": -9999},
+                "moderate": {"stage": 14.0, "flow": 22000},
+                "major": {"stage": 18.0, "flow": -9999},
+            },
+        },
+        "status": {"observed": {"primary": observed_stage, "primaryUnit": "ft"}},
+        "ObservedFloodCategory": observed_cat,
+        "ForecastFloodCategory": "",
+    }
+
+
 class TestGetFloodStatus:
-    """Tests for usgs_get_flood_status tool."""
+    """Tests for usgs_get_flood_status tool (NWS/NWPS flood stage)."""
+
+    def _mock_usgs(self):
+        respx.get(f"{USGS_BASE_URL}/iv/").mock(
+            return_value=httpx.Response(200, json=load_json_fixture("iv_response.json"))
+        )
+        respx.get(USGS_PEAK_URL).mock(
+            return_value=httpx.Response(200, text=load_fixture("peak_streamflow.rdb"))
+        )
+        respx.get(f"{USGS_BASE_URL}/stat/").mock(
+            return_value=httpx.Response(200, text=load_fixture("daily_stats.rdb"))
+        )
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_get_flood_status(self, ctx):
-        """Get flood status returns current status assessment."""
-        iv_json = load_json_fixture("iv_response.json")
-        peak_rdb = load_fixture("peak_streamflow.rdb")
-        stat_rdb = load_fixture("daily_stats.rdb")
-        respx.get(f"{USGS_BASE_URL}/iv/").mock(
-            return_value=httpx.Response(200, json=iv_json)
-        )
-        respx.get(USGS_PEAK_URL).mock(return_value=httpx.Response(200, text=peak_rdb))
-        respx.get(f"{USGS_BASE_URL}/stat/").mock(
-            return_value=httpx.Response(200, text=stat_rdb)
+    async def test_nws_no_flooding(self, ctx):
+        """Below action stage → NWS 'No Flooding', never a flow-ratio label."""
+        self._mock_usgs()
+        respx.get(f"{NWPS_GAUGE_URL}/01646500").mock(
+            return_value=httpx.Response(200, json=_nwps_gauge(2.92, "no_flooding"))
         )
         result = await usgs_get_flood_status(ctx, site_number="01646500")
-        assert "Flood Status" in result
-        assert "Current Flow" in result
+        assert "**Status**: **No Flooding**" in result
+        assert "NWS BRKM2 flood category" in result
+        assert "NWS Flood Categories" in result
+        # Took the NWS path, not the flow-anomaly fallback.
+        assert "not an NWS flood-forecast point" not in result.lower()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_nws_moderate_flood_json(self, ctx):
+        """At/over the moderate stage threshold → real NWS 'Moderate Flood'."""
+        self._mock_usgs()
+        respx.get(f"{NWPS_GAUGE_URL}/01646500").mock(
+            return_value=httpx.Response(200, json=_nwps_gauge(15.2, "moderate"))
+        )
+        result = await usgs_get_flood_status(
+            ctx, site_number="01646500", response_format="json"
+        )
+        data = json.loads(result)
+        assert data["status"] == "Moderate Flood"
+        assert data["flood_source"] == "NWS/NWPS"
+        assert data["nws_flood_category"] == "moderate"
+        assert data["nws_lid"] == "BRKM2"
+        assert data["observed_stage"] == 15.2
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_no_nws_mapping_falls_back_honestly(self, ctx):
+        """Not an NWS forecast point → flow anomaly, explicitly NOT flood stage."""
+        self._mock_usgs()
+        respx.get(f"{NWPS_GAUGE_URL}/01646500").mock(return_value=httpx.Response(404))
+        result = await usgs_get_flood_status(ctx, site_number="01646500")
+        assert "not an nws flood-forecast point" in result.lower()
+        assert "streamflow anomaly" in result.lower()
+        # No NWS thresholds → no flood-category table at all.
+        assert "NWS Flood Categories" not in result
+        assert "Moderate Flood" not in result
+
+        as_json = json.loads(
+            await usgs_get_flood_status(
+                ctx, site_number="01646500", response_format="json"
+            )
+        )
+        assert "flow anomaly" in as_json["flood_source"]
+        assert "note" in as_json
+        assert "nws_flood_category" not in as_json
 
     @pytest.mark.asyncio
     async def test_get_flood_status_invalid_site(self, ctx):
