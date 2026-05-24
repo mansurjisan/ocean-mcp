@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-8_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-14_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -18,8 +18,16 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [ofs-mcp](servers/ofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ofs-mcp)](https://pypi.org/project/ofs-mcp/) | NOAA OFS regional ocean model forecasts (water level, temperature, salinity) |
 | [rtofs-mcp](servers/rtofs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/rtofs-mcp)](https://pypi.org/project/rtofs-mcp/) | NOAA RTOFS global ocean forecasts (SST, salinity, currents, SSH) via HYCOM THREDDS |
 | [ww3-mcp](servers/ww3-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ww3-mcp)](https://pypi.org/project/ww3-mcp/) | GFS-Wave (WAVEWATCH III) forecasts and NDBC buoy wave observations |
+| [ndbc-mcp](servers/ndbc-mcp/) | [![PyPI](https://img.shields.io/pypi/v/ndbc-mcp)](https://pypi.org/project/ndbc-mcp/) | NOAA NDBC buoy observations — waves, SST, wind, pressure (1,300+ stations) |
+| [winds-mcp](servers/winds-mcp/) | [![PyPI](https://img.shields.io/pypi/v/winds-mcp)](https://pypi.org/project/winds-mcp/) | NWS surface wind observations from ASOS / AWOS stations |
+| [usgs-mcp](servers/usgs-mcp/) | [![PyPI](https://img.shields.io/pypi/v/usgs-mcp)](https://pypi.org/project/usgs-mcp/) | USGS Water Services — streamflow, NWS/NWPS flood status, peak events |
+| [goes-mcp](servers/goes-mcp/) | [![PyPI](https://img.shields.io/pypi/v/goes-mcp)](https://pypi.org/project/goes-mcp/) | NOAA GOES-18/19 satellite imagery — visible, infrared, water vapor |
+| [adcirc-mcp](servers/adcirc-mcp/) | [![PyPI](https://img.shields.io/pypi/v/adcirc-mcp)](https://pypi.org/project/adcirc-mcp/) | ADCIRC model setup debugging, parameter lookup, config validation |
+| [schism-mcp](servers/schism-mcp/) | [![PyPI](https://img.shields.io/pypi/v/schism-mcp)](https://pypi.org/project/schism-mcp/) | SCHISM model setup debugging, parameter lookup, config validation |
 
 **No API keys required** — all servers use free, publicly available datasets.
+
+Additional servers live in this repo but are not yet published to PyPI (install from source): `vdatum-mcp` (vertical datum conversion), `hpc-system-mcp` and `ufs-runner-mcp` (NOAA RDHPCS / UFS-Coastal HPC workflows), and `alert-mcp` (CO-OPS threshold alerting).
 
 ## Quick Start
 
@@ -36,13 +44,13 @@ pip install coops-mcp
 pipx install coops-mcp
 ```
 
-Replace `coops-mcp` with any server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`, `rtofs-mcp`, `ww3-mcp`.
+Replace `coops-mcp` with any published server: `erddap-mcp`, `nhc-mcp`, `recon-mcp`, `stofs-mcp`, `ofs-mcp`, `rtofs-mcp`, `ww3-mcp`, `ndbc-mcp`, `winds-mcp`, `usgs-mcp`, `goes-mcp`, `adcirc-mcp`, `schism-mcp`.
 
 ### Install from source
 
 ```bash
 git clone https://github.com/mansurjisan/ocean-mcp.git
-cd ocean-mcp/servers/coops-mcp  # or erddap-mcp, nhc-mcp, recon-mcp, stofs-mcp, ofs-mcp, rtofs-mcp, ww3-mcp
+cd ocean-mcp/servers/coops-mcp  # or any other server directory under servers/
 uv sync
 ```
 

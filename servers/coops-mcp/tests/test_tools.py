@@ -278,6 +278,42 @@ class TestStationTools:
         assert "1611400" in result
         assert "Nawiliwili" in result
 
+    @pytest.mark.asyncio
+    async def test_list_stations_rejects_negative_limit(self, ctx: MagicMock) -> None:
+        """Negative limit is rejected up front (no network call)."""
+        from coops_mcp.tools.stations import coops_list_stations
+
+        result = await coops_list_stations(ctx, limit=-5)
+        assert "Validation Error" in result and "limit" in result
+
+    @pytest.mark.asyncio
+    async def test_list_stations_rejects_negative_offset(self, ctx: MagicMock) -> None:
+        """Negative offset is rejected up front."""
+        from coops_mcp.tools.stations import coops_list_stations
+
+        result = await coops_list_stations(ctx, offset=-1)
+        assert "Validation Error" in result and "offset" in result
+
+    @pytest.mark.asyncio
+    async def test_find_nearest_rejects_out_of_range_lat(self, ctx: MagicMock) -> None:
+        """Out-of-range latitude is rejected before any fetch."""
+        from coops_mcp.tools.stations import coops_find_nearest_stations
+
+        result = await coops_find_nearest_stations(ctx, latitude=200.0, longitude=-74.0)
+        assert "Validation Error" in result and "latitude" in result
+
+    @pytest.mark.asyncio
+    async def test_find_nearest_rejects_nonpositive_radius(
+        self, ctx: MagicMock
+    ) -> None:
+        """A zero/negative search radius is rejected."""
+        from coops_mcp.tools.stations import coops_find_nearest_stations
+
+        result = await coops_find_nearest_stations(
+            ctx, latitude=40.7, longitude=-74.0, radius_km=0
+        )
+        assert "Validation Error" in result and "radius" in result
+
     @respx.mock
     @pytest.mark.asyncio
     async def test_list_stations_with_state_filter(self, ctx: MagicMock) -> None:
