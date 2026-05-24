@@ -9,8 +9,10 @@ from enum import Enum
 REALTIME2_BASE = "https://www.ndbc.noaa.gov/data/realtime2"
 ACTIVE_STATIONS_URL = "https://www.ndbc.noaa.gov/activestations.xml"
 
-# Station cache TTL in seconds (10 minutes)
-STATION_CACHE_TTL = 600
+# Station cache TTL in seconds (4 hours). activestations.xml is ~100 KB and
+# the active-station roster changes on the order of weeks, so a 10-minute TTL
+# re-fetched it needlessly often; hours is plenty fresh for an MCP tool.
+STATION_CACHE_TTL = 14400
 
 # ---------------------------------------------------------------------------
 # Missing value sentinels used in NDBC fixed-width text files

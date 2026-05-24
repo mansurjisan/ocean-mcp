@@ -88,6 +88,17 @@ async def vdatum_convert(
     if not (len(lats) == len(lons) == len(zs)):
         return f"**Error:** lat ({len(lats)}), lon ({len(lons)}), and z ({len(zs)}) must have the same length."
 
+    # Reject out-of-range coordinates up front. Otherwise they pass straight
+    # to the VDatum grids, which silently return inf for points outside any
+    # domain — indistinguishable from a real conversion failure. (lon is
+    # lenient to accept both -180..180 and 0..360 conventions.)
+    for v in lats:
+        if not -90.0 <= v <= 90.0:
+            return f"**Error:** Latitude {v} out of range (must be -90 to 90)."
+    for v in lons:
+        if not -180.0 <= v <= 360.0:
+            return f"**Error:** Longitude {v} out of range (must be -180 to 360)."
+
     # Convert
     try:
         from coastalmodeling_vdatum import vdatum
