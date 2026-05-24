@@ -498,6 +498,33 @@ class TestGetBestTrack:
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_best_track_geojson(self, client):
+        """GeoJSON output is a FeatureCollection: a LineString plus a Point
+        per fix, with coordinates in [lon, lat] order."""
+        hurdat2_text = load_fixture("hurdat2_sample.txt")
+        respx.get(HURDAT2_URLS["al"]).mock(
+            return_value=httpx.Response(200, text=hurdat2_text)
+        )
+
+        ctx = make_ctx(client)
+        result = await nhc_get_best_track(
+            ctx, storm_id="AL011851", response_format="geojson"
+        )
+
+        gj = json.loads(result)
+        assert gj["type"] == "FeatureCollection"
+        line = next(f for f in gj["features"] if f["geometry"]["type"] == "LineString")
+        assert len(line["geometry"]["coordinates"]) == 14  # 14 fixes in the fixture
+        assert line["properties"]["track_type"] == "best_track"
+        lon, lat = line["geometry"]["coordinates"][0]
+        assert -180 <= lon <= 180 and 0 < lat <= 90  # Atlantic storm, N hemisphere
+        points = [f for f in gj["features"] if f["geometry"]["type"] == "Point"]
+        assert len(points) == 14
+        assert "max_wind" in points[0]["properties"]
+        assert "lat" not in points[0]["properties"]
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_best_track_hurdat2_track_point_fields(self, client):
         """Each track point should include datetime, lat, lon, wind, pressure, status, category."""
         hurdat2_text = load_fixture("hurdat2_sample.txt")

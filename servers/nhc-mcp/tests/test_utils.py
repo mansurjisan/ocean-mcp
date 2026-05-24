@@ -6,6 +6,7 @@ from nhc_mcp.models import classify_wind_speed
 from nhc_mcp.utils import (
     _positive_int_or_none,
     build_arcgis_query_url,
+    build_track_geojson,
     format_tabular_data,
     get_arcgis_layer_id,
     handle_nhc_error,
@@ -494,3 +495,49 @@ class TestBdeckMissingSentinels:
         points = parse_atcf_bdeck(SENTINEL_BDECK)
         assert points[0]["max_wind"] == 30
         assert points[0]["min_pressure"] == 1008
+
+
+class TestBuildTrackGeojson:
+    """Tests for the GeoJSON track builder."""
+
+    POINTS = [
+        {"lat": 25.0, "lon": -80.0, "max_wind": 90, "status": "HU"},
+        {"lat": 26.5, "lon": -82.0, "max_wind": 110, "status": "HU"},
+        {"lat": 28.0, "lon": -84.0, "max_wind": 80, "status": "HU"},
+    ]
+
+    def test_feature_collection_structure(self):
+        gj = build_track_geojson(self.POINTS)
+        assert gj["type"] == "FeatureCollection"
+        kinds = [f["geometry"]["type"] for f in gj["features"]]
+        assert kinds[0] == "LineString"  # track line first
+        assert kinds.count("Point") == 3
+
+    def test_coordinates_are_lon_lat_order(self):
+        """GeoJSON is [longitude, latitude] (RFC 7946), not [lat, lon]."""
+        gj = build_track_geojson(self.POINTS)
+        line = gj["features"][0]
+        assert line["geometry"]["coordinates"][0] == [-80.0, 25.0]
+        assert line["geometry"]["coordinates"][-1] == [-84.0, 28.0]
+        first_point = gj["features"][1]
+        assert first_point["geometry"]["coordinates"] == [-80.0, 25.0]
+
+    def test_line_and_point_properties(self):
+        gj = build_track_geojson(
+            self.POINTS,
+            line_properties={"storm_id": "AL992026", "track_type": "best_track"},
+            point_property_keys=["max_wind", "status"],
+        )
+        assert gj["features"][0]["properties"]["storm_id"] == "AL992026"
+        pt_props = gj["features"][1]["properties"]
+        assert pt_props == {"max_wind": 90, "status": "HU"}
+        # lon/lat live in geometry, never duplicated into properties
+        assert "lat" not in pt_props and "lon" not in pt_props
+
+    def test_skips_invalid_coords_and_no_line_under_two_points(self):
+        gj = build_track_geojson(
+            [{"lat": None, "lon": -80.0}, {"lat": 25.0, "lon": -80.0}]
+        )
+        kinds = [f["geometry"]["type"] for f in gj["features"]]
+        assert "LineString" not in kinds  # only 1 valid point, need >= 2
+        assert kinds.count("Point") == 1

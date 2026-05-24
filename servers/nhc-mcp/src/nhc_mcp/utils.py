@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime
 
@@ -443,6 +444,67 @@ def format_json_response(data: dict | list, context: str = "") -> str:
     else:
         wrapper.update(data)
     return json.dumps(wrapper, indent=2)
+
+
+def build_track_geojson(
+    points: list[dict],
+    *,
+    lon_key: str = "lon",
+    lat_key: str = "lat",
+    line_properties: dict | None = None,
+    point_property_keys: list[str] | None = None,
+) -> dict:
+    """Build a GeoJSON FeatureCollection from an ordered list of track points.
+
+    Emits one ``LineString`` feature for the track path plus one ``Point``
+    feature per fix (carrying the selected per-point properties). Coordinates
+    follow the GeoJSON spec (RFC 7946) order: ``[longitude, latitude]``.
+    Points whose lon/lat are missing or non-numeric are skipped.
+
+    Note: coordinates are passed through as-is, so a track crossing the
+    antimeridian (±180°) is not split — most NHC Atlantic/E-Pacific tracks
+    do not, but a consumer rendering a dateline-crossing track may need to
+    handle the seam itself.
+    """
+
+    def _coord(p: dict) -> list[float] | None:
+        try:
+            lon = float(p.get(lon_key))
+            lat = float(p.get(lat_key))
+        except (TypeError, ValueError):
+            return None
+        if math.isnan(lon) or math.isnan(lat):
+            return None
+        return [round(lon, 4), round(lat, 4)]
+
+    line_coords: list[list[float]] = []
+    point_features: list[dict] = []
+    for p in points:
+        coord = _coord(p)
+        if coord is None:
+            continue
+        line_coords.append(coord)
+        keys = point_property_keys if point_property_keys is not None else list(p)
+        props = {k: p.get(k) for k in keys if k not in (lon_key, lat_key)}
+        point_features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": coord},
+                "properties": props,
+            }
+        )
+
+    features: list[dict] = []
+    if len(line_coords) >= 2:
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": line_coords},
+                "properties": line_properties or {},
+            }
+        )
+    features.extend(point_features)
+    return {"type": "FeatureCollection", "features": features}
 
 
 # ---------------------------------------------------------------------------

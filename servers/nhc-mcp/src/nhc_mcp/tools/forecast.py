@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 from ..client import NHCClient
 from ..server import mcp
 from ..utils import (
+    build_track_geojson,
     format_tabular_data,
     get_arcgis_layer_id,
     handle_nhc_error,
@@ -62,7 +63,9 @@ async def nhc_get_forecast_track(
 
     Args:
         storm_id: NHC storm identifier (e.g., 'AL052024', 'EP042023').
-        response_format: Output format — 'markdown' (default) or 'json'.
+        response_format: Output format — 'markdown' (default), 'json', or
+            'geojson' (a FeatureCollection: a LineString for the forecast
+            track plus a Point per forecast period, coordinates [lon, lat]).
     """
     try:
         client = _get_client(ctx)
@@ -118,6 +121,29 @@ async def nhc_get_forecast_track(
                     "bin_number": bin_number,
                     "forecast_points": rows,
                 },
+                indent=2,
+            )
+
+        if response_format == "geojson":
+            return json.dumps(
+                build_track_geojson(
+                    rows,
+                    line_properties={
+                        "storm_id": storm_id,
+                        "stormname": rows[0].get("stormname", ""),
+                        "track_type": "forecast_track",
+                        "advisory": rows[0].get("advisnum", ""),
+                    },
+                    point_property_keys=[
+                        "tau",
+                        "datelbl",
+                        "maxwind",
+                        "gust",
+                        "mslp",
+                        "tcdvlp",
+                        "ssnum",
+                    ],
+                ),
                 indent=2,
             )
 
