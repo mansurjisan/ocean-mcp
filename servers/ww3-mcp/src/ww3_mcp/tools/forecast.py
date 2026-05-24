@@ -309,7 +309,7 @@ async def ww3_get_regional_summary(
         grid: Wave grid to use (default: 'global.0p25').
         response_format: 'markdown' (default) or 'json'.
     """
-    tmp_path: Path | None = None
+    tmp_paths: list[Path] = []
     try:
         import numpy as np
 
@@ -328,35 +328,54 @@ async def ww3_get_regional_summary(
         lon_min_360 = normalize_lon(lon_min)
         lon_max_360 = normalize_lon(lon_max)
 
-        tmp_path = await client.download_grib_subset(
-            grid.value,
-            date_str,
-            cycle_str,
-            forecast_hour,
-            lat_range=(lat_min, lat_max),
-            lon_range=(lon_min_360, lon_max_360),
-        )
+        # A box whose west edge normalizes east of its east edge wraps the
+        # 0°/360° seam (Greenwich or the dateline). NOMADS grib-filter cannot
+        # express a seam-crossing subregion in one request — it returns an
+        # empty body (verified) — so fetch the two pieces [west, 360] and
+        # [0, east] and combine. W→E bounds make the split unambiguous, and
+        # for a spatial summary the union of valid grid points is exact.
+        if lon_min_360 <= lon_max_360:
+            lon_ranges = [(lon_min_360, lon_max_360)]
+        else:
+            lon_ranges = [(lon_min_360, 360.0), (0.0, lon_max_360)]
 
         import xarray as xr
 
-        ds = await asyncio.to_thread(
-            lambda: xr.open_dataset(str(tmp_path), engine="cfgrib")
-        )
+        combined: dict[str, list] = {}
+        for lon_lo, lon_hi in lon_ranges:
+            tmp = await client.download_grib_subset(
+                grid.value,
+                date_str,
+                cycle_str,
+                forecast_hour,
+                lat_range=(lat_min, lat_max),
+                lon_range=(lon_lo, lon_hi),
+            )
+            tmp_paths.append(tmp)
+            if tmp.stat().st_size == 0:
+                continue  # NOMADS returned an empty slice for this piece
+            ds = await asyncio.to_thread(
+                lambda p=tmp: xr.open_dataset(str(p), engine="cfgrib")
+            )
+            try:
+                for var_name in ds.data_vars:
+                    valid = ds[var_name].values.flatten()
+                    valid = valid[~np.isnan(valid)]
+                    if len(valid):
+                        combined.setdefault(str(var_name), []).append(valid)
+            finally:
+                ds.close()
 
         stats: dict[str, dict[str, float]] = {}
-        for var_name in ds.data_vars:
-            data = ds[var_name].values.flatten()
-            valid = data[~np.isnan(data)]
-            if len(valid) == 0:
-                continue
-            stats[str(var_name)] = {
-                "min": round(float(np.min(valid)), 4),
-                "max": round(float(np.max(valid)), 4),
-                "mean": round(float(np.mean(valid)), 4),
-                "std": round(float(np.std(valid)), 4),
-                "n_points": int(len(valid)),
+        for var_name, arrays in combined.items():
+            allv = np.concatenate(arrays)
+            stats[var_name] = {
+                "min": round(float(np.min(allv)), 4),
+                "max": round(float(np.max(allv)), 4),
+                "mean": round(float(np.mean(allv)), 4),
+                "std": round(float(np.std(allv)), 4),
+                "n_points": int(len(allv)),
             }
-        ds.close()
 
         if response_format == "json":
             return json.dumps(
@@ -400,7 +419,8 @@ async def ww3_get_regional_summary(
     except Exception as e:
         return handle_ww3_error(e, grid.value)
     finally:
-        cleanup_temp_file(tmp_path)
+        for p in tmp_paths:
+            cleanup_temp_file(p)
 
 
 @mcp.tool(

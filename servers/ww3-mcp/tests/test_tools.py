@@ -630,3 +630,107 @@ class TestWw3GetForecastAtPoint:
         result = await ww3_get_forecast_at_point(ctx, latitude=35.0, longitude=-75.0)
 
         assert "No GFS-Wave cycles found" in result
+
+
+# ============================================================================
+# Test: ww3_get_regional_summary antimeridian / seam handling (regression)
+#
+# normalize_lon maps each bound independently into 0-360, so a box that wraps
+# the 0/360 seam (Greenwich or the dateline) yields west>east — and NOMADS
+# grib-filter returns an EMPTY body for an inverted subregion (verified
+# live), which then fails opaquely in cfgrib. The tool must split a
+# seam-crossing box into [west,360] + [0,east] and combine the two pieces.
+# ============================================================================
+
+
+class _FakeDataset:
+    """Minimal stand-in for an xarray Dataset (avoids real GRIB in tests)."""
+
+    def __init__(self, arrays):
+        self._arrays = arrays  # {var_name: np.ndarray}
+
+    @property
+    def data_vars(self):
+        return list(self._arrays)
+
+    def __getitem__(self, name):
+        m = MagicMock()
+        m.values = self._arrays[name]
+        return m
+
+    def close(self):
+        pass
+
+
+def _patch_regional(monkeypatch, client):
+    """Stub the cycle resolve, GRIB download (recording lon ranges), and
+    xarray open so ww3_get_regional_summary runs without real network/GRIB.
+    Returns the list that records each download's lon_range."""
+    import tempfile
+
+    import numpy as np
+
+    calls: list = []
+
+    async def fake_cycle(grid, num_days=2):
+        return ("20260524", "18")
+
+    async def fake_download(
+        grid, date, cycle, fhour, variables=None, lat_range=None, lon_range=None
+    ):
+        calls.append(lon_range)
+        f = tempfile.NamedTemporaryFile(suffix=".grib2", delete=False)
+        f.write(b"GRIB")
+        f.close()
+        return Path(f.name)
+
+    monkeypatch.setattr(client, "resolve_latest_cycle", fake_cycle)
+    monkeypatch.setattr(client, "download_grib_subset", fake_download)
+    monkeypatch.setattr(
+        "xarray.open_dataset",
+        lambda *a, **k: _FakeDataset({"swh": np.array([1.0, 2.0, 3.0])}),
+    )
+    return calls
+
+
+class TestRegionalSummarySeam:
+    """ww3_get_regional_summary must handle boxes that wrap the 0/360 seam."""
+
+    async def test_normal_box_is_a_single_request(self, client, monkeypatch):
+        """A box that does not wrap the seam stays one request."""
+        from ww3_mcp.tools.forecast import ww3_get_regional_summary
+
+        calls = _patch_regional(monkeypatch, client)
+        ctx = make_ctx(client)
+        result = await ww3_get_regional_summary(
+            ctx,
+            lat_min=30,
+            lat_max=40,
+            lon_min=-75,
+            lon_max=-65,
+            response_format="json",
+        )
+        data = json.loads(result)
+        assert calls == [(285.0, 295.0)]  # -75/-65 -> 285/295, west<east
+        assert data["statistics"]["swh"]["n_points"] == 3
+
+    async def test_seam_crossing_box_splits_and_merges(self, client, monkeypatch):
+        """A Greenwich-crossing box splits into [west,360]+[0,east] and the
+        per-variable point counts are the exact union of both pieces."""
+        from ww3_mcp.tools.forecast import ww3_get_regional_summary
+
+        calls = _patch_regional(monkeypatch, client)
+        ctx = make_ctx(client)
+        result = await ww3_get_regional_summary(
+            ctx,
+            lat_min=30,
+            lat_max=40,
+            lon_min=-30,
+            lon_max=20,
+            response_format="json",
+        )
+        data = json.loads(result)
+        # -30/20 -> 330/20, west>east -> split at the seam, two requests.
+        assert calls == [(330.0, 360.0), (0.0, 20.0)]
+        # Union of both halves (3 + 3), not silently empty/errored.
+        assert data["statistics"]["swh"]["n_points"] == 6
