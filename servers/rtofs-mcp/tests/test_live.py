@@ -22,33 +22,43 @@ async def client():
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_live_ssh_point_query(client):
-    """Fetch SSH at The Battery, NYC from HYCOM THREDDS."""
+    """Fetch SSH at an open-ocean point from HYCOM THREDDS.
+
+    Use a deep NW-Atlantic point (35N, 65W), NOT a coastal one: RTOFS/HYCOM
+    is a ~9 km global model and masks near-shore cells (e.g. NY Harbor) as
+    land, so SSH there is legitimately NaN — testing such a point would be a
+    false negative about the live data path, not a real check.
+    """
     rows = await client.fetch_point_csv(
         dataset_key="ssh",
         variable="surf_el",
-        latitude=40.7,
-        longitude=-74.0,
+        latitude=35.0,
+        longitude=-65.0,
         time="present",
     )
     assert len(rows) >= 1, "Expected at least one SSH value"
     assert "surf_el" in rows[0]
     val = rows[0]["surf_el"]
     assert isinstance(val, float)
-    assert not math.isnan(val), "SSH should not be NaN at The Battery"
+    assert not math.isnan(val), "SSH should not be NaN in the open ocean"
     # SSH should be reasonable (between -5 and 5 meters)
     assert -5.0 < val < 5.0
-    print(f"\nSSH at The Battery: {val:.4f} m")
+    print(f"\nSSH at 35N,65W: {val:.4f} m")
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_live_sst_surface_timeseries(client):
-    """Fetch SST time series at The Battery, NYC."""
+    """Fetch SST time series at an open-ocean point (35N, 65W).
+
+    Coastal cells are masked in the ~9 km HYCOM grid (see SSH test), so an
+    open-ocean point is required to exercise the live time-series path.
+    """
     rows = await client.fetch_point_csv(
         dataset_key="sst",
         variable="water_temp",
-        latitude=40.7,
-        longitude=-74.0,
+        latitude=35.0,
+        longitude=-65.0,
         vert_coord=0.0,  # Surface
     )
     valid = [r for r in rows if not math.isnan(r.get("water_temp", float("nan")))]
