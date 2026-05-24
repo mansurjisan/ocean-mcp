@@ -5,7 +5,9 @@ import re
 import httpx
 
 ADCIRC_WIKI_BASE = "https://wiki.adcirc.org"
-WIKI_API_URL = f"{ADCIRC_WIKI_BASE}/w/api.php"
+# The MediaWiki API moved from /w/api.php (now 404) to /api.php. The old path
+# silently broke every wiki tool (search + page fetch) with a 404.
+WIKI_API_URL = f"{ADCIRC_WIKI_BASE}/api.php"
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
