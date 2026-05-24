@@ -73,6 +73,32 @@ class TestVdatumConvert:
         assert "same length" in result
 
     @pytest.mark.asyncio
+    async def test_out_of_range_latitude(self, mock_ctx):
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="mllw",
+            lat="120",
+            lon="-80",
+            z="1.0",
+        )
+        assert "Error" in result
+        assert "Latitude" in result and "out of range" in result
+
+    @pytest.mark.asyncio
+    async def test_out_of_range_longitude(self, mock_ctx):
+        result = await vdatum_convert(
+            mock_ctx,
+            datum_from="navd88",
+            datum_to="mllw",
+            lat="30",
+            lon="-400",
+            z="1.0",
+        )
+        assert "Error" in result
+        assert "Longitude" in result and "out of range" in result
+
+    @pytest.mark.asyncio
     async def test_single_point_conversion(self, mock_ctx):
         """Single-point conversion formats correctly (vdatum lib mocked).
 

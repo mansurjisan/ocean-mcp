@@ -17,7 +17,9 @@ from hpc_system_mcp.tools.system import (
     hpc_system_info,
     hpc_user_groups,
     hpc_recent_jobs,
+    hpc_partition_limits,
 )
+from hpc_system_mcp.executor import ExecutorError
 from hpc_system_mcp.tools.pbs import (
     hpc_pbs_jobs,
     hpc_pbs_job_detail,
@@ -152,6 +154,27 @@ class TestSystemTools:
     async def test_user_groups_unsafe(self, mock_ctx):
         result = await hpc_user_groups(mock_ctx, user="test; whoami")
         assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_partition_limits_sbatch_limits(self, mock_ctx, mock_executor):
+        """Primary path: sbatch-limits output is rendered."""
+        mock_executor.run.return_value = (
+            "Partition  MaxNodes  MaxWall\ndebug  10  01:00:00"
+        )
+        result = await hpc_partition_limits(mock_ctx)
+        assert "Partition & QOS Limits" in result
+        assert "debug" in result
+
+    @pytest.mark.asyncio
+    async def test_partition_limits_falls_back_to_sinfo(self, mock_ctx, mock_executor):
+        """When sbatch-limits is absent, fall back to sinfo (not an error)."""
+        mock_executor.run.side_effect = [
+            ExecutorError("sbatch-limits: not found"),
+            "PARTITION  TIMELIMIT  NODES\nu1-compute  8:00:00  500",
+        ]
+        result = await hpc_partition_limits(mock_ctx)
+        assert "via sinfo" in result
+        assert "u1-compute" in result
 
     @pytest.mark.asyncio
     async def test_recent_jobs(self, mock_ctx, mock_executor):
