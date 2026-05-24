@@ -12,6 +12,7 @@ from ..client import NHCClient
 from ..models import Basin, classify_wind_speed
 from ..server import mcp
 from ..utils import (
+    build_track_geojson,
     format_tabular_data,
     handle_nhc_error,
     parse_atcf_bdeck,
@@ -45,7 +46,9 @@ async def nhc_get_best_track(
 
     Args:
         storm_id: NHC storm identifier (e.g., 'AL092005' for Katrina, 'AL042024').
-        response_format: Output format — 'markdown' (default) or 'json'.
+        response_format: Output format — 'markdown' (default), 'json', or
+            'geojson' (a FeatureCollection: a LineString for the track plus a
+            Point per fix, coordinates [lon, lat], for mapping).
     """
     try:
         client = _get_client(ctx)
@@ -119,6 +122,26 @@ async def nhc_get_best_track(
                     "track_points": track_points,
                     "count": len(track_points),
                 },
+                indent=2,
+            )
+
+        if response_format == "geojson":
+            return json.dumps(
+                build_track_geojson(
+                    track_points,
+                    line_properties={
+                        "storm_id": storm_id.upper(),
+                        "source": source,
+                        "track_type": "best_track",
+                    },
+                    point_property_keys=[
+                        "datetime",
+                        "max_wind",
+                        "min_pressure",
+                        "status",
+                        "category",
+                    ],
+                ),
                 indent=2,
             )
 
