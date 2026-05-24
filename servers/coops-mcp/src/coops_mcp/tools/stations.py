@@ -56,6 +56,11 @@ async def coops_list_stations(
         offset: Number of stations to skip for pagination (default 0).
     """
     try:
+        if limit < 1:
+            return "Validation Error: limit must be >= 1."
+        if offset < 0:
+            return "Validation Error: offset must be >= 0."
+
         client = _get_client(ctx)
         params: dict = {}
         if station_type:
@@ -250,6 +255,15 @@ async def coops_find_nearest_stations(
         limit: Maximum number of stations to return (default 5).
     """
     try:
+        if not -90.0 <= latitude <= 90.0:
+            return "Validation Error: latitude must be between -90 and 90."
+        if not -180.0 <= longitude <= 180.0:
+            return "Validation Error: longitude must be between -180 and 180."
+        if radius_km <= 0:
+            return "Validation Error: radius_km must be > 0."
+        if limit < 1:
+            return "Validation Error: limit must be >= 1."
+
         client = _get_client(ctx)
         params: dict = {}
         if station_type:
