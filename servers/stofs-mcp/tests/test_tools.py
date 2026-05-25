@@ -18,6 +18,7 @@ import respx
 
 from stofs_mcp.client import (
     COOPS_API_BASE,
+    RetryTransport,
     S3_BASE_2D,
     S3_BASE_3D,
     STOFSClient,
@@ -52,6 +53,17 @@ def make_ctx(client: STOFSClient) -> MagicMock:
     return ctx
 
 
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = STOFSClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
+
+
 # ---------------------------------------------------------------------------
 # Test: stofs_list_cycles — mock S3 HEAD requests
 # ---------------------------------------------------------------------------
@@ -66,7 +78,7 @@ class TestListCycles:
         """stofs_list_cycles should report cycles as available when S3 HEAD returns 200."""
         from stofs_mcp.tools.discovery import stofs_list_cycles
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         # Mock: 2d_global, date 2026-03-03, cycle 18z exists (200), cycle 12z exists (200),
@@ -114,7 +126,7 @@ class TestListCycles:
         """stofs_list_cycles should report no cycles when all S3 HEADs return 404."""
         from stofs_mcp.tools.discovery import stofs_list_cycles
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         # All HEAD requests return 404
@@ -138,7 +150,7 @@ class TestListCycles:
         """stofs_list_cycles for 3d_atlantic should only check the 12z cycle."""
         from stofs_mcp.tools.discovery import stofs_list_cycles
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         date_str = "20260303"
@@ -171,7 +183,7 @@ class TestListCycles:
         """stofs_list_cycles should return an error for an invalid date string."""
         from stofs_mcp.tools.discovery import stofs_list_cycles
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_list_cycles(
@@ -190,7 +202,7 @@ class TestListCycles:
         """stofs_list_cycles should clamp num_days to the range [1, 7]."""
         from stofs_mcp.tools.discovery import stofs_list_cycles
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         # Mock all HEAD requests as 404
@@ -223,7 +235,7 @@ class TestGetSystemInfo:
         """stofs_get_system_info with model=None should return info for both models."""
         from stofs_mcp.tools.discovery import stofs_get_system_info
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_system_info(ctx, model=None, include_stations=False)
@@ -240,7 +252,7 @@ class TestGetSystemInfo:
         """stofs_get_system_info with a specific model should only return that model."""
         from stofs_mcp.tools.discovery import stofs_get_system_info
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_system_info(
@@ -257,7 +269,7 @@ class TestGetSystemInfo:
         """stofs_get_system_info with include_stations=True should list stations."""
         from stofs_mcp.tools.discovery import stofs_get_system_info
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_system_info(ctx, model=None, include_stations=True)
@@ -273,7 +285,7 @@ class TestGetSystemInfo:
         """stofs_get_system_info should include OPeNDAP URLs in the output."""
         from stofs_mcp.tools.discovery import stofs_get_system_info
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_system_info(ctx, model=None)
@@ -288,7 +300,7 @@ class TestGetSystemInfo:
         """stofs_get_system_info should include the datum warning note."""
         from stofs_mcp.tools.discovery import stofs_get_system_info
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_system_info(ctx, model=None)
@@ -313,7 +325,7 @@ class TestListStations:
         """stofs_list_stations with no filters should return up to 20 stations."""
         from stofs_mcp.tools.discovery import stofs_list_stations
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_list_stations(ctx, model=STOFSModel.GLOBAL_2D)
@@ -328,7 +340,7 @@ class TestListStations:
         """stofs_list_stations should filter stations by state abbreviation."""
         from stofs_mcp.tools.discovery import stofs_list_stations
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_list_stations(ctx, model=STOFSModel.GLOBAL_2D, state="FL")
@@ -346,7 +358,7 @@ class TestListStations:
         from stofs_mcp.tools.discovery import stofs_list_stations
         from stofs_mcp.models import Region
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_list_stations(
@@ -364,7 +376,7 @@ class TestListStations:
         """stofs_list_stations should filter stations by proximity to a point."""
         from stofs_mcp.tools.discovery import stofs_list_stations
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         # Near NYC
@@ -386,7 +398,7 @@ class TestListStations:
         """stofs_list_stations should handle the case when no stations match."""
         from stofs_mcp.tools.discovery import stofs_list_stations
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         # A point in the middle of the Atlantic Ocean, far from any station
@@ -407,7 +419,7 @@ class TestListStations:
         """stofs_list_stations should respect the limit parameter."""
         from stofs_mcp.tools.discovery import stofs_list_stations
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_list_stations(ctx, model=STOFSModel.GLOBAL_2D, limit=3)
@@ -427,7 +439,7 @@ class TestBuildUrls:
 
     def test_build_station_url_2d_global_cwl(self):
         """build_station_url for 2d_global/cwl should point to the correct S3 path."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_station_url("2d_global", "20260303", "12", "cwl")
         assert url == (
             "https://noaa-gestofs-pds.s3.amazonaws.com/"
@@ -436,19 +448,19 @@ class TestBuildUrls:
 
     def test_build_station_url_2d_global_swl(self):
         """build_station_url for 2d_global/swl should use the swl product name."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_station_url("2d_global", "20260303", "06", "swl")
         assert "t06z.points.swl.nc" in url
 
     def test_build_station_url_2d_global_htp(self):
         """build_station_url for 2d_global/htp should use the htp product name."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_station_url("2d_global", "20260303", "00", "htp")
         assert "t00z.points.htp.nc" in url
 
     def test_build_station_url_3d_atlantic(self):
         """build_station_url for 3d_atlantic should always use cwl product."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_station_url("3d_atlantic", "20260303", "12", "cwl")
         assert "noaa-nos-stofs3d-pds.s3.amazonaws.com" in url
         assert "STOFS-3D-Atl/stofs_3d_atl.20260303" in url
@@ -456,33 +468,33 @@ class TestBuildUrls:
 
     def test_build_station_url_invalid_model(self):
         """build_station_url should raise ValueError for an unrecognized model."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         with pytest.raises(ValueError, match="Unknown model"):
             client.build_station_url("invalid", "20260303", "12", "cwl")
 
     def test_build_opendap_url_2d_global_default_region(self):
         """build_opendap_url for 2d_global should default to conus.east region."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_opendap_url("2d_global", "20260303", "12")
         assert "nomads.ncep.noaa.gov/dods/stofs_2d_glo" in url
         assert "stofs_2d_glo_conus.east_12z" in url
 
     def test_build_opendap_url_2d_global_custom_region(self):
         """build_opendap_url should accept a custom region parameter."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_opendap_url("2d_global", "20260303", "06", "hawaii")
         assert "stofs_2d_glo_hawaii_06z" in url
 
     def test_build_opendap_url_3d_atlantic(self):
         """build_opendap_url for 3d_atlantic should use the stofs_3d_atl path."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         url = client.build_opendap_url("3d_atlantic", "20260303", "12")
         assert "nomads.ncep.noaa.gov/dods/stofs_3d_atl" in url
         assert "stofs_3d_atl_conus.east_12z" in url
 
     def test_build_opendap_url_invalid_model(self):
         """build_opendap_url should raise ValueError for an unrecognized model."""
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         with pytest.raises(ValueError, match="Unknown model"):
             client.build_opendap_url("invalid", "20260303", "12")
 
@@ -503,7 +515,7 @@ class TestFetchCoopsObservations:
 
         respx.get(COOPS_API_BASE).mock(return_value=httpx.Response(200, json=fixture))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await client.fetch_coops_observations(
             "8518750", "20250301", "20250302", datum="MSL"
         )
@@ -523,7 +535,7 @@ class TestFetchCoopsObservations:
 
         respx.get(COOPS_API_BASE).mock(return_value=httpx.Response(200, json=fixture))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         with pytest.raises(ValueError, match="CO-OPS API error"):
             await client.fetch_coops_observations(
                 "0000000", "20250301", "20250302", datum="MSL"
@@ -539,7 +551,7 @@ class TestFetchCoopsObservations:
             return_value=httpx.Response(500, text="Internal Server Error")
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         with pytest.raises(httpx.HTTPStatusError):
             await client.fetch_coops_observations(
                 "8518750", "20250301", "20250302", datum="MSL"
@@ -557,7 +569,7 @@ class TestFetchCoopsObservations:
             return_value=httpx.Response(200, json=fixture)
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         await client.fetch_coops_observations(
             "8518750", "20250301 00:00", "20250302 00:00", datum="NAVD"
         )
@@ -590,7 +602,7 @@ class TestCheckFileExists:
         test_url = "https://noaa-gestofs-pds.s3.amazonaws.com/test.nc"
         respx.head(test_url).mock(return_value=httpx.Response(200))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await client.check_file_exists(test_url)
         assert result is True
         await client.close()
@@ -602,7 +614,7 @@ class TestCheckFileExists:
         test_url = "https://noaa-gestofs-pds.s3.amazonaws.com/test.nc"
         respx.head(test_url).mock(return_value=httpx.Response(404))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await client.check_file_exists(test_url)
         assert result is False
         await client.close()
@@ -614,7 +626,7 @@ class TestCheckFileExists:
         test_url = "https://noaa-gestofs-pds.s3.amazonaws.com/test.nc"
         respx.head(test_url).mock(side_effect=httpx.ConnectError("Connection refused"))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await client.check_file_exists(test_url)
         assert result is False
         await client.close()
@@ -639,7 +651,7 @@ class TestCheckOpendapAvailable:
             )
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         available, reason = await client.check_opendap_available(base_url)
         assert available is True
         assert reason == "ok"
@@ -656,7 +668,7 @@ class TestCheckOpendapAvailable:
             )
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         available, reason = await client.check_opendap_available(base_url)
         assert available is False
         assert reason == "missing"
@@ -671,7 +683,7 @@ class TestCheckOpendapAvailable:
             return_value=httpx.Response(500, text="Server Error")
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         available, reason = await client.check_opendap_available(base_url)
         assert available is False
         assert reason == "http_error"
@@ -686,7 +698,7 @@ class TestCheckOpendapAvailable:
             side_effect=httpx.ConnectError("Connection refused")
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         available, reason = await client.check_opendap_available(base_url)
         assert available is False
         assert reason == "network_error"
@@ -700,7 +712,7 @@ class TestCheckOpendapAvailable:
         html = "<!doctype html><html><head><title>Request for OpenDAP Data</title>"
         respx.get(f"{base_url}.das").mock(return_value=httpx.Response(200, text=html))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         available, reason = await client.check_opendap_available(base_url)
         assert available is False
         assert reason == "retired"
@@ -733,7 +745,7 @@ class TestResolveLatestCycle:
             return_value=httpx.Response(404)
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_latest_cycle(client, "2d_global", num_days=1)
 
         assert result is not None
@@ -751,7 +763,7 @@ class TestResolveLatestCycle:
             return_value=httpx.Response(404)
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_latest_cycle(client, "2d_global", num_days=2)
         assert result is None
         await client.close()
@@ -764,7 +776,7 @@ class TestResolveLatestCycle:
             return_value=httpx.Response(200)
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_latest_cycle(client, "3d_atlantic", num_days=1)
 
         assert result is not None
@@ -789,7 +801,7 @@ class TestResolveCycleExplicit:
         """resolve_cycle should return the parsed date and hour when both are provided."""
         from stofs_mcp.utils import resolve_cycle
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_cycle(client, "2d_global", "2026-03-03", "12")
 
         assert result == ("20260303", "12")
@@ -800,7 +812,7 @@ class TestResolveCycleExplicit:
         """resolve_cycle should accept YYYYMMDD format for the date."""
         from stofs_mcp.utils import resolve_cycle
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_cycle(client, "2d_global", "20260303", "06")
 
         assert result == ("20260303", "06")
@@ -811,7 +823,7 @@ class TestResolveCycleExplicit:
         """resolve_cycle should zero-pad a single-digit hour string."""
         from stofs_mcp.utils import resolve_cycle
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_cycle(client, "2d_global", "2026-03-03", "6")
 
         assert result == ("20260303", "06")
@@ -822,7 +834,7 @@ class TestResolveCycleExplicit:
         """resolve_cycle should return None for an unparseable date."""
         from stofs_mcp.utils import resolve_cycle
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         result = await resolve_cycle(client, "2d_global", "bad-date", "12")
 
         assert result is None
@@ -846,7 +858,7 @@ class TestGetStationForecastNoCycle:
         # All HEAD requests 404
         respx.head(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_station_forecast(
@@ -863,7 +875,7 @@ class TestGetStationForecastNoCycle:
         """stofs_get_station_forecast should reject non-cwl products for 3d_atlantic."""
         from stofs_mcp.tools.forecast import stofs_get_station_forecast
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_station_forecast(
@@ -894,7 +906,7 @@ class TestGetGriddedForecastErrors:
         # All HEAD requests 404 (no cycle)
         respx.head(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_gridded_forecast(ctx, latitude=40.7, longitude=-74.0)
@@ -929,7 +941,7 @@ class TestGetGriddedForecastErrors:
             )
         )
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_get_gridded_forecast(ctx, latitude=40.7, longitude=-74.0)
@@ -955,7 +967,7 @@ class TestCompareWithObservationsErrors:
 
         respx.head(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-        client = STOFSClient()
+        client = STOFSClient(backoff_factor=0)
         ctx = make_ctx(client)
 
         result = await stofs_compare_with_observations(ctx, station_id="8518750")

@@ -16,7 +16,7 @@ import httpx
 import pytest
 import respx
 
-from erddap_mcp.client import ERDDAPClient
+from erddap_mcp.client import ERDDAPClient, RetryTransport
 
 # ---------------------------------------------------------------------------
 # Tool function imports
@@ -54,14 +54,26 @@ def make_ctx(client: ERDDAPClient) -> MagicMock:
 # ---------------------------------------------------------------------------
 @pytest.fixture()
 def erddap_client() -> ERDDAPClient:
-    """Return a fresh ERDDAPClient (no teardown needed -- respx intercepts all IO)."""
-    return ERDDAPClient()
+    """Return a fresh ERDDAPClient (respx intercepts all IO; backoff_factor=0 so
+    retries replay instantly)."""
+    return ERDDAPClient(backoff_factor=0)
 
 
 @pytest.fixture()
 def ctx(erddap_client: ERDDAPClient) -> MagicMock:
     """Return a mock MCP Context wired to *erddap_client*."""
     return make_ctx(erddap_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = ERDDAPClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 @pytest.fixture()

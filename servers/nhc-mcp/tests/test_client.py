@@ -19,7 +19,7 @@ from nhc_mcp.utils import ARCGIS_BASE_URL
 
 @pytest.fixture
 async def client():
-    c = NHCClient()
+    c = NHCClient(backoff_factor=0)
     yield c
     await c.close()
 
