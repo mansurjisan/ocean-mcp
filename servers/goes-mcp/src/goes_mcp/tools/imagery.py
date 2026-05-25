@@ -6,7 +6,7 @@ from mcp.server.fastmcp import Context
 from mcp.server.fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
 
-from ..client import GOESClient
+from ..client import GOESClient, handle_goes_error
 from ..models import (
     COVERAGES,
     PRODUCTS,
@@ -90,7 +90,7 @@ async def goes_get_latest_image(
         return Image(data=img_bytes, format="jpeg")
 
     except Exception as e:
-        return f"**Error**: {e}"
+        return handle_goes_error(e)
 
 
 @mcp.tool(
@@ -167,7 +167,7 @@ async def goes_get_image(
         return Image(data=img_bytes, format="jpeg")
 
     except Exception as e:
-        return f"**Error**: {e}"
+        return handle_goes_error(e)
 
 
 @mcp.tool(
@@ -242,7 +242,7 @@ async def goes_get_sector_image(
         return Image(data=img_bytes, format="jpeg")
 
     except Exception as e:
-        return f"**Error**: {e}"
+        return handle_goes_error(e)
 
 
 @mcp.tool(
@@ -352,4 +352,4 @@ async def goes_get_current_view(
         return "\n".join(lines)
 
     except Exception as e:
-        return f"**Error**: {e}"
+        return handle_goes_error(e)
