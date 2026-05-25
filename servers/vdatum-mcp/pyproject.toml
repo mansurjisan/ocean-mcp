@@ -25,7 +25,7 @@ keywords = [
 ]
 dependencies = [
     "mcp[cli]>=1.0.0",
-    "coastalmodeling-vdatum @ git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git",
+    "coastalmodeling-vdatum @ git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git@0d63b2bbc0b0634e20a0ec55023a53354fab1b47",
     "numpy>=1.26",
 ]
 
@@ -38,9 +38,11 @@ vdatum-mcp = "vdatum_mcp.server:main"
 
 [tool.hatch.metadata]
 # coastalmodeling-vdatum is a NOAA library not published to PyPI, so it is a
-# git direct reference. Hatchling rejects direct references in
-# project.dependencies unless this is set, which made `uv sync`/`uv build`
-# (and therefore any CI coverage) fail outright.
+# git direct reference, pinned to a commit SHA so builds are reproducible and
+# a force-push / new commit upstream can't silently change what we ship.
+# Hatchling rejects direct references in project.dependencies unless this is
+# set, which made `uv sync`/`uv build` (and therefore any CI coverage) fail
+# outright.
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
