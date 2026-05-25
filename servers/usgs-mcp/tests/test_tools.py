@@ -179,6 +179,7 @@ class TestGetInstantaneousValues:
         parsed = json.loads(result)
         # JSON is now wrapped in a truncation envelope; raw WaterML under "data".
         assert {"truncated", "returned", "total", "data"} <= parsed.keys()
+        assert "retrieved_at" in parsed
         assert "value" in parsed["data"]
 
     @pytest.mark.asyncio

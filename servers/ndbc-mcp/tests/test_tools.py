@@ -305,6 +305,7 @@ class TestGetObservations:
         assert "records" in parsed
         assert parsed["truncated"] is False
         assert parsed["returned"] == parsed["total"] == len(parsed["records"])
+        assert "retrieved_at" in parsed
         if parsed["records"]:
             assert "WSPD" in parsed["records"][0]
             assert "WTMP" in parsed["records"][0]

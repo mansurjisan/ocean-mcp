@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 
 def parse_erddap_json(data: dict) -> list[dict]:
     """Convert ERDDAP JSON response into a list of row dicts.
@@ -98,6 +100,7 @@ def cap_rows(rows: list[dict], max_records: int) -> tuple[list[dict], dict]:
         "truncated": truncated,
         "record_count": len(kept),
         "total": total,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     if truncated:
         env["hint"] = (

@@ -126,6 +126,7 @@ class TestListMissions:
         parsed = json.loads(result)
         assert "data" in parsed
         assert parsed["record_count"] == 3
+        assert "retrieved_at" in parsed
         filenames = [entry["filename"] for entry in parsed["data"]]
         assert "URNT15-KNHC.202410091200.txt" in filenames
 

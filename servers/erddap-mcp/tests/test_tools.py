@@ -811,6 +811,7 @@ class TestGetTabledapData:
         assert parsed["record_count"] == 5
         assert parsed["truncated"] is False
         assert parsed["total"] == 5
+        assert "retrieved_at" in parsed
         assert len(parsed["data"]) == 5
         # First row should have expected keys
         row0 = parsed["data"][0]

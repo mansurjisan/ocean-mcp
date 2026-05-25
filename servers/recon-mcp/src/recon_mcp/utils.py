@@ -563,6 +563,7 @@ def format_json_response(data: dict | list, context: str = "") -> str:
         wrapper["data"] = data
     else:
         wrapper.update(data)
+    wrapper["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return json.dumps(wrapper, indent=2)
 
 

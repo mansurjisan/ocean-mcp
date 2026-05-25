@@ -1,6 +1,7 @@
 """Observation retrieval tools for NDBC buoy data."""
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from mcp.server.fastmcp import Context
@@ -49,6 +50,7 @@ def _capped_obs_json(
     out: dict[str, Any] = {
         "station": station_id.upper(),
         "hours": hours,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "truncated": truncated,
         "returned": len(kept),
         "total": total,
