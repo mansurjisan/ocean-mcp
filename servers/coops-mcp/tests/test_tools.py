@@ -500,6 +500,34 @@ class TestStationTools:
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_find_nearest_stations_geojson(self, ctx: MagicMock) -> None:
+        """GeoJSON output is a Point FeatureCollection with [lon, lat] coords."""
+        from coops_mcp.tools.stations import coops_find_nearest_stations
+
+        fixture = _load_fixture("nearest_stations.json")
+        respx.get(f"{METADATA_API_BASE}/stations.json").mock(
+            return_value=httpx.Response(200, json=fixture)
+        )
+
+        result = await coops_find_nearest_stations(
+            ctx,
+            latitude=21.3,
+            longitude=-157.9,
+            radius_km=500,
+            response_format="geojson",
+        )
+
+        gj = json.loads(result)
+        assert gj["type"] == "FeatureCollection"
+        assert gj["features"], "expected at least one station feature"
+        feat = gj["features"][0]
+        assert feat["geometry"]["type"] == "Point"
+        lon, lat = feat["geometry"]["coordinates"]
+        assert -180 <= lon <= 180 and -90 <= lat <= 90
+        assert "distance_km" in feat["properties"]
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_find_nearest_stations_none_in_radius(self, ctx: MagicMock) -> None:
         """Verify message when no stations found within radius."""
         from coops_mcp.tools.stations import coops_find_nearest_stations

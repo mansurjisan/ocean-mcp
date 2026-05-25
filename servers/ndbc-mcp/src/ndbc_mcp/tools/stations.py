@@ -177,6 +177,7 @@ async def ndbc_find_nearest_stations(
     station_type: str | None = None,
     has_met: bool | None = None,
     limit: int = 5,
+    response_format: str = "markdown",
 ) -> str:
     """Find NDBC stations nearest to a geographic coordinate.
 
@@ -187,6 +188,8 @@ async def ndbc_find_nearest_stations(
         station_type: Optional filter by platform type (e.g., 'buoy').
         has_met: If true, only stations with meteorological sensors.
         limit: Maximum number of stations to return (default 5).
+        response_format: Output format — 'markdown' (default) or 'geojson'
+            (a FeatureCollection of Point features, coordinates [lon, lat]).
     """
     try:
         client = _get_client(ctx)
@@ -211,6 +214,36 @@ async def ndbc_find_nearest_stations(
 
         results.sort(key=lambda x: x[0])
         results = results[:limit]
+
+        if response_format == "geojson":
+            import json
+
+            features = []
+            for dist, s in results:
+                try:
+                    slon = float(s.get("lon"))
+                    slat = float(s.get("lat"))
+                except (TypeError, ValueError):
+                    continue
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [round(slon, 4), round(slat, 4)],
+                        },
+                        "properties": {
+                            "id": s.get("id"),
+                            "name": s.get("name"),
+                            "type": s.get("type"),
+                            "has_met": s.get("met") == "y",
+                            "distance_km": round(dist, 1),
+                        },
+                    }
+                )
+            return json.dumps(
+                {"type": "FeatureCollection", "features": features}, indent=2
+            )
 
         lines = [f"## Nearest NDBC Stations to ({latitude:.4f}, {longitude:.4f})"]
         filters = []

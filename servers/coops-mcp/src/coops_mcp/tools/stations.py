@@ -244,6 +244,7 @@ async def coops_find_nearest_stations(
     radius_km: float = 50.0,
     station_type: StationType | None = None,
     limit: int = 5,
+    response_format: str = "markdown",
 ) -> str:
     """Find CO-OPS stations nearest to a geographic coordinate.
 
@@ -253,6 +254,8 @@ async def coops_find_nearest_stations(
         radius_km: Search radius in kilometers (default 50).
         station_type: Optional filter by station type (e.g., 'waterlevels').
         limit: Maximum number of stations to return (default 5).
+        response_format: Output format — 'markdown' (default) or 'geojson'
+            (a FeatureCollection of Point features, coordinates [lon, lat]).
     """
     try:
         if not -90.0 <= latitude <= 90.0:
@@ -286,6 +289,35 @@ async def coops_find_nearest_stations(
 
         results.sort(key=lambda x: x[0])
         results = results[:limit]
+
+        if response_format == "geojson":
+            import json
+
+            features = []
+            for dist, s in results:
+                try:
+                    slng = float(s.get("lng", s.get("longitude")))
+                    slat = float(s.get("lat", s.get("latitude")))
+                except (TypeError, ValueError):
+                    continue
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [round(slng, 4), round(slat, 4)],
+                        },
+                        "properties": {
+                            "id": s.get("id"),
+                            "name": s.get("name"),
+                            "state": s.get("state"),
+                            "distance_km": round(dist, 1),
+                        },
+                    }
+                )
+            return json.dumps(
+                {"type": "FeatureCollection", "features": features}, indent=2
+            )
 
         lines = [f"## Nearest Stations to ({latitude:.4f}, {longitude:.4f})"]
         if station_type:

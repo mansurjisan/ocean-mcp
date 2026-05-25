@@ -219,7 +219,8 @@ async def usgs_find_nearest_sites(
         radius_miles: Search radius in miles (default 25).
         parameter_code: USGS parameter code — '00060' (discharge, default) or '00065' (gage height).
         limit: Maximum number of sites to return (default 10).
-        response_format: Output format — 'markdown' (default) or 'json'.
+        response_format: Output format — 'markdown' (default), 'json', or
+            'geojson' (a FeatureCollection of Point features, [lon, lat]).
     """
     try:
         if not -90 <= latitude <= 90:
@@ -266,6 +267,34 @@ async def usgs_find_nearest_sites(
             import json
 
             return json.dumps(rows, indent=2)
+
+        if response_format == "geojson":
+            import json
+
+            features = []
+            for row in rows:
+                try:
+                    rlon = float(row.get("dec_long_va"))
+                    rlat = float(row.get("dec_lat_va"))
+                except (TypeError, ValueError):
+                    continue
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [round(rlon, 4), round(rlat, 4)],
+                        },
+                        "properties": {
+                            "site_no": row.get("site_no"),
+                            "name": row.get("station_nm"),
+                            "distance_mi": round(_distance(row) * 69.0, 1),
+                        },
+                    }
+                )
+            return json.dumps(
+                {"type": "FeatureCollection", "features": features}, indent=2
+            )
 
         lines = [f"## Nearest USGS Sites to ({latitude:.4f}, {longitude:.4f})"]
         lines.append(f"**Search radius**: {radius_miles} mi")
