@@ -298,6 +298,8 @@ class TestGetObservations:
 
         parsed = json.loads(result)
         assert "records" in parsed
+        assert parsed["truncated"] is False
+        assert parsed["returned"] == parsed["total"] == len(parsed["records"])
         if parsed["records"]:
             assert "WSPD" in parsed["records"][0]
             assert "WTMP" in parsed["records"][0]
@@ -486,3 +488,54 @@ class TestCompareStations:
 
         assert "44013" in result
         assert "Errors" in result or "ZZZZZ" in result
+
+
+class TestCappedObsJson:
+    """The JSON cap helper used by the observation/wave-summary tools."""
+
+    @staticmethod
+    def _records(n: int) -> list[dict]:
+        """n synthetic records, newest-first (index 0 = most recent)."""
+        from datetime import datetime, timedelta
+
+        base = datetime(2026, 5, 25, 12, 0)
+        return [
+            {"datetime": base - timedelta(minutes=10 * i), "WVHT": float(i)}
+            for i in range(n)
+        ]
+
+    @staticmethod
+    def _build_row(r: dict) -> dict:
+        return {"datetime": r["datetime"].isoformat(), "WVHT": r.get("WVHT")}
+
+    def test_under_cap_untouched(self) -> None:
+        """At or below the cap nothing is trimmed and there is no hint."""
+        from ndbc_mcp.tools.observations import _capped_obs_json
+
+        parsed = json.loads(
+            _capped_obs_json("44025", 24, self._records(10), self._build_row, 2000)
+        )
+        assert parsed["station"] == "44025"
+        assert parsed["hours"] == 24
+        assert parsed["truncated"] is False
+        assert parsed["returned"] == 10
+        assert parsed["total"] == 10
+        assert len(parsed["records"]) == 10
+        assert "hint" not in parsed
+
+    def test_over_cap_keeps_most_recent_head(self) -> None:
+        """NDBC is newest-first, so the cap keeps the head (most recent)."""
+        from ndbc_mcp.tools.observations import _capped_obs_json
+
+        recs = self._records(2500)  # WVHT 0.0 (newest) .. 2499.0 (oldest)
+        parsed = json.loads(
+            _capped_obs_json("44025", 1080, recs, self._build_row, 2000)
+        )
+        assert parsed["truncated"] is True
+        assert parsed["returned"] == 2000
+        assert parsed["total"] == 2500
+        assert len(parsed["records"]) == 2000
+        # Head kept: newest (WVHT 0.0) present, oldest (2499.0) dropped.
+        assert parsed["records"][0]["WVHT"] == 0.0
+        assert parsed["records"][-1]["WVHT"] == 1999.0
+        assert "most recent 2000 of 2500" in parsed["hint"]
