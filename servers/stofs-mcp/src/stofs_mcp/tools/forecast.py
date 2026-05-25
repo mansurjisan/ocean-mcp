@@ -458,7 +458,7 @@ async def stofs_get_gridded_forecast(
     cycle_hour: str | None = None,
     response_format: str = "markdown",
 ) -> str:
-    """Get STOFS forecast at any lat/lon from the regular gridded product via OPeNDAP.
+    """[CURRENTLY UNAVAILABLE — NOMADS OPeNDAP retired Oct 2025, NWS SCN 25-81] Get STOFS forecast at any lat/lon from the regular gridded product via OPeNDAP.
 
     Unlike stofs_get_station_forecast (limited to ~385 fixed CO-OPS stations),
     this tool queries the STOFS regular-grid product interpolated onto structured
@@ -468,9 +468,11 @@ async def stofs_get_gridded_forecast(
     Coverage: US East Coast, Gulf, West Coast, Alaska, Hawaii, Puerto Rico, Guam.
     Resolution: ~2.5 km (conus/hawaii/guam), ~1.25 km (Puerto Rico), ~6 km (Alaska).
 
-    Note: Uses NOMADS OPeNDAP which retains only a ~2-day rolling window and can
-    be intermittently slow or unavailable. If this tool fails, use
-    stofs_get_point_forecast (station-based, uses reliable AWS S3) as a fallback.
+    Note: NOMADS OPeNDAP was RETIRED in October 2025 (NWS Service Change Notice
+    25-81), so this tool currently returns a retirement notice rather than data.
+    Use stofs_get_point_forecast / stofs_get_station_forecast instead (station-
+    based, reliable AWS S3). It is kept so the retirement is reported clearly,
+    and so it resumes working automatically if NOMADS ever restores the service.
 
     Args:
         latitude: Target latitude in decimal degrees.
