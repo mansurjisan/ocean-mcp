@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from schism_mcp.client import SchismClient
+from schism_mcp.client import RetryTransport, SchismClient
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -36,6 +36,17 @@ def schism_client() -> SchismClient:
 def ctx(schism_client: SchismClient) -> MagicMock:
     """Create a mock Context wired to the SchismClient fixture."""
     return _make_ctx(schism_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = SchismClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 class TestExplainParameter:

@@ -11,7 +11,12 @@ import httpx
 import pytest
 import respx
 
-from ndbc_mcp.client import NDBCClient, REALTIME2_BASE, ACTIVE_STATIONS_URL
+from ndbc_mcp.client import (
+    NDBCClient,
+    REALTIME2_BASE,
+    ACTIVE_STATIONS_URL,
+    RetryTransport,
+)
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
@@ -539,3 +544,14 @@ class TestCappedObsJson:
         assert parsed["records"][0]["WVHT"] == 0.0
         assert parsed["records"][-1]["WVHT"] == 1999.0
         assert "most recent 2000 of 2500" in parsed["hint"]
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = NDBCClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
