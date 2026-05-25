@@ -34,8 +34,8 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0",
-    "httpx>=0.27",
+    "mcp[cli]>=1.0.0,<2",
+    "httpx>=0.27,<1",
 ]
 
 [project.urls]

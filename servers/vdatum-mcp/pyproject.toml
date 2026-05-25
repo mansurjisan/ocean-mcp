@@ -24,9 +24,9 @@ keywords = [
     "coastal",
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0",
+    "mcp[cli]>=1.0.0,<2",
     "coastalmodeling-vdatum @ git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git@0d63b2bbc0b0634e20a0ec55023a53354fab1b47",
-    "numpy>=1.26",
+    "numpy>=1.26,<3",
 ]
 
 [project.urls]
