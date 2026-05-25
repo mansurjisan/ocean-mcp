@@ -27,8 +27,12 @@ from .conftest import load_fixture, load_json_fixture
 
 @pytest.fixture
 def usgs_client():
-    """Create a fresh USGSClient for each test."""
-    return USGSClient()
+    """Create a fresh USGSClient for each test.
+
+    backoff_factor=0 so the retry transport replays transient failures with
+    no real delay, keeping the error-path tests fast.
+    """
+    return USGSClient(backoff_factor=0)
 
 
 @pytest.fixture
@@ -460,3 +464,51 @@ class TestCapWaterml:
         assert env["total"] == 2
         assert env["returned"] == 2
         assert "hint" not in env
+
+
+class TestRetryTransport:
+    """The RetryTransport replays transient GET failures (backoff_factor=0)."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_retries_transient_503_then_succeeds(self):
+        """A 503 followed by a 200 is retried through to success."""
+        route = respx.get(f"{USGS_BASE_URL}/iv/").mock(
+            side_effect=[
+                httpx.Response(503),
+                httpx.Response(200, json={"value": {"timeSeries": []}}),
+            ]
+        )
+        c = USGSClient(backoff_factor=0)
+        try:
+            data = await c.get_json("iv", {"sites": "01646500"})
+        finally:
+            await c.close()
+        assert route.call_count == 2
+        assert data == {"value": {"timeSeries": []}}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_exhausts_retries_on_persistent_500(self):
+        """A persistent 500 is retried max_retries times, then surfaces."""
+        route = respx.get(f"{USGS_BASE_URL}/iv/").mock(return_value=httpx.Response(500))
+        c = USGSClient(max_retries=2, backoff_factor=0)
+        try:
+            with pytest.raises(httpx.HTTPStatusError):
+                await c.get_json("iv", {"sites": "01646500"})
+        finally:
+            await c.close()
+        assert route.call_count == 3  # initial + 2 retries
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_does_not_retry_404(self):
+        """A non-transient 4xx is returned on the first attempt, not retried."""
+        route = respx.get(f"{USGS_BASE_URL}/iv/").mock(return_value=httpx.Response(404))
+        c = USGSClient(backoff_factor=0)
+        try:
+            with pytest.raises(httpx.HTTPStatusError):
+                await c.get_json("iv", {"sites": "01646500"})
+        finally:
+            await c.close()
+        assert route.call_count == 1
