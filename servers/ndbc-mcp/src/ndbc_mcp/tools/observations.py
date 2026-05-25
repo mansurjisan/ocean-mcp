@@ -28,6 +28,40 @@ def _format_value(val: Any, col: str) -> str:
     return str(val)
 
 
+def _capped_obs_json(
+    station_id: str,
+    hours: int,
+    records: list[dict],
+    build_row,
+    max_records: int,
+) -> str:
+    """Serialize NDBC records to JSON, capped to the most recent max_records.
+
+    NDBC realtime2 returns observations newest-first, so the head is the most
+    recent — keep records[:max_records]. A long window (hours up to 1080) is
+    thousands of ~10-minute records; dumping them all floods the model's
+    context. The wrapper carries truncated/returned/total (and a hint when
+    trimmed) so the caller knows the series was cut and how to narrow it.
+    """
+    total = len(records)
+    truncated = total > max_records
+    kept = records[:max_records] if truncated else records
+    out: dict[str, Any] = {
+        "station": station_id.upper(),
+        "hours": hours,
+        "truncated": truncated,
+        "returned": len(kept),
+        "total": total,
+        "records": [build_row(r) for r in kept],
+    }
+    if truncated:
+        out["hint"] = (
+            f"Showing the most recent {len(kept)} of {total} records. "
+            "Lower `hours` to narrow the series."
+        )
+    return json.dumps(out, indent=2)
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
@@ -109,6 +143,7 @@ async def ndbc_get_observations(
     hours: int = 24,
     variables: list[str] | None = None,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Get time series observations from an NDBC station.
 
@@ -119,6 +154,9 @@ async def ndbc_get_observations(
         hours: Number of hours to retrieve (default 24, max 1080 = 45 days).
         variables: Optional list of variables to include (e.g., ['WSPD', 'WVHT', 'WTMP']). Default: all available.
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON records returned (default 2000). A long hours
+            window is thousands of points; only the most recent max_records are
+            kept, and the JSON flags any truncation. (Markdown is already capped.)
     """
     try:
         if hours < 1 or hours > 1080:
@@ -140,18 +178,16 @@ async def ndbc_get_observations(
             data_cols = valid_vars
 
         if response_format == "json":
-            rows = []
-            for r in records:
+
+            def _row(r: dict) -> dict[str, Any]:
                 row: dict[str, Any] = {}
                 if r.get("datetime"):
                     row["datetime"] = r["datetime"].isoformat()
                 for col in data_cols:
                     row[col] = r.get(col)
-                rows.append(row)
-            return json.dumps(
-                {"station": station_id.upper(), "hours": hours, "records": rows},
-                indent=2,
-            )
+                return row
+
+            return _capped_obs_json(station_id, hours, records, _row, max_records)
 
         # Markdown table
         display_cols = data_cols[:8]  # Cap columns for readability
@@ -199,6 +235,7 @@ async def ndbc_get_wave_summary(
     station_id: str,
     hours: int = 24,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Get spectral wave summary from an NDBC station.
 
@@ -208,6 +245,9 @@ async def ndbc_get_wave_summary(
         station_id: NDBC station ID (e.g., '41001', '46042').
         hours: Number of hours to retrieve (default 24, max 1080).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON records returned (default 2000). Only the most
+            recent max_records are kept, and the JSON flags any truncation.
+            (Markdown is already capped.)
     """
     try:
         if hours < 1 or hours > 1080:
@@ -222,18 +262,16 @@ async def ndbc_get_wave_summary(
             return f"No spectral wave data found for station {station_id.upper()} in the past {hours} hours. Not all stations have spectral data."
 
         if response_format == "json":
-            rows = []
-            for r in records:
+
+            def _row(r: dict) -> dict[str, Any]:
                 row: dict[str, Any] = {}
                 if r.get("datetime"):
                     row["datetime"] = r["datetime"].isoformat()
                 for col in columns[5:]:
                     row[col] = r.get(col)
-                rows.append(row)
-            return json.dumps(
-                {"station": station_id.upper(), "hours": hours, "records": rows},
-                indent=2,
-            )
+                return row
+
+            return _capped_obs_json(station_id, hours, records, _row, max_records)
 
         data_cols = columns[5:]
         display_cols = data_cols[:8]
