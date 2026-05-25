@@ -38,13 +38,13 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "mcp[cli]>=1.0.0",
-    "httpx>=0.27.0",
-    "pydantic>=2.0.0",
-    "cfgrib>=0.9.12",
-    "eccodes>=2.37.0",
+    "mcp[cli]>=1.0.0,<2",
+    "httpx>=0.27.0,<1",
+    "pydantic>=2.0.0,<3",
+    "cfgrib>=0.9.12,<1",
+    "eccodes>=2.37.0,<3",
     "xarray>=2024.1.0",
-    "numpy>=1.26.0",
+    "numpy>=1.26.0,<3",
 ]
 
 [project.urls]
