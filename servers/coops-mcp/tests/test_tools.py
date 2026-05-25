@@ -20,6 +20,7 @@ from coops_mcp.client import (
     DATA_API_BASE,
     METADATA_API_BASE,
     DERIVED_API_BASE,
+    RetryTransport,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,14 +50,26 @@ def _make_ctx(client: COOPSClient) -> MagicMock:
 
 @pytest.fixture
 def coops_client() -> COOPSClient:
-    """Create a bare COOPSClient (its internal httpx client will be intercepted by respx)."""
-    return COOPSClient()
+    """Create a bare COOPSClient (intercepted by respx; backoff_factor=0 so
+    retries replay instantly)."""
+    return COOPSClient(backoff_factor=0)
 
 
 @pytest.fixture
 def ctx(coops_client: COOPSClient) -> MagicMock:
     """Create a mock Context wired to the COOPSClient fixture."""
     return _make_ctx(coops_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = COOPSClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 # ===========================================================================

@@ -15,7 +15,7 @@ from coops_mcp.client import (
 
 @pytest.fixture
 async def client():
-    c = COOPSClient()
+    c = COOPSClient(backoff_factor=0)
     yield c
     await c.close()
 
