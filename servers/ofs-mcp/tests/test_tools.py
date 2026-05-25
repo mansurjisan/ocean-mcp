@@ -15,7 +15,7 @@ import httpx
 import pytest
 import respx
 
-from ofs_mcp.client import OFSClient
+from ofs_mcp.client import OFSClient, RetryTransport
 from ofs_mcp.models import OFS_MODELS, OFSModel
 
 # ---------------------------------------------------------------------------
@@ -47,6 +47,17 @@ def make_ctx(client: OFSClient) -> MagicMock:
     return ctx
 
 
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = OFSClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
+
+
 # ---------------------------------------------------------------------------
 # Client fixture
 # ---------------------------------------------------------------------------
@@ -54,8 +65,12 @@ def make_ctx(client: OFSClient) -> MagicMock:
 
 @pytest.fixture
 async def client():
-    """Create an OFSClient and close it after the test."""
-    c = OFSClient()
+    """Create an OFSClient and close it after the test.
+
+    backoff_factor=0 so the retry transport replays transient failures with
+    no real delay, keeping the error-path tests fast.
+    """
+    c = OFSClient(backoff_factor=0)
     yield c
     await c.close()
 

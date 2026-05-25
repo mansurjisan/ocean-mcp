@@ -15,7 +15,7 @@ import httpx
 import pytest
 import respx
 
-from ww3_mcp.client import WW3Client
+from ww3_mcp.client import RetryTransport, WW3Client
 from ww3_mcp.models import WAVE_GRIDS, WaveGrid
 
 # ---------------------------------------------------------------------------
@@ -48,6 +48,17 @@ def make_ctx(client: WW3Client) -> MagicMock:
     return ctx
 
 
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = WW3Client()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
+
+
 # ---------------------------------------------------------------------------
 # Client fixture
 # ---------------------------------------------------------------------------
@@ -55,8 +66,12 @@ def make_ctx(client: WW3Client) -> MagicMock:
 
 @pytest.fixture
 async def client():
-    """Create a WW3Client and close it after the test."""
-    c = WW3Client()
+    """Create a WW3Client and close it after the test.
+
+    backoff_factor=0 so the retry transport replays transient failures with
+    no real delay, keeping the error-path tests fast.
+    """
+    c = WW3Client(backoff_factor=0)
     yield c
     await c.close()
 
