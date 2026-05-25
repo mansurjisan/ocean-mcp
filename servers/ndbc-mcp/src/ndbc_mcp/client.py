@@ -1,6 +1,8 @@
 """Async HTTP client for NDBC realtime2 text files and activestations XML."""
 
+import asyncio
 import math
+import random
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -16,6 +18,55 @@ from .models import (
 )
 
 
+# Transient responses worth retrying: rate-limit + the upstream/gateway 5xx
+# family that NOAA endpoints intermittently emit under load.
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+class RetryTransport(httpx.AsyncHTTPTransport):
+    """AsyncHTTPTransport that retries idempotent GETs on transient failures.
+
+    httpx's built-in ``retries=`` covers only connection errors; this also
+    retries transient HTTP 5xx/429 and timeouts (read included) with
+    exponential backoff plus jitter. These servers are read-only and issue
+    only GETs, which are safe to replay; non-GET requests and non-transient
+    responses pass straight through. Set ``backoff_factor=0`` to retry with
+    no delay (used by the test suite).
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        max_retries: int = 2,
+        backoff_factor: float = 0.5,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._max_retries = max_retries
+        self._backoff_factor = backoff_factor
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.method != "GET":
+            return await super().handle_async_request(request)
+
+        last_exc: httpx.TransportError | None = None
+        for attempt in range(self._max_retries + 1):
+            if attempt:
+                delay = self._backoff_factor * (2 ** (attempt - 1))
+                await asyncio.sleep(delay + random.uniform(0, delay / 2))
+            try:
+                response = await super().handle_async_request(request)
+            except httpx.TransportError as exc:
+                last_exc = exc
+                continue
+            if response.status_code in _RETRY_STATUS and attempt < self._max_retries:
+                await response.aclose()
+                continue
+            return response
+        assert last_exc is not None  # loop ran at least once
+        raise last_exc
+
+
 class NDBCAPIError(Exception):
     """Raised when an NDBC data request fails."""
 
@@ -23,8 +74,10 @@ class NDBCAPIError(Exception):
 class NDBCClient:
     """Client for NDBC realtime2 data and active-station metadata."""
 
-    def __init__(self) -> None:
+    def __init__(self, max_retries: int = 2, backoff_factor: float = 0.5) -> None:
         self._client: httpx.AsyncClient | None = None
+        self._max_retries = max_retries
+        self._backoff_factor = backoff_factor
         self._station_cache: list[dict[str, Any]] = []
         self._cache_time: float = 0.0
 
@@ -34,6 +87,10 @@ class NDBCClient:
                 timeout=30.0,
                 headers={"User-Agent": "ndbc-mcp/0.1.0"},
                 follow_redirects=True,
+                transport=RetryTransport(
+                    max_retries=self._max_retries,
+                    backoff_factor=self._backoff_factor,
+                ),
             )
         return self._client
 

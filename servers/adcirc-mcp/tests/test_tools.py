@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from adcirc_mcp.client import ADCIRCClient, WIKI_API_URL
+from adcirc_mcp.client import ADCIRCClient, RetryTransport, WIKI_API_URL
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -38,6 +38,17 @@ def adcirc_client() -> ADCIRCClient:
 def ctx(adcirc_client: ADCIRCClient) -> MagicMock:
     """Create a mock Context wired to the ADCIRCClient fixture."""
     return _make_ctx(adcirc_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = ADCIRCClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 class TestExplainParameter:
