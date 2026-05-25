@@ -21,7 +21,7 @@ import httpx
 import pytest
 import respx
 
-from recon_mcp.client import ReconClient
+from recon_mcp.client import ReconClient, RetryTransport
 from recon_mcp.models import AOML_SFMR_BASE, ATCF_FIX_BASE, NHC_RECON_ARCHIVE_BASE
 
 # Import tool functions directly
@@ -66,14 +66,26 @@ def make_ctx(client: ReconClient) -> MagicMock:
 
 @pytest.fixture
 def recon_client() -> ReconClient:
-    """Return a fresh ``ReconClient`` (no open connection yet)."""
-    return ReconClient()
+    """Return a fresh ``ReconClient`` (backoff_factor=0 so the retry transport
+    replays transient failures with no real delay)."""
+    return ReconClient(backoff_factor=0)
 
 
 @pytest.fixture
 def ctx(recon_client: ReconClient) -> MagicMock:
     """Return a mock Context wired to *recon_client*."""
     return make_ctx(recon_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = ReconClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 # ===================================================================

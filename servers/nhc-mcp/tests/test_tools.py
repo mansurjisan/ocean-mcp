@@ -25,7 +25,7 @@ import httpx
 import pytest
 import respx
 
-from nhc_mcp.client import NHCClient, CURRENT_STORMS_URL, HURDAT2_URLS
+from nhc_mcp.client import NHCClient, CURRENT_STORMS_URL, HURDAT2_URLS, RetryTransport
 from nhc_mcp.utils import ARCGIS_BASE_URL
 
 # Import tool functions directly
@@ -72,8 +72,12 @@ def make_ctx(client: NHCClient) -> MagicMock:
 
 @pytest.fixture
 async def client():
-    """Create a fresh NHCClient and tear it down after the test."""
-    c = NHCClient()
+    """Create a fresh NHCClient and tear it down after the test.
+
+    backoff_factor=0 so the retry transport replays transient failures with
+    no real delay, keeping the error-path tests fast.
+    """
+    c = NHCClient(backoff_factor=0)
     yield c
     await c.close()
 
@@ -82,6 +86,17 @@ async def client():
 def ctx(client):
     """Create a mock Context wrapping the NHCClient."""
     return make_ctx(client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = NHCClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 # ===========================================================================
