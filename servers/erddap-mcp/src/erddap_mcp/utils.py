@@ -81,6 +81,33 @@ def format_erddap_table(
     return "\n".join(lines)
 
 
+def cap_rows(rows: list[dict], max_records: int) -> tuple[list[dict], dict]:
+    """Cap an ERDDAP row list, returning (kept_rows, envelope_fields).
+
+    ERDDAP returns rows in the dataset's query order (not necessarily by time)
+    and applies its row limit as a head-truncation, so the cap keeps the first
+    ``max_records`` rows. The envelope carries record_count (returned), total
+    (before the cap) and truncated — plus a hint when trimmed — so the caller
+    knows the result was cut and how to narrow it. An uncapped JSON dump of a
+    large dataset floods the model's context.
+    """
+    total = len(rows)
+    truncated = total > max_records
+    kept = rows[:max_records] if truncated else rows
+    env: dict = {
+        "truncated": truncated,
+        "record_count": len(kept),
+        "total": total,
+    }
+    if truncated:
+        env["hint"] = (
+            f"Showing the first {len(kept)} of {total} rows. Narrow the query "
+            "(tighter constraints/ranges, a lower limit, or a larger stride) to "
+            "fetch fewer rows."
+        )
+    return kept, env
+
+
 def build_tabledap_query(
     variables: list[str] | None = None,
     constraints: dict[str, str | int | float] | None = None,
