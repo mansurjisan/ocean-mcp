@@ -1,5 +1,6 @@
 """Discovery tools for GOES satellite imagery products and timestamps."""
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -32,7 +33,7 @@ def _get_client(ctx: Context) -> GOESClient:
 )
 async def goes_list_products(
     ctx: Context,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """List all available GOES satellite imagery products.
 
@@ -118,7 +119,7 @@ async def goes_get_available_times(
     sector: str = "CONUS",
     product: str = "GEOCOLOR",
     limit: int = 10,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get available image timestamps for a GOES product.
 

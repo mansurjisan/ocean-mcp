@@ -1,5 +1,6 @@
 """Meteorological observation tools."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -57,7 +58,7 @@ async def coops_get_meteorological(
     units: Units = Units.METRIC,
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve meteorological observations from a CO-OPS station.

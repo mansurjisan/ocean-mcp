@@ -1,5 +1,6 @@
 """Streamflow data tools for USGS Water Services."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -98,7 +99,7 @@ async def usgs_get_instantaneous_values(
     site_number: str,
     parameter_code: str = "00060",
     period: str = "P7D",
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_points: int = 2000,
 ) -> str:
     """Get real-time (instantaneous) streamflow data from a USGS site.
@@ -183,7 +184,7 @@ async def usgs_get_daily_values(
     end_date: str,
     parameter_code: str = "00060",
     stat_code: str = "00003",
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_points: int = 2000,
 ) -> str:
     """Get daily mean/min/max streamflow values from a USGS site.
@@ -283,7 +284,7 @@ async def usgs_get_hydrograph(
     site_number: str,
     days: int = 7,
     include_median: bool = True,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get streamflow data formatted for hydrograph context.
 

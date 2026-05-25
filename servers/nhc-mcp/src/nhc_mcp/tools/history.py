@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from datetime import datetime
 
@@ -36,7 +37,7 @@ def _get_client(ctx: Context) -> NHCClient:
 async def nhc_get_best_track(
     ctx: Context,
     storm_id: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json", "geojson"] = "markdown",
 ) -> str:
     """Get best track (observed path) data for a tropical cyclone.
 
@@ -184,7 +185,7 @@ async def nhc_search_storms(
     basin: Basin | None = None,
     min_wind: int | None = None,
     limit: int = 50,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Search historical tropical cyclones in the HURDAT2 database.
 

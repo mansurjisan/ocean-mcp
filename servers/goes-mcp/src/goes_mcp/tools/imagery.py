@@ -1,5 +1,6 @@
 """Image retrieval tools for GOES satellite imagery."""
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -35,7 +36,7 @@ async def goes_get_latest_image(
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: str = "image",
+    response_format: Literal["image", "markdown", "json"] = "image",
 ):
     """Get the most recent GOES satellite image.
 
@@ -108,7 +109,7 @@ async def goes_get_image(
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: str = "image",
+    response_format: Literal["image", "markdown", "json"] = "image",
 ):
     """Get a GOES satellite image for a specific timestamp.
 
@@ -184,7 +185,7 @@ async def goes_get_sector_image(
     satellite: str = "goes-19",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: str = "image",
+    response_format: Literal["image", "markdown", "json"] = "image",
 ):
     """Get latest GOES imagery for a regional sector.
 
@@ -256,7 +257,7 @@ async def goes_get_sector_image(
 async def goes_get_current_view(
     ctx: Context,
     satellite: str = "goes-19",
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Quick overview of what GOES satellite imagery is available now.
 

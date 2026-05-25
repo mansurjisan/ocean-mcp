@@ -1,5 +1,6 @@
 """Flood analysis tools for USGS Water Services."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -101,7 +102,7 @@ async def usgs_get_peak_streamflow(
     site_number: str,
     start_year: int | None = None,
     end_year: int | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get annual peak streamflow records for a USGS site.
 
@@ -184,7 +185,7 @@ async def usgs_get_peak_streamflow(
 async def usgs_get_flood_status(
     ctx: Context,
     site_number: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Assess current flood conditions at a USGS site.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -50,7 +51,7 @@ async def _resolve_bin_number(client: NHCClient, storm_id: str) -> str | None:
 async def nhc_get_forecast_track(
     ctx: Context,
     storm_id: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json", "geojson"] = "markdown",
 ) -> str:
     """Get the official NHC 5-day forecast track positions for an active storm.
 
@@ -187,7 +188,7 @@ async def nhc_get_forecast_track(
 async def nhc_get_storm_watches_warnings(
     ctx: Context,
     storm_id: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get active watches and warnings for an active tropical cyclone.
 
