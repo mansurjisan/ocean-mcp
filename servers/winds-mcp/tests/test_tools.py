@@ -15,7 +15,7 @@ import httpx
 import pytest
 import respx
 
-from winds_mcp.client import WindsClient
+from winds_mcp.client import RetryTransport, WindsClient
 from winds_mcp.models import NWS_API_BASE
 
 # ---------------------------------------------------------------------------
@@ -45,14 +45,26 @@ def _make_ctx(client: WindsClient) -> MagicMock:
 
 @pytest.fixture
 def winds_client() -> WindsClient:
-    """Create a bare WindsClient (its internal httpx client will be intercepted by respx)."""
-    return WindsClient()
+    """Create a bare WindsClient (intercepted by respx; backoff_factor=0 so
+    retries replay instantly)."""
+    return WindsClient(backoff_factor=0)
 
 
 @pytest.fixture
 def ctx(winds_client: WindsClient) -> MagicMock:
     """Create a mock Context wired to the WindsClient fixture."""
     return _make_ctx(winds_client)
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = WindsClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 # ===========================================================================

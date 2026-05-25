@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from rtofs_mcp.client import RTOFSClient
+from rtofs_mcp.client import RetryTransport, RTOFSClient
 from rtofs_mcp.models import DATASETS, THREDDS_BASE
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -18,6 +18,17 @@ def _mock_ctx(client: RTOFSClient):
     ctx = MagicMock()
     ctx.request_context.lifespan_context = {"rtofs_client": client}
     return ctx
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = RTOFSClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 class TestFetchPointCSV:
@@ -133,7 +144,7 @@ class TestFetchPointCSV:
         url = f"{THREDDS_BASE}/ncss/{ds['path']}"
         respx.get(url).mock(side_effect=httpx.ReadTimeout("timeout"))
 
-        client = RTOFSClient()
+        client = RTOFSClient(backoff_factor=0)
         try:
             with pytest.raises(RTOFSAPIError, match="timed out"):
                 await client.fetch_point_csv(

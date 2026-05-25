@@ -7,15 +7,15 @@ import httpx
 import pytest
 import respx
 
-from goes_mcp.client import GOESClient, GOESAPIError
+from goes_mcp.client import GOESClient, GOESAPIError, RetryTransport
 from goes_mcp.models import SLIDER_BASE_URL, STAR_CDN_BASE
 from tests.conftest import load_fixture, load_fixture_bytes
 
 
 @pytest.fixture
 def coops_client() -> GOESClient:
-    """Create a bare GOESClient."""
-    return GOESClient()
+    """Create a bare GOESClient (backoff_factor=0 so retries replay instantly)."""
+    return GOESClient(backoff_factor=0)
 
 
 @pytest.fixture
@@ -24,6 +24,17 @@ def ctx(coops_client: GOESClient) -> MagicMock:
     mock_ctx = MagicMock()
     mock_ctx.request_context.lifespan_context = {"goes_client": coops_client}
     return mock_ctx
+
+
+@pytest.mark.asyncio
+async def test_client_uses_retry_transport() -> None:
+    """The shared httpx client is mounted on the RetryTransport."""
+    c = GOESClient()
+    client = await c._get_client()
+    try:
+        assert isinstance(client._transport, RetryTransport)
+    finally:
+        await c.close()
 
 
 class TestGoesListProducts:
