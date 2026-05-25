@@ -1,5 +1,6 @@
 """Observation retrieval tools for NWS surface wind data."""
 
+from typing import Literal
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -126,7 +127,7 @@ async def winds_get_latest_observation(
     ctx: Context,
     station_id: str,
     units: Units = Units.METRIC,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get the most recent surface observation at a station.
 
@@ -176,7 +177,7 @@ async def winds_get_observations(
     station_id: str,
     hours: int = 24,
     units: Units = Units.METRIC,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get recent surface observations over a time window.
 
@@ -249,7 +250,7 @@ async def winds_get_history(
     start_date: str,
     end_date: str,
     units: Units = Units.METRIC,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get historical ASOS wind data from the Iowa Environmental Mesonet archive.
 
@@ -373,7 +374,7 @@ async def winds_get_daily_summary(
     start_date: str,
     end_date: str,
     units: Units = Units.METRIC,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get daily wind statistics summary from IEM ASOS archive.
 
@@ -548,7 +549,7 @@ async def winds_compare_stations(
     ctx: Context,
     station_ids: list[str],
     units: Units = Units.METRIC,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare latest wind observations across multiple stations.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -42,7 +43,7 @@ async def ofs_get_forecast_at_point(
     model: OFSModel,
     variable: OFSVariable = OFSVariable.WATER_LEVEL,
     max_distance_km: float = 100.0,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get an OFS model forecast time series at a geographic point.
 
@@ -244,7 +245,7 @@ async def ofs_compare_with_coops(
     station_id: str,
     model: OFSModel,
     hours_to_compare: int = 24,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare OFS model water level forecast against CO-OPS observations at a station.
 

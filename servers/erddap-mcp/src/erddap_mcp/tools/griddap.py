@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from collections import OrderedDict
 
@@ -68,7 +69,7 @@ async def erddap_get_griddap_data(
     longitude_range: list[float] | None = None,
     depth_range: list[float] | None = None,
     stride: int = 1,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve gridded data from an ERDDAP griddap dataset with dimension subsetting.

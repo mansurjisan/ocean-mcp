@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import asyncio
 import json
 import math
@@ -38,7 +39,7 @@ async def rtofs_get_surface_forecast(
     variable: str = "sst",
     time_start: str | None = None,
     time_end: str | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get RTOFS surface time series at a point (SST, SSS, currents, or SSH).
 
@@ -189,7 +190,7 @@ async def rtofs_get_profile_forecast(
     longitude: float,
     variable: str = "temperature",
     time: str | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get RTOFS 3D depth profile at a point (temperature, salinity, or currents vs depth).
 
@@ -317,7 +318,7 @@ async def rtofs_get_area_forecast(
     variable: str = "sst",
     time: str | None = None,
     n_points: int = 10,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get RTOFS surface forecast for a grid of points in a bounding box.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -26,7 +27,9 @@ def _get_client(ctx: Context) -> OFSClient:
         openWorldHint=False,
     )
 )
-async def ofs_list_models(ctx: Context, response_format: str = "markdown") -> str:
+async def ofs_list_models(
+    ctx: Context, response_format: Literal["markdown", "json"] = "markdown"
+) -> str:
     """List all supported NOAA OFS regional ocean models with key metadata.
 
     Returns model names, grid types, geographic coverage, cycle schedules,
@@ -102,7 +105,7 @@ async def ofs_list_models(ctx: Context, response_format: str = "markdown") -> st
 async def ofs_get_model_info(
     ctx: Context,
     model: OFSModel,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get detailed specifications for a specific OFS model.
 

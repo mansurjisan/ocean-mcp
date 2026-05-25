@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -37,7 +38,7 @@ async def erddap_get_tabledap_data(
     variables: list[str] | None = None,
     constraints: dict[str, str | int | float] | None = None,
     limit: int = 1000,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve tabular data from an ERDDAP tabledap dataset with constraint filtering.

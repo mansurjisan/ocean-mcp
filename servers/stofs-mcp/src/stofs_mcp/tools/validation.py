@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -41,7 +42,7 @@ async def stofs_compare_with_observations(
     cycle_date: str | None = None,
     cycle_hour: str | None = None,
     hours_to_compare: int = 24,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare STOFS forecast against CO-OPS observed water levels at a station.
 

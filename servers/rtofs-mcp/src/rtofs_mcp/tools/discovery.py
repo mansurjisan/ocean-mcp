@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -26,7 +27,7 @@ def _get_client(ctx: Context) -> RTOFSClient:
 )
 async def rtofs_get_system_info(
     ctx: Context,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get RTOFS system overview — model specifications, variables, resolution, and coverage.
 
@@ -98,7 +99,7 @@ async def rtofs_get_system_info(
 async def rtofs_list_datasets(
     ctx: Context,
     check_availability: bool = True,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """List RTOFS datasets on HYCOM THREDDS with optional availability check.
 
@@ -166,7 +167,7 @@ async def rtofs_list_datasets(
 async def rtofs_get_latest_time(
     ctx: Context,
     dataset: str = "ssh",
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Query the latest available forecast time from HYCOM THREDDS.
 

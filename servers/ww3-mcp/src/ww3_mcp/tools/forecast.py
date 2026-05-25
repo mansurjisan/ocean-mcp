@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -46,7 +46,7 @@ async def ww3_get_forecast_at_point(
     variables: list[str] | None = None,
     max_hours: int = 120,
     step_hours: int = 3,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get GFS-Wave forecast time series at a geographic point.
 
@@ -180,7 +180,7 @@ async def ww3_get_point_snapshot(
     longitude: float,
     forecast_hour: int = 0,
     grid: WaveGrid = WaveGrid.GLOBAL_0P25,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get all wave variables at a single point and forecast time.
 
@@ -293,7 +293,7 @@ async def ww3_get_regional_summary(
     lon_max: float,
     forecast_hour: int = 0,
     grid: WaveGrid = WaveGrid.GLOBAL_0P25,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get spatial statistics for wave variables over a bounding box.
 
@@ -438,7 +438,7 @@ async def ww3_compare_forecast_with_buoy(
     buoy_lon: float,
     grid: WaveGrid = WaveGrid.GLOBAL_0P25,
     hours_to_compare: int = 24,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare GFS-Wave forecast with NDBC buoy observations.
 

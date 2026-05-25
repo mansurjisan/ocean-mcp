@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from pathlib import Path
 
@@ -43,7 +44,7 @@ async def stofs_get_station_forecast(
     product: STOFSProduct = STOFSProduct.CWL,
     cycle_date: str | None = None,
     cycle_hour: str | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get STOFS water level forecast time series at a specific CO-OPS station.
 
@@ -162,7 +163,7 @@ async def stofs_get_point_forecast(
     cycle_date: str | None = None,
     cycle_hour: str | None = None,
     max_distance_km: float = 50.0,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get STOFS forecast at an arbitrary lat/lon by finding the nearest station.
 
@@ -281,7 +282,7 @@ async def stofs_get_max_water_level(
     cycle_hour: str | None = None,
     top_n: int = 20,
     region: Region | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get the stations with the highest predicted water levels in a STOFS cycle.
 
@@ -456,7 +457,7 @@ async def stofs_get_gridded_forecast(
     variable: str | None = None,
     cycle_date: str | None = None,
     cycle_hour: str | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """[CURRENTLY UNAVAILABLE — NOMADS OPeNDAP retired Oct 2025, NWS SCN 25-81] Get STOFS forecast at any lat/lon from the regular gridded product via OPeNDAP.
 

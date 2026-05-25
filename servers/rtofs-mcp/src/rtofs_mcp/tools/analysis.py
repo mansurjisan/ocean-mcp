@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import asyncio
 import json
 import math
@@ -40,7 +41,7 @@ async def rtofs_get_transect(
     variable: str = "temperature",
     time: str | None = None,
     n_points: int = 10,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get a vertical transect (cross-section) between two points from RTOFS 3D data.
 
@@ -208,7 +209,7 @@ async def rtofs_compare_with_observations(
     longitude: float,
     variable: str = "sst",
     time: str | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare RTOFS forecast values at two different times at the same location.
 
