@@ -31,8 +31,12 @@ async def client():
 
 @pytest.fixture
 def usgs_client():
-    """Create a USGSClient instance for unit tests (not connected)."""
-    return USGSClient()
+    """Create a USGSClient instance for unit tests (not connected).
+
+    backoff_factor=0 so the retry transport replays transient failures with
+    no real delay, keeping the error-path tests fast.
+    """
+    return USGSClient(backoff_factor=0)
 
 
 @pytest.fixture
