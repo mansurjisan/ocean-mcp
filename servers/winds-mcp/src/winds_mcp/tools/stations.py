@@ -1,5 +1,6 @@
 """Station discovery tools for NWS surface wind observations."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -44,7 +45,7 @@ async def winds_list_stations(
     ctx: Context,
     state: str,
     limit: int = 50,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """List NWS weather stations by US state.
 
@@ -100,7 +101,7 @@ async def winds_list_stations(
 async def winds_get_station(
     ctx: Context,
     station_id: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get detailed metadata for a specific NWS station.
 
@@ -156,7 +157,7 @@ async def winds_find_nearest_stations(
     latitude: float,
     longitude: float,
     limit: int = 5,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Find NWS stations nearest to a geographic coordinate.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 
 from mcp.server.fastmcp import Context
@@ -32,7 +33,7 @@ async def ww3_get_buoy_observations(
     ctx: Context,
     station_id: str,
     hours: int = 24,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get recent wave observations from an NDBC buoy.
 
@@ -90,7 +91,7 @@ async def ww3_get_buoy_history(
     station_id: str,
     year: int,
     max_records: int = 500,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get historical annual wave observations from an NDBC buoy.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Literal
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -26,7 +27,9 @@ def _get_client(ctx: Context) -> WW3Client:
         openWorldHint=False,
     )
 )
-async def ww3_list_grids(ctx: Context, response_format: str = "markdown") -> str:
+async def ww3_list_grids(
+    ctx: Context, response_format: Literal["markdown", "json"] = "markdown"
+) -> str:
     """List available GFS-Wave (WAVEWATCH III) model grids with resolution and domain info.
 
     Returns grid IDs, resolution, geographic coverage, forecast length, and
@@ -200,7 +203,7 @@ async def ww3_find_buoys(
     longitude: float,
     radius_km: float = 200.0,
     limit: int = 10,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Find NDBC buoys near a geographic location.
 
