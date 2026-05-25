@@ -173,7 +173,9 @@ class TestGetInstantaneousValues:
             ctx, site_number="01646500", response_format="json"
         )
         parsed = json.loads(result)
-        assert "value" in parsed
+        # JSON is now wrapped in a truncation envelope; raw WaterML under "data".
+        assert {"truncated", "returned", "total", "data"} <= parsed.keys()
+        assert "value" in parsed["data"]
 
     @pytest.mark.asyncio
     async def test_get_iv_invalid_site(self, ctx):
@@ -429,3 +431,32 @@ class TestErrorHandling:
         respx.get(f"{USGS_BASE_URL}/iv/").mock(return_value=httpx.Response(500))
         result = await usgs_get_instantaneous_values(ctx, site_number="01646500")
         assert "Error" in result
+
+
+class TestCapWaterml:
+    """Tests for the WaterML JSON truncation envelope (_cap_waterml)."""
+
+    @staticmethod
+    def _waterml(n):
+        vals = [{"value": str(i), "dateTime": f"t{i}"} for i in range(n)]
+        return {"value": {"timeSeries": [{"values": [{"value": vals}]}]}}
+
+    def test_truncates_over_cap_keeping_most_recent(self):
+        from usgs_mcp.tools.streamflow import _cap_waterml
+
+        env = _cap_waterml(self._waterml(10), max_points=3)
+        assert env["truncated"] is True
+        assert env["total"] == 10
+        assert env["returned"] == 3
+        assert "hint" in env
+        kept = env["data"]["value"]["timeSeries"][0]["values"][0]["value"]
+        assert [v["value"] for v in kept] == ["7", "8", "9"]
+
+    def test_under_cap_untouched(self):
+        from usgs_mcp.tools.streamflow import _cap_waterml
+
+        env = _cap_waterml(self._waterml(2), max_points=5)
+        assert env["truncated"] is False
+        assert env["total"] == 2
+        assert env["returned"] == 2
+        assert "hint" not in env
