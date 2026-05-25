@@ -262,8 +262,7 @@ class STOFSClient:
             if (
                 body.startswith("<!doctype html")
                 or body.startswith("<html")
-                or "OpenDAP" in body[:200]
-                and "retired" in body
+                or ("OpenDAP" in body[:200] and "retired" in body)
             ):
                 return False, "retired"
             if response.status_code != 200:
