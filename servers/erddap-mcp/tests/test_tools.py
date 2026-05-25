@@ -630,6 +630,8 @@ class TestGetGriddapData:
         parsed = json.loads(result)
         assert parsed["dataset_id"] == "erdMH1chlamday"
         assert parsed["record_count"] == 6
+        assert parsed["truncated"] is False
+        assert parsed["total"] == 6
         assert len(parsed["data"]) == 6
         assert parsed["variables"] == ["chlorophyll"]
 
@@ -795,6 +797,8 @@ class TestGetTabledapData:
         parsed = json.loads(result)
         assert parsed["dataset_id"] == "cwwcNDBCMet"
         assert parsed["record_count"] == 5
+        assert parsed["truncated"] is False
+        assert parsed["total"] == 5
         assert len(parsed["data"]) == 5
         # First row should have expected keys
         row0 = parsed["data"][0]

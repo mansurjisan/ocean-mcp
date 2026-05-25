@@ -12,6 +12,7 @@ from ..client import ERDDAPClient
 from ..server import mcp
 from ..utils import (
     build_griddap_query,
+    cap_rows,
     format_erddap_table,
     handle_erddap_error,
     parse_erddap_json,
@@ -68,6 +69,7 @@ async def erddap_get_griddap_data(
     depth_range: list[float] | None = None,
     stride: int = 1,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve gridded data from an ERDDAP griddap dataset with dimension subsetting.
 
@@ -81,6 +83,9 @@ async def erddap_get_griddap_data(
         depth_range: Depth/altitude range as [min, max] (optional, for datasets with depth dimension).
         stride: Step size for subsetting (default 1). Increase to reduce data volume.
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON rows returned (default 2000). The first
+            max_records grid points are kept and the JSON flags any truncation.
+            (Markdown is already capped at 100 rows.)
     """
     try:
         client = _get_client(ctx)
@@ -187,13 +192,14 @@ async def erddap_get_griddap_data(
         rows = parse_erddap_json(data)
 
         if response_format == "json":
+            kept, env = cap_rows(rows, max_records)
             result = {
                 "server_url": server_url,
                 "dataset_id": dataset_id,
                 "dimensions": dim_names,
                 "variables": variables,
-                "record_count": len(rows),
-                "data": rows,
+                **env,
+                "data": kept,
             }
             if warnings:
                 result["warnings"] = warnings

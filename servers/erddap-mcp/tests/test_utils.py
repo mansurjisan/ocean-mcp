@@ -5,6 +5,7 @@ from collections import OrderedDict
 from erddap_mcp.utils import (
     build_griddap_query,
     build_tabledap_query,
+    cap_rows,
     format_erddap_table,
     handle_erddap_error,
     parse_erddap_json,
@@ -232,3 +233,30 @@ class TestHandleErddapError:
         err = httpx.ReadTimeout("timed out")
         result = handle_erddap_error(err, "https://example.com/erddap")
         assert "timed out" in result.lower()
+
+
+# --- cap_rows ---
+
+
+class TestCapRows:
+    def test_under_cap_untouched(self):
+        """At or below the cap nothing is trimmed; counts agree, no hint."""
+        rows = [{"i": n} for n in range(10)]
+        kept, env = cap_rows(rows, 2000)
+        assert kept == rows
+        assert env["truncated"] is False
+        assert env["record_count"] == 10
+        assert env["total"] == 10
+        assert "hint" not in env
+
+    def test_over_cap_keeps_head(self):
+        """Over the cap, the first max_records rows are kept (head), with a hint."""
+        rows = [{"i": n} for n in range(2500)]
+        kept, env = cap_rows(rows, 2000)
+        assert len(kept) == 2000
+        assert kept[0]["i"] == 0
+        assert kept[-1]["i"] == 1999
+        assert env["truncated"] is True
+        assert env["record_count"] == 2000
+        assert env["total"] == 2500
+        assert "first 2000 of 2500 rows" in env["hint"]

@@ -11,6 +11,7 @@ from ..client import ERDDAPClient
 from ..server import mcp
 from ..utils import (
     build_tabledap_query,
+    cap_rows,
     format_erddap_table,
     handle_erddap_error,
     parse_erddap_json,
@@ -37,6 +38,7 @@ async def erddap_get_tabledap_data(
     constraints: dict[str, str | int | float] | None = None,
     limit: int = 1000,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve tabular data from an ERDDAP tabledap dataset with constraint filtering.
 
@@ -47,6 +49,9 @@ async def erddap_get_tabledap_data(
         constraints: Dict of constraints, e.g. {"time>=": "2024-01-01", "latitude>=": 38.0, "station=": "46013"}.
         limit: Maximum number of rows to return (default 1000).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON rows returned (default 2000). The first
+            max_records rows are kept and the JSON flags any truncation.
+            (Markdown is already capped at 100 rows.)
     """
     try:
         client = _get_client(ctx)
@@ -75,11 +80,12 @@ async def erddap_get_tabledap_data(
         rows = parse_erddap_json(data)
 
         if response_format == "json":
+            kept, env = cap_rows(rows, max_records)
             result = {
                 "server_url": server_url,
                 "dataset_id": dataset_id,
-                "record_count": len(rows),
-                "data": rows,
+                **env,
+                "data": kept,
             }
             if warnings:
                 result["warnings"] = warnings
