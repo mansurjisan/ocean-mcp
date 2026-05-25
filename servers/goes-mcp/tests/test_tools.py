@@ -7,7 +7,12 @@ import httpx
 import pytest
 import respx
 
-from goes_mcp.client import GOESClient, GOESAPIError, RetryTransport
+from goes_mcp.client import (
+    GOESClient,
+    GOESAPIError,
+    RetryTransport,
+    handle_goes_error,
+)
 from goes_mcp.models import SLIDER_BASE_URL, STAR_CDN_BASE
 from tests.conftest import load_fixture, load_fixture_bytes
 
@@ -35,6 +40,34 @@ async def test_client_uses_retry_transport() -> None:
         assert isinstance(client._transport, RetryTransport)
     finally:
         await c.close()
+
+
+class TestHandleGoesError:
+    """handle_goes_error gives typed, actionable messages (not a raw repr)."""
+
+    def test_goes_api_error(self) -> None:
+        assert handle_goes_error(GOESAPIError("no such product")) == (
+            "GOES Error: no such product"
+        )
+
+    def test_http_status_error(self) -> None:
+        req = httpx.Request("GET", "https://example.com/img.jpg")
+        exc = httpx.HTTPStatusError(
+            "boom", request=req, response=httpx.Response(404, request=req)
+        )
+        msg = handle_goes_error(exc)
+        assert "HTTP 404" in msg
+        assert "goes_get_available_times" in msg
+
+    def test_timeout_error(self) -> None:
+        msg = handle_goes_error(httpx.TimeoutException("slow"))
+        assert "timed out" in msg.lower()
+        assert "markdown" in msg
+
+    def test_generic_error(self) -> None:
+        msg = handle_goes_error(ValueError("weird"))
+        assert "ValueError" in msg
+        assert "weird" in msg
 
 
 class TestGoesListProducts:

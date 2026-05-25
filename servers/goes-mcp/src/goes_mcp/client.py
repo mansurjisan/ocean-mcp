@@ -74,6 +74,29 @@ class GOESAPIError(Exception):
     """Custom exception for GOES API errors."""
 
 
+def handle_goes_error(e: Exception) -> str:
+    """Format an exception into a clear, actionable error message.
+
+    Replaces a bare ``f"**Error**: {e}"`` so the model sees the failure
+    category and a concrete next step instead of a raw exception repr.
+    """
+    if isinstance(e, GOESAPIError):
+        return f"GOES Error: {e}"
+    if isinstance(e, httpx.HTTPStatusError):
+        return (
+            f"GOES Error: HTTP {e.response.status_code} fetching imagery. The "
+            "satellite/product/sector/time combination may not exist yet — check "
+            "goes_get_available_times or goes_list_products."
+        )
+    if isinstance(e, httpx.TimeoutException):
+        return (
+            "GOES Error: request timed out fetching imagery (full-resolution GOES "
+            "images are large). Try again, or use response_format='markdown' to get "
+            "the image URL instead of the embedded image."
+        )
+    return f"GOES Error: {type(e).__name__}: {e}"
+
+
 class GOESClient:
     """Async client for NOAA STAR CDN and RAMMB/CIRA SLIDER APIs."""
 

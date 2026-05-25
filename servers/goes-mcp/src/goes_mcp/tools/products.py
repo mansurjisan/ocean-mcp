@@ -5,7 +5,7 @@ import json
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import GOESClient
+from ..client import GOESClient, handle_goes_error
 from ..models import (
     ABI_BANDS,
     COMPOSITE_PRODUCTS,
@@ -184,4 +184,4 @@ async def goes_get_available_times(
         return "\n".join(lines)
 
     except Exception as e:
-        return f"**Error**: {e}"
+        return handle_goes_error(e)
