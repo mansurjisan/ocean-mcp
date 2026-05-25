@@ -1,7 +1,7 @@
 """Observation retrieval tools for NDBC buoy data."""
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -73,7 +73,7 @@ def _capped_obs_json(
 async def ndbc_get_latest_observation(
     ctx: Context,
     station_id: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get the latest observation from an NDBC station.
 
@@ -142,7 +142,7 @@ async def ndbc_get_observations(
     station_id: str,
     hours: int = 24,
     variables: list[str] | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Get time series observations from an NDBC station.
@@ -234,7 +234,7 @@ async def ndbc_get_wave_summary(
     ctx: Context,
     station_id: str,
     hours: int = 24,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Get spectral wave summary from an NDBC station.

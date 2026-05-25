@@ -1,5 +1,6 @@
 """Station discovery and metadata tools for NDBC buoys."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -177,7 +178,7 @@ async def ndbc_find_nearest_stations(
     station_type: str | None = None,
     has_met: bool | None = None,
     limit: int = 5,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "geojson"] = "markdown",
 ) -> str:
     """Find NDBC stations nearest to a geographic coordinate.
 

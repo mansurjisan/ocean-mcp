@@ -1,5 +1,6 @@
 """Tool: nhc_get_active_storms — currently active tropical cyclones."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -22,7 +23,7 @@ def _get_client(ctx: Context) -> NHCClient:
 )
 async def nhc_get_active_storms(
     ctx: Context,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get currently active tropical cyclones from the National Hurricane Center.
 

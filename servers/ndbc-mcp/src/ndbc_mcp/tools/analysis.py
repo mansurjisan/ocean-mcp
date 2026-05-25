@@ -2,7 +2,7 @@
 
 import json
 from collections import defaultdict
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -29,7 +29,7 @@ async def ndbc_get_daily_summary(
     station_id: str,
     days: int = 7,
     variables: list[str] | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get daily min/max/mean statistics for key variables over recent days.
 
@@ -148,7 +148,7 @@ async def ndbc_get_daily_summary(
 async def ndbc_compare_stations(
     ctx: Context,
     station_ids: list[str],
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Compare latest observations from multiple NDBC stations side by side.
 

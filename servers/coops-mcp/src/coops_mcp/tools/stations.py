@@ -1,5 +1,6 @@
 """Station discovery and metadata tools."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -244,7 +245,7 @@ async def coops_find_nearest_stations(
     radius_km: float = 50.0,
     station_type: StationType | None = None,
     limit: int = 5,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "geojson"] = "markdown",
 ) -> str:
     """Find CO-OPS stations nearest to a geographic coordinate.
 

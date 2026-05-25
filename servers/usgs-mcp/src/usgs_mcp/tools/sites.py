@@ -1,5 +1,6 @@
 """Site discovery and metadata tools for USGS Water Services."""
 
+from typing import Literal
 import math
 
 from mcp.server.fastmcp import Context
@@ -43,7 +44,7 @@ async def usgs_find_sites(
     site_type: str = "ST",
     parameter_code: str = "00060",
     limit: int = 20,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Find USGS gauge stations by state or bounding box.
 
@@ -126,7 +127,7 @@ async def usgs_find_sites(
 async def usgs_get_site_info(
     ctx: Context,
     site_number: str,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get detailed metadata for a specific USGS site.
 
@@ -206,7 +207,7 @@ async def usgs_find_nearest_sites(
     radius_miles: float = 25.0,
     parameter_code: str = "00060",
     limit: int = 10,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json", "geojson"] = "markdown",
 ) -> str:
     """Find USGS sites near a geographic point.
 

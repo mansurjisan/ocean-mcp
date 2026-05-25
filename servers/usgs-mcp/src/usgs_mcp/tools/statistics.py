@@ -1,5 +1,6 @@
 """Statistical summary tools for USGS Water Services."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -55,7 +56,7 @@ async def usgs_get_monthly_stats(
     ctx: Context,
     site_number: str,
     parameter_code: str = "00060",
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get monthly streamflow statistics for a USGS site.
 
@@ -147,7 +148,7 @@ async def usgs_get_daily_stats(
     site_number: str,
     parameter_code: str = "00060",
     month: int | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get daily streamflow statistics (flow duration) for a USGS site.
 

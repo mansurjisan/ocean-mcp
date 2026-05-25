@@ -1,5 +1,6 @@
 """Water level observation and tide prediction tools."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -37,7 +38,7 @@ async def coops_get_water_levels(
     units: Units = Units.METRIC,
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve observed water level data from a CO-OPS station.
@@ -157,7 +158,7 @@ async def coops_get_tide_predictions(
     units: Units = Units.METRIC,
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve tide predictions for a CO-OPS station.

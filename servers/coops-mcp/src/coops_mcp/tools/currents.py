@@ -1,5 +1,6 @@
 """Currents observation and prediction tools."""
 
+from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -37,7 +38,7 @@ async def coops_get_currents(
     units: Units = Units.METRIC,
     time_zone: TimeZone = TimeZone.GMT,
     bin_num: int | None = None,
-    response_format: str = "markdown",
+    response_format: Literal["markdown", "json"] = "markdown",
     max_records: int = 2000,
 ) -> str:
     """Retrieve current (water flow) observations or predictions from a CO-OPS currents station.
