@@ -163,6 +163,7 @@ class TestFormatJsonResponse:
         assert parsed["total_count"] == 5
         assert len(parsed["data"]["data"]) == 5
         assert "hint" not in parsed
+        assert "retrieved_at" in parsed
 
     def test_data_shape_capped_keeps_most_recent(self):
         """An over-cap 'data' series is trimmed to its most recent max_records."""

@@ -1,5 +1,6 @@
 """Streamflow data tools for USGS Water Services."""
 
+from datetime import datetime, timezone
 from typing import Literal
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -33,6 +34,7 @@ def _cap_waterml(data: dict, max_points: int) -> dict:
                 truncated = True
             returned += len(vset["value"])
     envelope: dict = {"truncated": truncated, "returned": returned, "total": total}
+    envelope["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     if truncated:
         envelope["hint"] = (
             f"Showing the most recent {returned} of {total} points. Narrow "

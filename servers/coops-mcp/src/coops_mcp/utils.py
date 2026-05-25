@@ -3,7 +3,7 @@
 import json
 import math
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def format_station_summary(station: dict) -> str:
@@ -214,6 +214,7 @@ def format_json_response(
     wrapper: dict = {
         "station_id": station_id,
         "request_params": params or {},
+        "retrieved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "truncated": truncated,
         "record_count": len(records),
         "total_count": total,
