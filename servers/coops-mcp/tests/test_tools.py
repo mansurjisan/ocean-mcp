@@ -100,6 +100,8 @@ class TestGetWaterLevels:
         parsed = json.loads(result)
         assert parsed["station_id"] == "8518750"
         assert parsed["record_count"] >= 1
+        assert parsed["truncated"] is False
+        assert parsed["total_count"] == parsed["record_count"]
         assert "data" in parsed
 
     @respx.mock
@@ -224,6 +226,8 @@ class TestGetTidePredictions:
         parsed = json.loads(result)
         assert parsed["station_id"] == "8518750"
         assert parsed["record_count"] == 8
+        assert parsed["truncated"] is False
+        assert parsed["total_count"] == 8
         assert "predictions" in parsed["data"]
 
     @respx.mock

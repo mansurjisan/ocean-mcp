@@ -1,8 +1,11 @@
 """Tests for utility functions."""
 
+import json
+
 import pytest
 
 from coops_mcp.utils import (
+    format_json_response,
     format_station_summary,
     format_tabular_data,
     haversine_distance,
@@ -131,3 +134,71 @@ class TestFormatTabularData:
             [{"a": "1"}], [("a", "A")], count_label="observations"
         )
         assert "1 observations returned" in result
+
+    def test_under_cap_not_truncated(self):
+        """At or below max_rows the footer is the plain 'returned' form."""
+        data = [{"v": str(i)} for i in range(10)]
+        result = format_tabular_data(data, [("v", "V")], max_rows=10)
+        assert "10 records returned" in result
+        assert "truncated" not in result
+
+    def test_truncates_over_cap_keeping_most_recent(self):
+        """Over max_rows, only the most recent rows render and the footer says so."""
+        data = [{"v": str(i)} for i in range(2500)]  # 0..2499, oldest first
+        result = format_tabular_data(data, [("v", "V")], max_rows=2000)
+        assert "Showing the most recent 2000 of 2500 records (truncated)" in result
+        # Most recent kept (2499 present), oldest dropped (0 absent as its own row).
+        assert "| 2499 |" in result
+        assert "| 0 |" not in result
+
+
+class TestFormatJsonResponse:
+    def test_under_cap_untouched(self):
+        """A small payload is wrapped but not trimmed; counts agree."""
+        data = {"data": [{"v": i} for i in range(5)]}
+        parsed = json.loads(format_json_response(data, "8518750", {"product": "x"}))
+        assert parsed["station_id"] == "8518750"
+        assert parsed["truncated"] is False
+        assert parsed["record_count"] == 5
+        assert parsed["total_count"] == 5
+        assert len(parsed["data"]["data"]) == 5
+        assert "hint" not in parsed
+
+    def test_data_shape_capped_keeps_most_recent(self):
+        """An over-cap 'data' series is trimmed to its most recent max_records."""
+        data = {"data": [{"v": i} for i in range(3000)]}  # 0..2999, oldest first
+        parsed = json.loads(format_json_response(data, max_records=2000))
+        assert parsed["truncated"] is True
+        assert parsed["record_count"] == 2000
+        assert parsed["total_count"] == 3000
+        kept = parsed["data"]["data"]
+        assert len(kept) == 2000
+        assert kept[0]["v"] == 1000  # oldest 1000 dropped
+        assert kept[-1]["v"] == 2999  # most recent kept
+        assert "most recent 2000 of 3000" in parsed["hint"]
+
+    def test_predictions_shape_capped(self):
+        """The 'predictions' shape (tide predictions) is capped the same way."""
+        data = {"predictions": [{"v": i} for i in range(2500)]}
+        parsed = json.loads(format_json_response(data, max_records=2000))
+        assert parsed["truncated"] is True
+        assert parsed["total_count"] == 2500
+        assert len(parsed["data"]["predictions"]) == 2000
+        assert parsed["data"]["predictions"][-1]["v"] == 2499
+
+    def test_currents_predictions_nested_cp_capped(self):
+        """Currents predictions nest the array at current_predictions.cp."""
+        data = {
+            "current_predictions": {
+                "units": "meters, cm/s",
+                "cp": [{"Velocity_Major": i} for i in range(2500)],
+            }
+        }
+        parsed = json.loads(format_json_response(data, max_records=2000))
+        assert parsed["truncated"] is True
+        assert parsed["total_count"] == 2500
+        cp = parsed["data"]["current_predictions"]["cp"]
+        assert len(cp) == 2000
+        assert cp[-1]["Velocity_Major"] == 2499
+        # Sibling metadata is preserved through the cap.
+        assert parsed["data"]["current_predictions"]["units"] == "meters, cm/s"

@@ -38,6 +38,7 @@ async def coops_get_currents(
     time_zone: TimeZone = TimeZone.GMT,
     bin_num: int | None = None,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve current (water flow) observations or predictions from a CO-OPS currents station.
 
@@ -53,6 +54,8 @@ async def coops_get_currents(
         time_zone: Time zone — 'gmt', 'lst', or 'lst_ldt' (default: gmt).
         bin_num: Depth bin number for multi-bin stations (optional).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on records returned (default 2000). Only the most
+            recent max_records are kept, and the output flags any truncation.
     """
     try:
         client = _get_client(ctx)
@@ -81,7 +84,9 @@ async def coops_get_currents(
         data = await client.fetch_data(params)
 
         if response_format == "json":
-            return format_json_response(data, station_id, params)
+            return format_json_response(
+                data, station_id, params, max_records=max_records
+            )
 
         records = data.get(
             "data", data.get("current_predictions", data.get("predictions", []))
@@ -107,7 +112,12 @@ async def coops_get_currents(
         meta = [f"Units: {units.value}", f"Timezone: {time_zone.value}"]
 
         return format_tabular_data(
-            records, columns, title=title, metadata_lines=meta, count_label="records"
+            records,
+            columns,
+            title=title,
+            metadata_lines=meta,
+            count_label="records",
+            max_rows=max_records,
         )
     except ValueError as e:
         return f"Validation Error: {e}"

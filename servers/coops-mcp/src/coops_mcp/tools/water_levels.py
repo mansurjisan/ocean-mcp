@@ -38,6 +38,7 @@ async def coops_get_water_levels(
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve observed water level data from a CO-OPS station.
 
@@ -54,6 +55,9 @@ async def coops_get_water_levels(
         interval: Data interval — '6' (6-min), 'h' (hourly), 'hilo' (high/low only). Default is 6-min.
         time_zone: Time zone — 'gmt', 'lst', or 'lst_ldt' (default: gmt).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on records returned (default 2000). A long 6-min range
+            is tens of thousands of points; only the most recent max_records are
+            kept, and the output flags any truncation.
     """
     try:
         client = _get_client(ctx)
@@ -91,7 +95,9 @@ async def coops_get_water_levels(
         data = await client.fetch_data(params)
 
         if response_format == "json":
-            return format_json_response(data, station_id, params)
+            return format_json_response(
+                data, station_id, params, max_records=max_records
+            )
 
         # Markdown formatting
         unit_label = "m" if units == Units.METRIC else "ft"
@@ -126,6 +132,7 @@ async def coops_get_water_levels(
             title=title,
             metadata_lines=meta,
             count_label="observations",
+            max_rows=max_records,
         )
     except ValueError as e:
         return f"Validation Error: {e}"
@@ -151,6 +158,7 @@ async def coops_get_tide_predictions(
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve tide predictions for a CO-OPS station.
 
@@ -166,6 +174,9 @@ async def coops_get_tide_predictions(
         interval: Prediction interval — '6' (6-min), 'h' (hourly), 'hilo' (high/low only). Default is 6-min.
         time_zone: Time zone — 'gmt', 'lst', or 'lst_ldt' (default: gmt).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on predictions returned (default 2000). A long 6-min
+            range is tens of thousands of points; only the most recent
+            max_records are kept, and the output flags any truncation.
     """
     try:
         client = _get_client(ctx)
@@ -191,7 +202,9 @@ async def coops_get_tide_predictions(
         data = await client.fetch_data(params)
 
         if response_format == "json":
-            return format_json_response(data, station_id, params)
+            return format_json_response(
+                data, station_id, params, max_records=max_records
+            )
 
         unit_label = "m" if units == Units.METRIC else "ft"
         records = data.get("predictions", [])
@@ -221,6 +234,7 @@ async def coops_get_tide_predictions(
             title=title,
             metadata_lines=meta,
             count_label="predictions",
+            max_rows=max_records,
         )
     except ValueError as e:
         return f"Validation Error: {e}"
