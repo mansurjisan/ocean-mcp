@@ -12,6 +12,35 @@ def _get_client(ctx: Context) -> USGSClient:
     return ctx.request_context.lifespan_context["usgs_client"]
 
 
+def _cap_waterml(data: dict, max_points: int) -> dict:
+    """Cap each WaterML time series to its most recent ``max_points`` values
+    and wrap the payload with a truncation envelope.
+
+    The raw USGS IV/DV JSON is unbounded (a long ``period`` can be tens of
+    thousands of records), and dumping it whole floods the model's context.
+    This keeps the most recent points and tells the model it was truncated.
+    """
+    total = 0
+    returned = 0
+    truncated = False
+    for ts in data.get("value", {}).get("timeSeries", []):
+        for vset in ts.get("values", []):
+            vals = vset.get("value", [])
+            total += len(vals)
+            if len(vals) > max_points:
+                vset["value"] = vals[-max_points:]  # keep the most recent
+                truncated = True
+            returned += len(vset["value"])
+    envelope: dict = {"truncated": truncated, "returned": returned, "total": total}
+    if truncated:
+        envelope["hint"] = (
+            f"Showing the most recent {returned} of {total} points. Narrow "
+            "`period`, or use response_format='markdown' for a summary."
+        )
+    envelope["data"] = data
+    return envelope
+
+
 def _handle_error(e: Exception) -> str:
     """Format an exception into a user-friendly error message."""
     import httpx
@@ -70,6 +99,7 @@ async def usgs_get_instantaneous_values(
     parameter_code: str = "00060",
     period: str = "P7D",
     response_format: str = "markdown",
+    max_points: int = 2000,
 ) -> str:
     """Get real-time (instantaneous) streamflow data from a USGS site.
 
@@ -81,6 +111,9 @@ async def usgs_get_instantaneous_values(
         parameter_code: USGS parameter code — '00060' (discharge, default) or '00065' (gage height).
         period: ISO 8601 duration for lookback period (default 'P7D' = 7 days). Max 'P120D'.
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_points: For json output, cap each series to the most recent N points
+            (default 2000) so a long period doesn't flood context; the response
+            carries a {truncated,returned,total} envelope.
     """
     try:
         if not site_number.isdigit() or len(site_number) < 8:
@@ -99,7 +132,7 @@ async def usgs_get_instantaneous_values(
         if response_format == "json":
             import json
 
-            return json.dumps(data, indent=2)
+            return json.dumps(_cap_waterml(data, max_points), indent=2)
 
         values, var_name, unit = _extract_timeseries(data)
 
@@ -151,6 +184,7 @@ async def usgs_get_daily_values(
     parameter_code: str = "00060",
     stat_code: str = "00003",
     response_format: str = "markdown",
+    max_points: int = 2000,
 ) -> str:
     """Get daily mean/min/max streamflow values from a USGS site.
 
@@ -164,6 +198,9 @@ async def usgs_get_daily_values(
         parameter_code: USGS parameter code — '00060' (discharge, default) or '00065' (gage height).
         stat_code: Statistic code — '00003' (mean, default), '00001' (max), '00002' (min).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_points: For json output, cap each series to the most recent N points
+            (default 2000) so a multi-decade range doesn't flood context; the
+            response carries a {truncated,returned,total} envelope.
     """
     try:
         if not site_number.isdigit() or len(site_number) < 8:
@@ -196,7 +233,7 @@ async def usgs_get_daily_values(
         if response_format == "json":
             import json
 
-            return json.dumps(data, indent=2)
+            return json.dumps(_cap_waterml(data, max_points), indent=2)
 
         values, var_name, unit = _extract_timeseries(data)
 
