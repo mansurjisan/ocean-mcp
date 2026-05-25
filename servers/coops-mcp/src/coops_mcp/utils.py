@@ -113,15 +113,20 @@ def format_tabular_data(
     title: str = "",
     metadata_lines: list[str] | None = None,
     count_label: str = "records",
+    max_rows: int = 2000,
 ) -> str:
     """Format a list of dicts as a markdown table.
 
     Args:
-        data: List of row dicts.
+        data: List of row dicts (assumed chronological, oldest first).
         columns: List of (dict_key, display_header) pairs.
         title: Optional markdown heading.
         metadata_lines: Optional lines shown below the title.
         count_label: Label for the count footer.
+        max_rows: Cap on rows rendered. A long 6-min range can be tens of
+            thousands of records; rendering them all floods the model's
+            context. When the data exceeds the cap, the most recent
+            ``max_rows`` are kept and the footer says so.
     """
     lines: list[str] = []
 
@@ -132,32 +137,94 @@ def format_tabular_data(
         lines.append(" | ".join(f"**{m}**" for m in metadata_lines))
         lines.append("")
 
+    total = len(data)
+    truncated = total > max_rows
+    rows = data[-max_rows:] if truncated else data
+
     # Header
     headers = [col[1] for col in columns]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
     # Rows
-    for row in data:
+    for row in rows:
         cells = [str(row.get(col[0], "")) for col in columns]
         lines.append("| " + " | ".join(cells) + " |")
 
     lines.append("")
-    lines.append(f"*{len(data)} {count_label} returned. Data from NOAA CO-OPS.*")
+    if truncated:
+        lines.append(
+            f"*Showing the most recent {len(rows)} of {total} {count_label} "
+            f"(truncated). Narrow the date range, use a coarser interval "
+            f"(e.g. 'h' for hourly), or call with response_format='json' and a "
+            f"higher max_records for the full series. Data from NOAA CO-OPS.*"
+        )
+    else:
+        lines.append(f"*{len(rows)} {count_label} returned. Data from NOAA CO-OPS.*")
 
     return "\n".join(lines)
 
 
 def format_json_response(
-    data: dict, station_id: str = "", params: dict | None = None
+    data: dict,
+    station_id: str = "",
+    params: dict | None = None,
+    max_records: int = 2000,
 ) -> str:
-    """Format API response as JSON string with metadata wrapper."""
-    wrapper = {
+    """Format API response as a JSON string with a metadata wrapper.
+
+    Caps the embedded record list to its most recent ``max_records`` entries
+    (CO-OPS returns them oldest-first) so a long date range doesn't flood the
+    model's context. ``record_count`` is the number actually returned;
+    ``total_count`` and ``truncated`` make any trimming explicit.
+    """
+    # Locate the embedded record list across CO-OPS product shapes:
+    #   observations / met     -> data["data"]
+    #   tide predictions       -> data["predictions"]
+    #   currents predictions   -> data["current_predictions"]["cp"]
+    location: tuple[str, ...] = ()
+    if isinstance(data.get("data"), list):
+        location, records = ("data",), data["data"]
+    elif isinstance(data.get("predictions"), list):
+        location, records = ("predictions",), data["predictions"]
+    elif isinstance(data.get("current_predictions"), dict) and isinstance(
+        data["current_predictions"].get("cp"), list
+    ):
+        location, records = (
+            ("current_predictions", "cp"),
+            data["current_predictions"]["cp"],
+        )
+    else:
+        records = []
+
+    total = len(records)
+    truncated = total > max_records
+    if truncated:
+        records = records[-max_records:]
+        if location == ("data",):
+            data = {**data, "data": records}
+        elif location == ("predictions",):
+            data = {**data, "predictions": records}
+        elif location == ("current_predictions", "cp"):
+            data = {
+                **data,
+                "current_predictions": {**data["current_predictions"], "cp": records},
+            }
+
+    wrapper: dict = {
         "station_id": station_id,
         "request_params": params or {},
-        "record_count": len(data.get("data", data.get("predictions", []))),
+        "truncated": truncated,
+        "record_count": len(records),
+        "total_count": total,
         "data": data,
     }
+    if truncated:
+        wrapper["hint"] = (
+            f"Showing the most recent {len(records)} of {total} records. "
+            "Narrow the date range, or use a coarser interval (e.g. 'h' for "
+            "hourly), to retrieve the full series."
+        )
     return json.dumps(wrapper, indent=2)
 
 

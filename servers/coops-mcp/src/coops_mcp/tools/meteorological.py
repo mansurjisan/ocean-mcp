@@ -58,6 +58,7 @@ async def coops_get_meteorological(
     interval: Interval | None = None,
     time_zone: TimeZone = TimeZone.GMT,
     response_format: str = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Retrieve meteorological observations from a CO-OPS station.
 
@@ -71,6 +72,8 @@ async def coops_get_meteorological(
         interval: Data interval — '6' (6-min) or 'h' (hourly).
         time_zone: Time zone — 'gmt', 'lst', or 'lst_ldt' (default: gmt).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on records returned (default 2000). Only the most
+            recent max_records are kept, and the output flags any truncation.
     """
     try:
         client = _get_client(ctx)
@@ -99,7 +102,9 @@ async def coops_get_meteorological(
         data = await client.fetch_data(params)
 
         if response_format == "json":
-            return format_json_response(data, station_id, params)
+            return format_json_response(
+                data, station_id, params, max_records=max_records
+            )
 
         records = data.get("data", [])
         columns = _MET_COLUMNS.get(product.value, [("t", "Time"), ("v", "Value")])
@@ -113,6 +118,7 @@ async def coops_get_meteorological(
             title=title,
             metadata_lines=meta,
             count_label="observations",
+            max_rows=max_records,
         )
     except ValueError as e:
         return f"Validation Error: {e}"
