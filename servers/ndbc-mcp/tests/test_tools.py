@@ -3,6 +3,7 @@
 All HTTP calls are mocked using respx; no network access is required.
 """
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -152,6 +153,32 @@ class TestFindNearestStations:
 
         assert "44013" in result
         assert "km" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_find_nearest_geojson(self, ctx: MagicMock) -> None:
+        """GeoJSON output is a Point FeatureCollection with [lon, lat] coords."""
+        from ndbc_mcp.tools.stations import ndbc_find_nearest_stations
+
+        xml = _load_fixture("activestations.xml")
+        respx.get(ACTIVE_STATIONS_URL).mock(return_value=httpx.Response(200, text=xml))
+
+        result = await ndbc_find_nearest_stations(
+            ctx,
+            latitude=42.36,
+            longitude=-71.06,
+            radius_km=300,
+            response_format="geojson",
+        )
+
+        gj = json.loads(result)
+        assert gj["type"] == "FeatureCollection"
+        assert gj["features"], "expected at least one station feature"
+        feat = gj["features"][0]
+        assert feat["geometry"]["type"] == "Point"
+        lon, lat = feat["geometry"]["coordinates"]
+        assert -180 <= lon <= 180 and -90 <= lat <= 90
+        assert "distance_km" in feat["properties"]
 
     @respx.mock
     @pytest.mark.asyncio

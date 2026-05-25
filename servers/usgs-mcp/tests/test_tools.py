@@ -118,6 +118,24 @@ class TestFindNearestSites:
         result = await usgs_find_nearest_sites(ctx, latitude=38.9, longitude=-77.1)
         assert "Nearest USGS Sites" in result
 
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_find_nearest_sites_geojson(self, ctx):
+        """GeoJSON output is a Point FeatureCollection with [lon, lat] coords."""
+        rdb_text = load_fixture("site_search.rdb")
+        respx.get(f"{USGS_BASE_URL}/site/").mock(
+            return_value=httpx.Response(200, text=rdb_text)
+        )
+        result = await usgs_find_nearest_sites(
+            ctx, latitude=38.9, longitude=-77.1, response_format="geojson"
+        )
+        gj = json.loads(result)
+        assert gj["type"] == "FeatureCollection"
+        assert gj["features"], "expected at least one site feature"
+        feat = gj["features"][0]
+        assert feat["geometry"]["type"] == "Point"
+        assert "site_no" in feat["properties"]
+
     @pytest.mark.asyncio
     async def test_find_nearest_sites_invalid_lat(self, ctx):
         """Find nearest sites with out-of-range latitude returns validation error."""
