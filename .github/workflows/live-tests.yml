@@ -8,11 +8,15 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   live-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # NOTE: do NOT set continue-on-error here. A failing server must turn the
+    # run red so the default failure notification fires — this job's whole
+    # purpose is early warning of upstream NOAA endpoint drift. fail-fast is
+    # off so one server's outage doesn't cancel the others.
     strategy:
       fail-fast: false
       matrix:
@@ -38,3 +42,21 @@ jobs:
         working-directory: servers/${{ matrix.server }}
         run: uv run pytest tests/test_live.py -v -s --tb=short
         timeout-minutes: 5
+
+      # On failure, open (or comment on) a per-server drift issue so the
+      # signal is actionable, not just a red X in the Actions tab.
+      - name: Report drift on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Live API drift: ${{ matrix.server }}"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="Weekly live-API tests failed for \`${{ matrix.server }}\` — most often an upstream NOAA endpoint moved (drift). Investigate and verify against the live source. Run: ${run_url}"
+          num=$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" \
+                --json number,title --jq "map(select(.title == \"$title\")) | .[0].number // empty")
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "${{ github.repository }}" --body "$body"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
+          fi
