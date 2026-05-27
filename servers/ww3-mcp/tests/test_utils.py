@@ -7,6 +7,7 @@ from pathlib import Path
 from ww3_mcp.utils import (
     denormalize_lon,
     format_wave_observation_table,
+    handle_ww3_error,
     haversine,
     normalize_lon,
     parse_ndbc_realtime,
@@ -252,3 +253,19 @@ class TestFormatWaveObservationTable:
         ]
         result = format_wave_observation_table(records)
         assert "—" in result
+
+
+class TestHandleWw3ErrorGrib:
+    """handle_ww3_error turns the opaque ecCodes failure into setup guidance."""
+
+    def test_eccodes_error_gives_install_guidance(self):
+        msg = handle_ww3_error(RuntimeError("Cannot find the ecCodes library"))
+        assert "ecCodes" in msg
+        assert "conda" in msg
+        # points the user at the GRIB-free fallback tools
+        assert "ww3_get_buoy" in msg
+
+    def test_non_grib_error_is_unaffected(self):
+        msg = handle_ww3_error(ValueError("bad latitude"))
+        assert "ecCodes" not in msg
+        assert "bad latitude" in msg

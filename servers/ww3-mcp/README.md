@@ -2,6 +2,17 @@
 
 MCP server for **NOAA GFS-Wave (WAVEWATCH III)** forecasts and **NDBC buoy** wave observations.
 
+## Requirements — ecCodes (native library)
+
+The forecast tools read GFS-Wave **GRIB2** via `cfgrib`, which needs the
+**ecCodes C library** — *not* pip-installable on every platform. If it's
+missing, the GRIB tools return a clear setup message (the NDBC buoy tools work
+without it). Install ecCodes one of:
+
+- **conda** (easiest): `conda install -c conda-forge eccodes cfgrib`
+- **Debian/Ubuntu**: `apt-get install libeccodes0` then `pip install cfgrib`
+- **macOS (Homebrew)**: `brew install eccodes` then `pip install cfgrib`
+
 ## Features
 
 - **GFS-Wave Forecasts** — Wave height, period, direction from NOMADS GRIB2 data (up to 16 days)
