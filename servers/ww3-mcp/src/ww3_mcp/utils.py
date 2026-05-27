@@ -482,6 +482,18 @@ def handle_ww3_error(e: Exception, context: str = "") -> str:
 
     label = f" ({context})" if context else ""
 
+    # cfgrib/ecCodes is a native dependency (not pip-installable everywhere);
+    # surface an actionable setup fix instead of the opaque cfgrib/ecCodes error.
+    if "eccodes" in str(e).lower():
+        return (
+            f"GRIB support unavailable{label}: cfgrib could not load the ecCodes "
+            "C library. WW3 forecast tools read GFS-Wave GRIB2 and need ecCodes "
+            "installed — via conda (`conda install -c conda-forge eccodes cfgrib`) "
+            "or your OS package manager (e.g. `apt-get install libeccodes0` then "
+            "`pip install cfgrib`); see the ww3-mcp README. NDBC buoy tools "
+            "(ww3_get_buoy_*) work without GRIB."
+        )
+
     if isinstance(e, httpx.HTTPStatusError):
         status = e.response.status_code
         if status == 404:
