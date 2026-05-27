@@ -1218,3 +1218,29 @@ class TestAlignTimeseriesForComparison:
         assert len(ct) == 2
         assert af == [2.0, 3.0]
         assert ao == [2.1, 3.1]
+
+
+def test_cap_series_json_caps_and_signals():
+    """_cap_series_json caps the times/values series, signals it, stamps retrieved_at."""
+    import json
+
+    from stofs_mcp.tools.forecast import _cap_series_json
+
+    parsed = json.loads(
+        _cap_series_json(
+            {"times": list(range(2500)), "values": list(range(2500))}, max_points=2000
+        )
+    )
+    assert parsed["truncated"] is True
+    assert parsed["n_points"] == 2000
+    assert parsed["total_points"] == 2500
+    assert len(parsed["times"]) == 2000
+    assert parsed["times"][0] == 0  # near-term head kept
+    assert "retrieved_at" in parsed
+    assert "first 2000 of 2500" in parsed["hint"]
+
+    whole = json.loads(_cap_series_json({"times": [1, 2], "values": [3, 4]}))
+    assert whole["truncated"] is False
+    assert whole["total_points"] == 2
+    assert "retrieved_at" in whole
+    assert "hint" not in whole

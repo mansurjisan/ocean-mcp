@@ -221,3 +221,28 @@ class TestToolRegistration:
         }
         for name in expected:
             assert name in tool_names, f"Tool '{name}' not registered"
+
+
+def test_cap_series_json_caps_data():
+    """_cap_series_json caps the surface-forecast `data` series + stamps retrieved_at."""
+    import json
+
+    from rtofs_mcp.tools.forecast import _cap_series_json
+
+    parsed = json.loads(
+        _cap_series_json(
+            {"data": [{"time": i, "value": i} for i in range(2500)]}, max_points=2000
+        )
+    )
+    assert parsed["truncated"] is True
+    assert parsed["n_rows"] == 2000
+    assert parsed["total_rows"] == 2500
+    assert len(parsed["data"]) == 2000
+    assert parsed["data"][0]["time"] == 0
+    assert "retrieved_at" in parsed
+    assert "first 2000 of 2500" in parsed["hint"]
+
+    whole = json.loads(_cap_series_json({"data": [{"time": 0, "value": 1}]}))
+    assert whole["truncated"] is False
+    assert whole["total_rows"] == 1
+    assert "retrieved_at" in whole
