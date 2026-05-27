@@ -36,20 +36,20 @@ async def goes_get_latest_image(
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: Literal["image", "markdown", "json"] = "image",
+    response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get the most recent GOES satellite image.
 
-    Fetches the latest image from NOAA STAR CDN. Default returns the image
-    directly (base64 JPEG). Use response_format='markdown' for a URL reference
-    or 'json' for metadata only.
+    Fetches the latest image from NOAA STAR CDN. Default returns a markdown URL
+    reference (light on the model's context); use response_format='image' for
+    the embedded base64 JPEG, or 'json' for metadata only.
 
     Args:
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
         coverage: Coverage area — 'CONUS' (Continental US) or 'FD' (Full Disk).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', 'Sandwich', 'FireTemperature', 'Dust', 'DMW').
         resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest'.
-        response_format: Output — 'image' (default, embedded JPEG), 'markdown' (URL), or 'json' (metadata).
+        response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
@@ -86,7 +86,7 @@ async def goes_get_latest_image(
             ]
             return "\n".join(lines)
 
-        # Default: return embedded image
+        # response_format == "image": return the embedded base64 JPEG
         img_bytes = await client.get_image(url)
         return Image(data=img_bytes, format="jpeg")
 
@@ -109,7 +109,7 @@ async def goes_get_image(
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: Literal["image", "markdown", "json"] = "image",
+    response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get a GOES satellite image for a specific timestamp.
 
@@ -122,7 +122,7 @@ async def goes_get_image(
         coverage: Coverage area — 'CONUS' (Continental US) or 'FD' (Full Disk).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', etc.).
         resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000'.
-        response_format: Output — 'image' (default, embedded JPEG), 'markdown' (URL), or 'json' (metadata).
+        response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
@@ -163,7 +163,7 @@ async def goes_get_image(
             ]
             return "\n".join(lines)
 
-        # Default: return embedded image
+        # response_format == "image": return the embedded base64 JPEG
         img_bytes = await client.get_image(url)
         return Image(data=img_bytes, format="jpeg")
 
@@ -185,7 +185,7 @@ async def goes_get_sector_image(
     satellite: str = "goes-19",
     product: str = "GEOCOLOR",
     resolution: str = "1250x750",
-    response_format: Literal["image", "markdown", "json"] = "image",
+    response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get latest GOES imagery for a regional sector.
 
@@ -198,7 +198,7 @@ async def goes_get_sector_image(
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', etc.).
         resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest'.
-        response_format: Output — 'image' (default, embedded JPEG), 'markdown' (URL), or 'json' (metadata).
+        response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
@@ -238,7 +238,7 @@ async def goes_get_sector_image(
             ]
             return "\n".join(lines)
 
-        # Default: return embedded image
+        # response_format == "image": return the embedded base64 JPEG
         img_bytes = await client.get_image(url)
         return Image(data=img_bytes, format="jpeg")
 

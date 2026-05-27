@@ -199,6 +199,18 @@ class TestGoesGetLatestImage:
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_latest_image_default_is_markdown(self, ctx: MagicMock) -> None:
+        """Default response_format is now markdown (URL), not an embedded image."""
+        from goes_mcp.tools.imagery import goes_get_latest_image
+
+        result = await goes_get_latest_image(
+            ctx, satellite="goes-19", coverage="CONUS", product="GEOCOLOR"
+        )
+        assert isinstance(result, str)
+        assert "cdn.star.nesdis.noaa.gov" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_latest_image_json(self, ctx: MagicMock) -> None:
         """Fetch latest image with JSON format returns structured metadata."""
         from goes_mcp.tools.imagery import goes_get_latest_image
@@ -221,7 +233,7 @@ class TestGoesGetLatestImage:
     @respx.mock
     @pytest.mark.asyncio
     async def test_latest_image_returns_image(self, ctx: MagicMock) -> None:
-        """Fetch latest image with default format returns Image object."""
+        """Fetch latest image with response_format='image' returns an Image object."""
         from mcp.server.fastmcp.utilities.types import Image
 
         from goes_mcp.tools.imagery import goes_get_latest_image
@@ -281,7 +293,7 @@ class TestGoesGetImage:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_image_returns_image(self, ctx: MagicMock) -> None:
-        """Fetch timestamped image with default format returns Image object."""
+        """Fetch timestamped image with response_format='image' returns an Image object."""
         from mcp.server.fastmcp.utilities.types import Image
 
         from goes_mcp.tools.imagery import goes_get_image
@@ -347,7 +359,7 @@ class TestGoesGetSectorImage:
     @respx.mock
     @pytest.mark.asyncio
     async def test_sector_image_returns_image(self, ctx: MagicMock) -> None:
-        """Fetch sector image with default format returns Image object."""
+        """Fetch sector image with response_format='image' returns an Image object."""
         from mcp.server.fastmcp.utilities.types import Image
 
         from goes_mcp.tools.imagery import goes_get_sector_image
