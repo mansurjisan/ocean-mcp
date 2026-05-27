@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp.server.fastmcp import Context
@@ -27,6 +28,36 @@ from ..utils import (
 
 def _get_client(ctx: Context) -> STOFSClient:
     return ctx.request_context.lifespan_context["stofs_client"]
+
+
+def _cap_series_json(result: dict, max_points: int = 2000) -> str:
+    """Serialize a forecast result to JSON, capping the times/values series.
+
+    A station/point forecast is a long parallel times[]/values[] series (STOFS
+    runs ~1,860 points); the json path would otherwise dump it whole and flood
+    the model's context. Keep the first ``max_points`` (the near-term forecast),
+    record n_points/total_points/truncated, and stamp retrieved_at (per
+    CONVENTIONS.md).
+    """
+    times = result.get("times", []) or []
+    values = result.get("values", []) or []
+    total = len(times)
+    truncated = total > max_points
+    if truncated:
+        times = times[:max_points]
+        values = values[:max_points]
+        result["times"] = times
+        result["values"] = values
+    result["n_points"] = len(times)
+    result["total_points"] = total
+    result["truncated"] = truncated
+    result["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if truncated:
+        result["hint"] = (
+            f"Showing the first {len(times)} of {total} forecast points "
+            "(truncated to limit response size)."
+        )
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool(
@@ -108,7 +139,7 @@ async def stofs_get_station_forecast(
         }.get(product.value, product.value)
 
         if response_format == "json":
-            return json.dumps(
+            return _cap_series_json(
                 {
                     "station_id": station_id,
                     "model": model.value,
@@ -118,13 +149,11 @@ async def stofs_get_station_forecast(
                     "datum": datum,
                     "lat": data.get("lat"),
                     "lon": data.get("lon"),
-                    "n_points": len(times),
                     "model_start": data.get("model_start"),
                     "model_end": data.get("model_end"),
                     "times": times,
                     "values": values,
-                },
-                indent=2,
+                }
             )
 
         return format_timeseries_table(
@@ -233,7 +262,7 @@ async def stofs_get_point_forecast(
         )
 
         if response_format == "json":
-            return json.dumps(
+            return _cap_series_json(
                 {
                     "query_lat": latitude,
                     "query_lon": longitude,
@@ -245,8 +274,7 @@ async def stofs_get_point_forecast(
                     "datum": datum,
                     "times": times,
                     "values": values,
-                },
-                indent=2,
+                }
             )
 
         return format_timeseries_table(

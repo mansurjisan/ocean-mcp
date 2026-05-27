@@ -28,6 +28,34 @@ def _get_client(ctx: Context) -> OFSClient:
     return ctx.request_context.lifespan_context["ofs_client"]
 
 
+def _cap_series_json(result: dict, max_points: int = 2000) -> str:
+    """Serialize a forecast result to JSON, capping the times/values series.
+
+    A point forecast is a parallel times[]/values[] series; the json path would
+    otherwise dump it whole. Keep the first ``max_points``, record
+    n_points/total_points/truncated, and stamp retrieved_at (per CONVENTIONS.md).
+    """
+    times = result.get("times", []) or []
+    values = result.get("values", []) or []
+    total = len(times)
+    truncated = total > max_points
+    if truncated:
+        times = times[:max_points]
+        values = values[:max_points]
+        result["times"] = times
+        result["values"] = values
+    result["n_points"] = len(times)
+    result["total_points"] = total
+    result["truncated"] = truncated
+    result["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if truncated:
+        result["hint"] = (
+            f"Showing the first {len(times)} of {total} forecast points "
+            "(truncated to limit response size)."
+        )
+    return json.dumps(result, indent=2)
+
+
 @mcp.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
@@ -200,7 +228,7 @@ async def ofs_get_forecast_at_point(
             }
             if cleanup_notes:
                 result["cleanup_notes"] = cleanup_notes
-            return json.dumps(result, indent=2)
+            return _cap_series_json(result)
 
         metadata = [
             f"Query location: ({latitude:.4f}°N, {longitude:.4f}°E)",

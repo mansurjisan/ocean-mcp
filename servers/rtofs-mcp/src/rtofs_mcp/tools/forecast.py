@@ -6,6 +6,7 @@ from typing import Literal
 import asyncio
 import json
 import math
+from datetime import datetime, timezone
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -22,6 +23,31 @@ from ..server import mcp
 
 def _get_client(ctx: Context) -> RTOFSClient:
     return ctx.request_context.lifespan_context["rtofs_client"]
+
+
+def _cap_series_json(result: dict, max_points: int = 2000) -> str:
+    """Serialize a forecast result to JSON, capping its `data` row series.
+
+    A surface time-series can be a long `data` list; the json path would
+    otherwise dump it whole. Keep the first ``max_points``, record
+    n_rows/total_rows/truncated, and stamp retrieved_at (per CONVENTIONS.md).
+    """
+    rows = result.get("data", []) or []
+    total = len(rows)
+    truncated = total > max_points
+    if truncated:
+        rows = rows[:max_points]
+        result["data"] = rows
+    result["n_rows"] = len(rows)
+    result["total_rows"] = total
+    result["truncated"] = truncated
+    result["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if truncated:
+        result["hint"] = (
+            f"Showing the first {len(rows)} of {total} points "
+            "(truncated to limit response size)."
+        )
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool(
@@ -110,7 +136,7 @@ async def rtofs_get_surface_forecast(
             )
 
         if response_format == "json":
-            return json.dumps(
+            return _cap_series_json(
                 {
                     "variable": variable,
                     "thredds_variable": thredds_var,
@@ -119,13 +145,11 @@ async def rtofs_get_surface_forecast(
                     "query_lon": longitude,
                     "actual_lat": valid_rows[0].get("latitude"),
                     "actual_lon": valid_rows[0].get("longitude"),
-                    "n_rows": len(valid_rows),
                     "data": [
                         {"time": r.get("time", ""), "value": r[thredds_var]}
                         for r in valid_rows
                     ],
-                },
-                indent=2,
+                }
             )
 
         # Markdown table
