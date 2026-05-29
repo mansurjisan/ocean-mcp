@@ -798,14 +798,16 @@ class TestOfsCompareWithCoopsMetadata:
         )
 
         ctx = make_ctx(client)
-        # hours_to_compare=200 should be clamped to 96
+        # hours_to_compare=200 should be clamped to 96 (not rejected).
+        # NOTE: a meaningful content assertion isn't possible here — reaching the
+        # clamp logic requires passing client.open_opendap(), a netCDF4/THREDDS
+        # open that respx can't intercept (it would make a real, slow network
+        # call). So this stays a no-crash check; the clamp value isn't observable
+        # in the output regardless.
         result = await ofs_compare_with_coops(
             ctx, station_id="8571892", model=OFSModel.CBOFS, hours_to_compare=200
         )
-
-        # Since no cycles found, we get an appropriate message
-        # The point is that it did not crash with hours_to_compare=200
-        assert isinstance(result, str)
+        assert isinstance(result, str) and result
 
 
 # ============================================================================

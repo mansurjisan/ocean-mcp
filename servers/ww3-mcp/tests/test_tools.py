@@ -379,10 +379,10 @@ class TestWw3GetBuoyObservations:
         )
 
         ctx = make_ctx(client)
-        # hours=0 should be clamped to 1
+        # hours=0 should be clamped to 1 (not rejected) and still render data
         result = await ww3_get_buoy_observations(ctx, station_id="41025", hours=0)
-        # Should not crash
-        assert isinstance(result, str)
+        assert "41025" in result  # clamped, parsed, and rendered observations
+        assert "No observation data" not in result
 
 
 # ============================================================================

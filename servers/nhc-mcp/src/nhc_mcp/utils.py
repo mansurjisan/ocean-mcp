@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from datetime import datetime
@@ -431,19 +430,6 @@ def format_tabular_data(
     lines.append(f"*{len(data)} {count_label} returned. Data from {source}.*")
 
     return "\n".join(lines)
-
-
-def format_json_response(data: dict | list, context: str = "") -> str:
-    """Format data as a JSON string with optional context."""
-    wrapper: dict = {}
-    if context:
-        wrapper["context"] = context
-    if isinstance(data, list):
-        wrapper["record_count"] = len(data)
-        wrapper["data"] = data
-    else:
-        wrapper.update(data)
-    return json.dumps(wrapper, indent=2)
 
 
 def build_track_geojson(
