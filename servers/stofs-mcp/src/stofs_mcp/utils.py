@@ -518,8 +518,19 @@ async def resolve_latest_cycle(
     Returns:
         (date_str, cycle_str) tuple (e.g., ('20260219', '12')), or None.
     """
+    import time
     from datetime import timedelta
     from .models import MODEL_CYCLES
+
+    # Short-TTL cache on the client: resolving sweeps several S3 HEADs and every
+    # forecast tool resolves on each call. Cache positive results only.
+    cache = getattr(client, "_cycle_cache", None)
+    ttl = getattr(client, "_cycle_cache_ttl", 0.0)
+    now = time.monotonic()
+    if cache is not None:
+        hit = cache.get(model)
+        if hit is not None and now - hit[0] < ttl:
+            return hit[1]
 
     cycles = MODEL_CYCLES.get(model, ["12"])
     today = datetime.now(timezone.utc)
@@ -530,6 +541,8 @@ async def resolve_latest_cycle(
         for cycle in cycles:
             url = client.build_station_url(model, date_str, cycle)
             if await client.check_file_exists(url):
+                if cache is not None:
+                    cache[model] = (now, (date_str, cycle))
                 return date_str, cycle
 
     return None

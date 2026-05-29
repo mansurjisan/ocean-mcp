@@ -1005,3 +1005,34 @@ class TestSSRFGuard:
             ctx, search_for="x", server_url="http://169.254.169.254"
         )
         assert "Blocked for security" in result
+
+
+@respx.mock
+async def test_search_is_cached():
+    """A repeated search (same server/query/page) is served from cache."""
+    route = respx.get(url__startswith=f"{COASTWATCH}/search/index.json").mock(
+        return_value=httpx.Response(200, json={"table": {"rows": []}})
+    )
+    c = ERDDAPClient()
+    try:
+        first = await c.search(COASTWATCH, "sst")
+        second = await c.search(COASTWATCH, "sst")
+    finally:
+        await c.close()
+    assert first == second
+    assert route.call_count == 1  # second search hit the cache
+
+
+@respx.mock
+async def test_search_ttl_zero_disables_cache():
+    """search_cache_ttl=0 disables the cache — each search re-fetches."""
+    route = respx.get(url__startswith=f"{COASTWATCH}/search/index.json").mock(
+        return_value=httpx.Response(200, json={"table": {"rows": []}})
+    )
+    c = ERDDAPClient(search_cache_ttl=0)
+    try:
+        await c.search(COASTWATCH, "sst")
+        await c.search(COASTWATCH, "sst")
+    finally:
+        await c.close()
+    assert route.call_count == 2

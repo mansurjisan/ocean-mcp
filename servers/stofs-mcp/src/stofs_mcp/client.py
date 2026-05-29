@@ -76,10 +76,21 @@ class STOFSAPIError(Exception):
 class STOFSClient:
     """Async client for downloading STOFS data and fetching CO-OPS observations."""
 
-    def __init__(self, max_retries: int = 2, backoff_factor: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_retries: int = 2,
+        backoff_factor: float = 0.5,
+        cycle_cache_ttl: float = 600.0,
+    ) -> None:
         self._client: httpx.AsyncClient | None = None
         self._max_retries = max_retries
         self._backoff_factor = backoff_factor
+        # Cache the resolved latest cycle per model for a short TTL (read/written
+        # by utils.resolve_latest_cycle). Resolving sweeps several S3 HEADs and
+        # every forecast tool resolves on each call; a cycle publishes every
+        # ~6 h, so a 10-min cache is safe. cycle_cache_ttl=0 disables it (tests).
+        self._cycle_cache: dict[str, tuple[float, tuple[str, str]]] = {}
+        self._cycle_cache_ttl = cycle_cache_ttl
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
