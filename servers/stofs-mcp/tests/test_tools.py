@@ -1244,3 +1244,34 @@ def test_cap_series_json_caps_and_signals():
     assert whole["total_points"] == 2
     assert "retrieved_at" in whole
     assert "hint" not in whole
+
+
+@respx.mock
+async def test_resolve_latest_cycle_is_cached():
+    """A second resolve for the same model is served from cache (no new HEADs)."""
+    route = respx.head(url__regex=r".*noaa-gestofs-pds.*").mock(
+        return_value=httpx.Response(200)
+    )
+    c = STOFSClient()
+    try:
+        first = await resolve_latest_cycle(c, "2d_global")
+        second = await resolve_latest_cycle(c, "2d_global")
+    finally:
+        await c.close()
+    assert first is not None and first == second
+    assert route.call_count == 1  # second resolve hit the cache
+
+
+@respx.mock
+async def test_resolve_latest_cycle_ttl_zero_disables_cache():
+    """cycle_cache_ttl=0 disables the cache — each resolve re-sweeps S3."""
+    route = respx.head(url__regex=r".*noaa-gestofs-pds.*").mock(
+        return_value=httpx.Response(200)
+    )
+    c = STOFSClient(cycle_cache_ttl=0)
+    try:
+        await resolve_latest_cycle(c, "2d_global")
+        await resolve_latest_cycle(c, "2d_global")
+    finally:
+        await c.close()
+    assert route.call_count == 2

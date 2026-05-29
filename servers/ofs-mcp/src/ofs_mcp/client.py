@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import random
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -71,10 +72,22 @@ class OFSAPIError(Exception):
 class OFSClient:
     """Async client for OFS data access and CO-OPS observations."""
 
-    def __init__(self, max_retries: int = 2, backoff_factor: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_retries: int = 2,
+        backoff_factor: float = 0.5,
+        cycle_cache_ttl: float = 600.0,
+    ) -> None:
         self._client: httpx.AsyncClient | None = None
         self._max_retries = max_retries
         self._backoff_factor = backoff_factor
+        # Cache the resolved latest cycle per model for a short TTL. Resolving
+        # sweeps up to num_days x cycles (~8) S3 HEADs, and both forecast tools
+        # resolve on every call; a cycle publishes every ~6 h, so a 10-min
+        # cache is safe and turns repeated lookups within a session into one
+        # sweep. cycle_cache_ttl=0 disables it (used by the tests).
+        self._cycle_cache: dict[str, tuple[float, tuple[str, str]]] = {}
+        self._cycle_cache_ttl = cycle_cache_ttl
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -227,6 +240,11 @@ class OFSClient:
         """
         from datetime import datetime, timedelta, timezone
 
+        now = time.monotonic()
+        cached = self._cycle_cache.get(model)
+        if cached is not None and now - cached[0] < self._cycle_cache_ttl:
+            return cached[1]
+
         model_info = OFS_MODELS.get(model, {})
         cycles = model_info.get("cycles", ["00", "06", "12", "18"])
         # Check newest first
@@ -239,6 +257,9 @@ class OFSClient:
             for cycle in cycles_desc:
                 url = self.build_s3_url(model, date_str, cycle, "f", 1)
                 if await self.check_file_exists(url):
+                    # Cache positive results only — a None could publish moments
+                    # later, and caching it would keep failing for the TTL.
+                    self._cycle_cache[model] = (now, (date_str, cycle))
                     return date_str, cycle
 
         return None

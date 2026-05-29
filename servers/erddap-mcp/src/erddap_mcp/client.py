@@ -6,6 +6,7 @@ import asyncio
 import ipaddress
 import random
 import socket
+import time
 from typing import Any
 from urllib.parse import quote, urljoin, urlparse
 
@@ -111,10 +112,20 @@ class RetryTransport(httpx.AsyncHTTPTransport):
 class ERDDAPClient:
     """Async client for ERDDAP REST API."""
 
-    def __init__(self, max_retries: int = 2, backoff_factor: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_retries: int = 2,
+        backoff_factor: float = 0.5,
+        search_cache_ttl: float = 600.0,
+    ) -> None:
         self._client: httpx.AsyncClient | None = None
         self._max_retries = max_retries
         self._backoff_factor = backoff_factor
+        # Cache dataset-search responses per (server, query, page) for a short
+        # TTL — the catalog changes rarely and the same search is often
+        # repeated within a session. search_cache_ttl=0 disables it (tests).
+        self._search_cache: dict[tuple, tuple[float, dict]] = {}
+        self._search_cache_ttl = search_cache_ttl
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -177,6 +188,12 @@ class ERDDAPClient:
         Returns:
             Raw ERDDAP JSON response.
         """
+        key = (server_url, search_for, page, items_per_page)
+        now = time.monotonic()
+        hit = self._search_cache.get(key)
+        if hit is not None and now - hit[0] < self._search_cache_ttl:
+            return hit[1]
+
         encoded_search = quote(search_for)
         url = (
             f"{server_url}/search/index.json"
@@ -184,7 +201,9 @@ class ERDDAPClient:
             f"&page={page}"
             f"&itemsPerPage={items_per_page}"
         )
-        return await self._get_json(url)
+        result = await self._get_json(url)
+        self._search_cache[key] = (now, result)
+        return result
 
     async def get_info(self, server_url: str, dataset_id: str) -> dict:
         """Get dataset metadata/info.
