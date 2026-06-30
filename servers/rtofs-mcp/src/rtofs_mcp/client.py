@@ -70,15 +70,21 @@ class RTOFSAPIError(Exception):
 class RTOFSClient:
     """Async client for querying RTOFS/ESPC data on HYCOM THREDDS."""
 
-    def __init__(self, max_retries: int = 2, backoff_factor: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_retries: int = 2,
+        backoff_factor: float = 0.5,
+        timeout: float = 120.0,
+    ) -> None:
         self._client: httpx.AsyncClient | None = None
         self._max_retries = max_retries
         self._backoff_factor = backoff_factor
+        self._timeout = timeout
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                timeout=120.0,
+                timeout=self._timeout,
                 follow_redirects=True,
                 transport=RetryTransport(
                     max_retries=self._max_retries,
