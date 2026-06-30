@@ -10,11 +10,23 @@ import pytest
 
 from rtofs_mcp.client import RTOFSClient
 
+# Hard per-test ceiling. HYCOM THREDDS intermittently stalls (connects, then
+# never responds); without a cap the client's 120s timeout x retries can exceed
+# the 5-minute CI job budget, getting the whole job SIGKILL'd with no
+# diagnostics. 45s x 5 tests stays well under that budget and a hang fails the
+# one test with a traceback instead of killing the run. Requires pytest-timeout.
+pytestmark = pytest.mark.timeout(45)
+
 
 @pytest.fixture
 async def client():
-    """Create and clean up a live client."""
-    c = RTOFSClient()
+    """Create and clean up a live client.
+
+    Fail fast: these are single-point smoke queries (healthy round-trips are
+    sub-10s), so a 30s timeout with a single retry rides out a one-off blip
+    without letting a true stall consume the job budget.
+    """
+    c = RTOFSClient(timeout=30.0, max_retries=1)
     yield c
     await c.close()
 
