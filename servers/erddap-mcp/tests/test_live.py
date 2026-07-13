@@ -9,7 +9,12 @@ import pytest
 from erddap_mcp.client import ERDDAPClient
 from erddap_mcp.utils import parse_erddap_json
 
-COASTWATCH_URL = "https://coastwatch.pfeg.noaa.gov/erddap"
+# PacIOOS, not coastwatch.pfeg.noaa.gov: NOAA CoastWatch's ERDDAP started
+# returning 403 to GitHub Actions' runner IPs around 2026-06-08 (weekly drift
+# issue #86) while staying reachable from everywhere else we checked — an
+# upstream network policy on NOAA's end, not an ERDDAP/API change. PacIOOS
+# runs the same ERDDAP software and has stayed reachable from CI.
+PACIOOS_URL = "https://pae-paha.pacioos.hawaii.edu/erddap"
 
 
 @pytest.fixture
@@ -22,9 +27,9 @@ async def client():
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_search_sst(client):
-    """Search CoastWatch for 'sea surface temperature' — should return results."""
+    """Search PacIOOS for 'sea surface temperature' — should return results."""
     data = await client.search(
-        COASTWATCH_URL, "sea surface temperature", items_per_page=10
+        PACIOOS_URL, "sea surface temperature", items_per_page=10
     )
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected search results for SST"
@@ -35,9 +40,9 @@ async def test_search_sst(client):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_info_chlorophyll(client):
-    """Get info for erdSW2018chlamday on CoastWatch — should return variables."""
-    data = await client.get_info(COASTWATCH_URL, "erdSW2018chlamday")
+async def test_get_info_sst(client):
+    """Get info for dhw_5km (Coral Reef Watch SST) on PacIOOS — should return variables."""
+    data = await client.get_info(PACIOOS_URL, "dhw_5km")
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected info rows"
     # Should have dimension and variable rows
@@ -49,11 +54,12 @@ async def test_get_info_chlorophyll(client):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_get_tabledap_ndbc(client):
-    """Get tabledap data from NDBC buoy dataset — should return rows."""
-    # Get a small sample: single station, short time window, few variables
-    query = "station,time,wtmp&station=%2246013%22&time>=2024-06-01T00:00:00Z&time<=2024-06-01T01:00:00Z"
-    data = await client.get_tabledap(COASTWATCH_URL, "cwwcNDBCMet", query)
+async def test_get_tabledap_buoy(client):
+    """Get tabledap data from a PacIOOS water quality buoy — should return rows."""
+    # Rolling 2-day window so the query keeps returning data indefinitely,
+    # rather than pinning to a fixed historical date.
+    query = "time,temperature&time>=now-2days&time<=now"
+    data = await client.get_tabledap(PACIOOS_URL, "wqb_04", query)
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected tabledap rows"
 
@@ -61,8 +67,8 @@ async def test_get_tabledap_ndbc(client):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_all_datasets(client):
-    """List all datasets on CoastWatch — should return 100+ datasets."""
-    data = await client.get_all_datasets(COASTWATCH_URL, "datasetID,title")
+    """List all datasets on PacIOOS — should return 100+ datasets."""
+    data = await client.get_all_datasets(PACIOOS_URL, "datasetID,title")
     rows = parse_erddap_json(data)
     assert len(rows) > 100, f"Expected 100+ datasets, got {len(rows)}"
 
@@ -71,11 +77,11 @@ async def test_get_all_datasets(client):
 @pytest.mark.asyncio
 async def test_get_griddap_small_subset(client):
     """Get a small griddap data subset — should return grid values."""
-    # Single time step, small spatial area for erdSW2018chlamday
-    query = "chlorophyll[(last)][(36):(37)][(-123):(-122)]"
-    data = await client.get_griddap(COASTWATCH_URL, "erdSW2018chlamday", query)
+    # Latest time step, small spatial area, for dhw_5km's SST variable
+    query = "CRW_SST[(last)][(36):(37)][(-123):(-122)]"
+    data = await client.get_griddap(PACIOOS_URL, "dhw_5km", query)
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected griddap data rows"
-    # Should have lat, lon, and chlorophyll columns
+    # Should have lat, lon, and CRW_SST columns
     first = rows[0]
-    assert "latitude" in first or "chlorophyll" in first
+    assert "latitude" in first or "CRW_SST" in first
