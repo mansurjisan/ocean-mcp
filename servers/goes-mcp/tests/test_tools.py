@@ -173,6 +173,51 @@ class TestGoesGetAvailableTimes:
         result = await goes_get_available_times(ctx)
         assert "Error" in result
 
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_available_times_lowercase_fd_is_normalized(
+        self, ctx: MagicMock
+    ) -> None:
+        """sector='fd' (lowercase) must resolve the same as 'FD'.
+
+        Before the fix, only the exact-case 'FD' matched SLIDER_SECTORS;
+        'fd' fell through to the literal string 'fd' as the SLIDER path
+        segment and 404d.
+        """
+        from goes_mcp.tools.products import goes_get_available_times
+
+        fixture = load_fixture("slider_latest_times.json")
+        route = respx.get(url__regex=r".*/goes-19/full_disk/geocolor/.*").mock(
+            return_value=httpx.Response(200, json=fixture)
+        )
+
+        result = await goes_get_available_times(
+            ctx, satellite="goes-19", sector="fd", product="GEOCOLOR", limit=3
+        )
+
+        assert route.called
+        assert "Error" not in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_available_times_rejects_unsupported_sector(
+        self, ctx: MagicMock
+    ) -> None:
+        """A regional SECTOR/xx sub-sector should be rejected, not 404 on SLIDER.
+
+        Verified live: SLIDER only publishes 'conus'/'full_disk' for
+        goes-19/18 — 'se'/'ne'/'car'/'taw'/'pr' all 404 there.
+        """
+        from goes_mcp.tools.products import goes_get_available_times
+
+        result = await goes_get_available_times(
+            ctx, satellite="goes-19", sector="se", product="GEOCOLOR"
+        )
+
+        assert "Error" in result
+        assert "se" in result
+        assert "goes_get_sector_image" in result
+
 
 class TestGoesGetLatestImage:
     """Tests for the goes_get_latest_image tool."""
@@ -208,6 +253,48 @@ class TestGoesGetLatestImage:
         )
         assert isinstance(result, str)
         assert "cdn.star.nesdis.noaa.gov" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_latest_image_fd_default_resolution(self, ctx: MagicMock) -> None:
+        """FD with no resolution given should default to '1808x1808', not CONUS's 1250x750.
+
+        Before the per-coverage fix every tool defaulted to '1250x750',
+        which doesn't exist in FD's (square) ladder and 404s live.
+        """
+        from goes_mcp.tools.imagery import goes_get_latest_image
+
+        result = await goes_get_latest_image(
+            ctx,
+            satellite="goes-19",
+            coverage="FD",
+            product="GEOCOLOR",
+            response_format="json",
+        )
+        data = json.loads(result)
+
+        assert data["resolution"] == "1808x1808"
+        assert data["url"].endswith("1808x1808.jpg")
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_latest_image_invalid_resolution_for_coverage(
+        self, ctx: MagicMock
+    ) -> None:
+        """Requesting a CONUS-shaped resolution for FD should error with valid options."""
+        from goes_mcp.tools.imagery import goes_get_latest_image
+
+        result = await goes_get_latest_image(
+            ctx,
+            satellite="goes-19",
+            coverage="FD",
+            product="GEOCOLOR",
+            resolution="1250x750",
+            response_format="markdown",
+        )
+
+        assert "Error" in result
+        assert "1808x1808" in result
 
     @respx.mock
     @pytest.mark.asyncio
@@ -321,6 +408,52 @@ class TestGoesGetImage:
         )
         assert "Error" in result
 
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_image_accepts_14_digit_slider_timestamp(
+        self, ctx: MagicMock
+    ) -> None:
+        """A raw goes_get_available_times timestamp (14-digit) should be accepted.
+
+        goes_get_available_times returns YYYYMMDDHHmmss and its docstring
+        tells the model to feed that straight into goes_get_image — this is
+        the chain that was previously broken (goes_get_image hard-rejected
+        anything but the 11-digit day-of-year format).
+        """
+        from goes_mcp.tools.imagery import goes_get_image
+
+        result = await goes_get_image(
+            ctx,
+            timestamp="20260305202617",
+            satellite="goes-19",
+            coverage="CONUS",
+            product="GEOCOLOR",
+            response_format="markdown",
+        )
+
+        assert "Error" not in result
+        # 2026-03-05 20:26:17 UTC is day-of-year 064 -> YYYYDDDHHmm = 20260642026
+        assert "20260642026" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_image_fd_default_resolution(self, ctx: MagicMock) -> None:
+        """FD timestamped image with no resolution should default to '1808x1808'."""
+        from goes_mcp.tools.imagery import goes_get_image
+
+        result = await goes_get_image(
+            ctx,
+            timestamp="20260642031",
+            satellite="goes-19",
+            coverage="FD",
+            product="GEOCOLOR",
+            response_format="json",
+        )
+        data = json.loads(result)
+
+        assert data["resolution"] == "1808x1808"
+        assert data["url"].endswith("1808x1808.jpg")
+
 
 class TestGoesGetSectorImage:
     """Tests for the goes_get_sector_image tool."""
@@ -342,6 +475,24 @@ class TestGoesGetSectorImage:
         assert "Southeast" in result
         assert "SECTOR/se" in result
         assert "cdn.star.nesdis.noaa.gov" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_sector_image_default_resolution(self, ctx: MagicMock) -> None:
+        """Sector image with no resolution should default to '1200x1200'.
+
+        Before the fix, every tool defaulted to CONUS's '1250x750', which
+        doesn't exist in SECTOR's (square) ladder and 404s live.
+        """
+        from goes_mcp.tools.imagery import goes_get_sector_image
+
+        result = await goes_get_sector_image(
+            ctx, sector="se", satellite="goes-19", response_format="json"
+        )
+        data = json.loads(result)
+
+        assert data["resolution"] == "1200x1200"
+        assert data["url"].endswith("1200x1200.jpg")
 
     @respx.mock
     @pytest.mark.asyncio
@@ -465,6 +616,81 @@ class TestClientURLBuilding:
         url = client.build_latest_url("goes-18", "FD", "13", "latest")
         assert url == f"{STAR_CDN_BASE}/GOES18/ABI/FD/13/latest.jpg"
 
+    def test_build_latest_url_fd_default_resolution_shape(self) -> None:
+        """FD's default resolution ('1808x1808') builds a URL that isn't CONUS-shaped."""
+        client = GOESClient()
+        url = client.build_latest_url("goes-19", "FD", "GEOCOLOR", "1808x1808")
+        assert url == f"{STAR_CDN_BASE}/GOES19/ABI/FD/GEOCOLOR/1808x1808.jpg"
+
+    def test_build_sector_url_default_resolution_shape(self) -> None:
+        """SECTOR's default resolution ('1200x1200') builds a URL that isn't CONUS-shaped."""
+        client = GOESClient()
+        url = client.build_sector_url("goes-19", "se", "GEOCOLOR", "1200x1200")
+        assert url == f"{STAR_CDN_BASE}/GOES19/ABI/SECTOR/se/GEOCOLOR/1200x1200.jpg"
+
+    def test_build_latest_url_rejects_conus_resolution_for_fd(self) -> None:
+        """A CONUS-shaped resolution must be rejected for FD coverage.
+
+        Before per-coverage validation, every tool defaulted to CONUS's
+        '1250x750' regardless of coverage, so FD requests always 404d live.
+        """
+        client = GOESClient()
+        with pytest.raises(ValueError, match="Unknown resolution '1250x750' for FD"):
+            client.build_latest_url("goes-19", "FD", "GEOCOLOR", "1250x750")
+
+    def test_build_sector_url_rejects_conus_resolution(self) -> None:
+        """A CONUS-shaped resolution must be rejected for SECTOR coverage."""
+        client = GOESClient()
+        with pytest.raises(
+            ValueError, match="Unknown resolution '1250x750' for SECTOR"
+        ):
+            client.build_sector_url("goes-19", "se", "GEOCOLOR", "1250x750")
+
+    def test_build_timestamped_url_accepts_14_digit_slider_timestamp(self) -> None:
+        """A 14-digit SLIDER timestamp (YYYYMMDDHHmmss) should convert to STAR CDN's format."""
+        client = GOESClient()
+        url = client.build_timestamped_url(
+            "goes-19", "CONUS", "GEOCOLOR", "20260305202617", "1250x750"
+        )
+        # 2026-03-05 20:26:17 UTC -> day-of-year 064 -> YYYYDDDHHmm = 20260642026
+        expected = (
+            f"{STAR_CDN_BASE}/GOES19/ABI/CONUS/GEOCOLOR/"
+            "20260642026_GOES19-ABI-CONUS-GEOCOLOR-1250x750.jpg"
+        )
+        assert url == expected
+
+    def test_build_timestamped_url_fd_latest_uses_fd_largest_size(self) -> None:
+        """FD + resolution='latest' should embed FD's largest size (10848x10848), not CONUS's 5000x3000."""
+        client = GOESClient()
+        url = client.build_timestamped_url(
+            "goes-19", "FD", "GEOCOLOR", "20260642031", "latest"
+        )
+        expected = (
+            f"{STAR_CDN_BASE}/GOES19/ABI/FD/GEOCOLOR/"
+            "20260642031_GOES19-ABI-FD-GEOCOLOR-10848x10848.jpg"
+        )
+        assert url == expected
+
+    def test_build_timestamped_url_conus_latest_still_5000x3000(self) -> None:
+        """CONUS + resolution='latest' keeps its existing 5000x3000 behavior."""
+        client = GOESClient()
+        url = client.build_timestamped_url(
+            "goes-19", "CONUS", "GEOCOLOR", "20260642031", "latest"
+        )
+        expected = (
+            f"{STAR_CDN_BASE}/GOES19/ABI/CONUS/GEOCOLOR/"
+            "20260642031_GOES19-ABI-CONUS-GEOCOLOR-5000x3000.jpg"
+        )
+        assert url == expected
+
+    def test_build_timestamped_url_rejects_wrong_resolution_for_coverage(self) -> None:
+        """A SECTOR-shaped resolution must be rejected for a CONUS timestamped URL."""
+        client = GOESClient()
+        with pytest.raises(ValueError, match="Unknown resolution"):
+            client.build_timestamped_url(
+                "goes-19", "CONUS", "GEOCOLOR", "20260642031", "2400x2400"
+            )
+
 
 class TestClientImageFetch:
     """Tests for GOESClient image download."""
@@ -517,4 +743,63 @@ class TestClientImageFetch:
 
         assert len(timestamps) == 5
         assert timestamps[0] == "20260305202617"
+        await client.close()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_slider_times_lowercase_fd_normalized(self) -> None:
+        """sector='fd' must hit the same 'full_disk' SLIDER path as 'FD'."""
+        client = GOESClient()
+        fixture = load_fixture("slider_latest_times.json")
+
+        route = respx.get(url__regex=r".*/goes-19/full_disk/geocolor/.*").mock(
+            return_value=httpx.Response(200, json=fixture)
+        )
+
+        timestamps = await client.get_slider_times(
+            satellite="goes-19", sector="fd", product="GEOCOLOR", limit=5
+        )
+
+        assert route.called
+        assert len(timestamps) == 5
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_slider_times_rejects_regional_sector(self) -> None:
+        """A regional SECTOR/xx sub-sector should raise before ever hitting SLIDER.
+
+        Verified live: SLIDER only has 'conus'/'full_disk' for goes-19/18;
+        'se'/'ne'/'car'/'taw'/'pr' (mapped from the old SLIDER_SECTORS) all
+        404 there.
+        """
+        client = GOESClient()
+        with pytest.raises(GOESAPIError, match="does not publish timestamps"):
+            await client.get_slider_times(
+                satellite="goes-19", sector="se", product="GEOCOLOR"
+            )
+        await client.close()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_image_rejects_small_body_even_with_image_content_type(
+        self,
+    ) -> None:
+        """A tiny body should be rejected even if content-type says image/jpeg.
+
+        This is the `and` -> `or` fix: a >1KB HTML error page with the wrong
+        content-type, and a suspiciously small body with the *right*
+        content-type (e.g. a truncated/placeholder response), should both be
+        caught rather than returned as if they were a valid JPEG.
+        """
+        client = GOESClient()
+        url = f"{STAR_CDN_BASE}/GOES19/ABI/CONUS/GEOCOLOR/1250x750.jpg"
+
+        respx.get(url).mock(
+            return_value=httpx.Response(
+                200, content=b"tiny", headers={"content-type": "image/jpeg"}
+            )
+        )
+
+        with pytest.raises(GOESAPIError, match="Expected image"):
+            await client.get_image(url)
         await client.close()

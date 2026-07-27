@@ -6,12 +6,13 @@ from goes_mcp.models import (
     ABI_BANDS,
     COMPOSITE_PRODUCTS,
     COVERAGES,
+    DEFAULT_RESOLUTION_BY_KIND,
     PRODUCTS,
-    RESOLUTIONS,
+    RESOLUTIONS_BY_KIND,
     SATELLITES,
     SECTORS,
+    SLIDER_COVERAGES,
     SLIDER_PRODUCTS,
-    SLIDER_SECTORS,
     satellite_key_to_id,
     validate_coverage,
     validate_product,
@@ -129,10 +130,14 @@ class TestSectorValidation:
 
 
 class TestResolutionValidation:
-    """Tests for resolution validation."""
+    """Tests for per-coverage-kind resolution validation.
 
-    def test_all_resolutions_exist(self) -> None:
-        """All expected resolutions should be in RESOLUTIONS dict."""
+    STAR CDN resolution ladders are coverage-shaped (verified live): CONUS
+    is landscape, FD and SECTOR are each square at different pixel sizes.
+    """
+
+    def test_conus_resolutions(self) -> None:
+        """CONUS ladder should have its documented sizes plus the two aliases."""
         expected = {
             "thumbnail",
             "625x375",
@@ -141,31 +146,94 @@ class TestResolutionValidation:
             "5000x3000",
             "latest",
         }
-        assert expected == set(RESOLUTIONS.keys())
+        assert expected == set(RESOLUTIONS_BY_KIND["CONUS"].keys())
+
+    def test_fd_resolutions(self) -> None:
+        """FD ladder is square and uses a different pixel ladder than CONUS."""
+        expected = {
+            "thumbnail",
+            "339x339",
+            "678x678",
+            "1808x1808",
+            "5424x5424",
+            "10848x10848",
+            "latest",
+        }
+        assert expected == set(RESOLUTIONS_BY_KIND["FD"].keys())
+
+    def test_sector_resolutions(self) -> None:
+        """SECTOR ladder is square and uses yet another pixel ladder."""
+        expected = {
+            "thumbnail",
+            "300x300",
+            "600x600",
+            "1200x1200",
+            "2400x2400",
+            "latest",
+        }
+        assert expected == set(RESOLUTIONS_BY_KIND["SECTOR"].keys())
 
     def test_validate_resolution_returns_filename(self) -> None:
         """Resolution validation should return the correct filename."""
-        assert validate_resolution("thumbnail") == "thumbnail.jpg"
-        assert validate_resolution("1250x750") == "1250x750.jpg"
-        assert validate_resolution("latest") == "latest.jpg"
+        assert validate_resolution("thumbnail", "CONUS") == "thumbnail.jpg"
+        assert validate_resolution("1250x750", "CONUS") == "1250x750.jpg"
+        assert validate_resolution("latest", "CONUS") == "latest.jpg"
+        assert validate_resolution("1808x1808", "FD") == "1808x1808.jpg"
+        assert validate_resolution("1200x1200", "SECTOR") == "1200x1200.jpg"
 
     def test_invalid_resolution_raises(self) -> None:
         """Unknown resolution should raise ValueError."""
         with pytest.raises(ValueError, match="Unknown resolution"):
-            validate_resolution("100x100")
+            validate_resolution("100x100", "CONUS")
+
+    def test_resolution_wrong_kind_raises(self) -> None:
+        """A resolution valid for one coverage kind must be rejected for another.
+
+        This is the actual bug that made goes_get_sector_image and FD
+        imagery 404 before per-coverage validation: CONUS's '1250x750'
+        doesn't exist for FD or SECTOR, and the error should say so.
+        """
+        with pytest.raises(ValueError, match="Unknown resolution '1250x750' for FD"):
+            validate_resolution("1250x750", "FD")
+        with pytest.raises(
+            ValueError, match="Unknown resolution '1808x1808' for SECTOR"
+        ):
+            validate_resolution("1808x1808", "SECTOR")
+
+    def test_error_lists_valid_options_for_kind(self) -> None:
+        """The error message should list the valid sizes for that coverage."""
+        with pytest.raises(ValueError) as exc_info:
+            validate_resolution("1250x750", "FD")
+        msg = str(exc_info.value)
+        assert "1808x1808" in msg
+        assert "10848x10848" in msg
+
+    def test_default_resolution_by_kind_are_valid(self) -> None:
+        """Each per-kind default must itself be a valid resolution for that kind."""
+        for kind, default in DEFAULT_RESOLUTION_BY_KIND.items():
+            assert default in RESOLUTIONS_BY_KIND[kind]
 
 
 class TestSliderMappings:
     """Tests for SLIDER API mappings."""
 
-    def test_slider_sectors_cover_all(self) -> None:
-        """SLIDER mapping should cover all coverages and sectors."""
+    def test_slider_coverages_are_conus_and_fd_only(self) -> None:
+        """SLIDER only publishes CONUS and FD — regional sectors 404 there.
+
+        Verified live against slider.cira.colostate.edu: 'southeast',
+        'northeast', 'caribbean', 'tropical_atlantic', and 'puerto_rico'
+        (the old SLIDER_SECTORS mappings for se/ne/car/taw/pr) all 404.
+        """
+        assert set(SLIDER_COVERAGES.keys()) == {"CONUS", "FD"}
         for key in COVERAGES:
-            assert key in SLIDER_SECTORS, (
-                f"Coverage '{key}' missing from SLIDER_SECTORS"
+            assert key in SLIDER_COVERAGES, (
+                f"Coverage '{key}' missing from SLIDER_COVERAGES"
             )
         for key in SECTORS:
-            assert key in SLIDER_SECTORS, f"Sector '{key}' missing from SLIDER_SECTORS"
+            assert key not in SLIDER_COVERAGES, (
+                f"Sector '{key}' should not be in SLIDER_COVERAGES — "
+                "SLIDER doesn't publish it"
+            )
 
     def test_slider_products_cover_all(self) -> None:
         """SLIDER mapping should cover all products."""
