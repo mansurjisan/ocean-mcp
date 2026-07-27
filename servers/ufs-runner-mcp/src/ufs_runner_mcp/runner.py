@@ -61,12 +61,22 @@ def _compute_derived_vars(
     return v
 
 
-def _render_template(content: str, variables: dict) -> str:
-    """Replace {{var}} placeholders with values from variables dict."""
+def _render_template(
+    content: str, variables: dict, matched_keys: set[str] | None = None
+) -> str:
+    """Replace {{var}} placeholders with values from variables dict.
+
+    If *matched_keys* is given, every placeholder name actually found in
+    *content* (and present in *variables*) is recorded in it — used to
+    report which override keys landed on a real placeholder somewhere in
+    the rendered template, versus being silently dropped.
+    """
 
     def replacer(match: re.Match) -> str:
         key = match.group(1)
         if key in variables:
+            if matched_keys is not None:
+                matched_keys.add(key)
             return str(variables[key])
         return match.group(0)  # Leave unresolved placeholders as-is
 
@@ -160,8 +170,12 @@ class UfsRunner:
         if user_err:
             raise RunnerError(user_err)
 
-        # Copy template to run directory, rendering {{var}} placeholders
+        # Copy template to run directory, rendering {{var}} placeholders.
+        # matched_placeholder_keys records every variable name that actually
+        # appeared as a {{...}} placeholder in some file, so we can tell the
+        # caller which of their flat overrides had no real effect.
         run_path.mkdir(parents=True, exist_ok=True)
+        matched_placeholder_keys: set[str] = set()
         _skip_files = {"defaults.yaml", "TEMPLATE_README"}
         for item in template_path.iterdir():
             if item.name in _skip_files:
@@ -175,14 +189,24 @@ class UfsRunner:
             else:
                 # Text files: render template variables
                 content = item.read_text()
-                rendered = _render_template(content, variables)
+                rendered = _render_template(
+                    content, variables, matched_placeholder_keys
+                )
                 dest.write_text(rendered)
 
+        unmatched_flat_keys = sorted(user_flat_keys - matched_placeholder_keys)
+
         # Apply f90nml namelist overrides (for nested dict overrides)
+        unmatched_namelist_groups: list[str] = []
+        namelist_write_failures: list[dict] = []
         if overrides:
             nml_overrides = {k: v for k, v in overrides.items() if isinstance(v, dict)}
             if nml_overrides:
-                self._apply_overrides(run_path, nml_overrides)
+                nml_report = self._apply_overrides(run_path, nml_overrides)
+                unmatched_namelist_groups = sorted(
+                    set(nml_overrides.keys()) - nml_report["applied_groups"]
+                )
+                namelist_write_failures = nml_report["failed_files"]
 
         # Stage input data from user's input directory
         staged_files: list[str] = []
@@ -196,6 +220,12 @@ class UfsRunner:
                 model_type=model.value,
             )
 
+        override_warnings = {
+            "unmatched_flat_keys": unmatched_flat_keys,
+            "unmatched_namelist_groups": unmatched_namelist_groups,
+            "namelist_write_failures": namelist_write_failures,
+        }
+
         # Write metadata
         meta = {
             "model_type": model.value,
@@ -206,6 +236,7 @@ class UfsRunner:
             "resolved_variables": {
                 k: v for k, v in variables.items() if not isinstance(v, (dict, list))
             },
+            "override_warnings": override_warnings,
             "input_data_dir": input_data_dir,
             "staged_files": staged_files,
             "status": "created",
@@ -221,6 +252,7 @@ class UfsRunner:
                 str(f.relative_to(run_path)) for f in run_path.rglob("*") if f.is_file()
             ),
             "staged_files": staged_files,
+            "override_warnings": override_warnings,
         }
 
     def _find_default_template(self, model_value: str) -> str:
@@ -236,11 +268,21 @@ class UfsRunner:
                 return d.name
         return default_name  # Will fail later with clear error
 
-    def _apply_overrides(self, run_path: Path, overrides: dict) -> None:
-        """Apply namelist overrides using f90nml."""
+    def _apply_overrides(self, run_path: Path, overrides: dict) -> dict:
+        """Apply namelist overrides using f90nml.
+
+        Returns a report dict so the caller can surface honest results
+        instead of silently swallowing a no-op or a write failure:
+          - "applied_groups": set of override group names that matched an
+            existing group in at least one namelist file.
+          - "failed_files": list of {"file", "error"} for namelist files
+            that raised while being read, updated, or written.
+        """
         nml_files = list(run_path.glob("*.nml")) + list(
             run_path.glob("model_configure")
         )
+        applied_groups: set[str] = set()
+        failed_files: list[dict] = []
         for nml_file in nml_files:
             try:
                 nml = f90nml.read(str(nml_file))
@@ -248,9 +290,12 @@ class UfsRunner:
                     if group in nml:
                         for key, value in params.items():
                             nml[group][key] = value
+                        applied_groups.add(group)
                 nml.write(str(nml_file), force=True)
             except Exception as e:
                 logger.warning("Failed to apply overrides to %s: %s", nml_file.name, e)
+                failed_files.append({"file": nml_file.name, "error": str(e)})
+        return {"applied_groups": applied_groups, "failed_files": failed_files}
 
     # ------------------------------------------------------------------
     # 2. Validate experiment
@@ -551,35 +596,29 @@ class UfsRunner:
         if not run_path.is_dir():
             raise RunnerError(f"Run directory '{run_dir}' does not exist.")
 
-        # Find output files (NetCDF, log, restart)
+        # Find output files (NetCDF, log, restart, Slurm stdout logs).
+        # "*.out" already matches Slurm's "slurm-<jobid>.out" naming, so we
+        # dedupe by resolved path instead of also globbing "slurm-*.out"
+        # separately — that used to double-count every Slurm log and
+        # inflate output_count.
         output_patterns = ["*.nc", "*.out", "*.log", "*.restart", "outputs/*"]
-        found: list[dict] = []
+        found_by_path: dict[Path, dict] = {}
 
         for pattern in output_patterns:
             for f in run_path.glob(pattern):
-                if f.is_file():
-                    stat = f.stat()
-                    found.append(
-                        {
-                            "path": str(f.relative_to(run_path)),
-                            "size_mb": round(stat.st_size / (1024 * 1024), 2),
-                            "modified": datetime.fromtimestamp(
-                                stat.st_mtime
-                            ).isoformat(),
-                        }
-                    )
-
-        # Check Slurm log
-        slurm_logs = list(run_path.glob("slurm-*.out"))
-        for log in slurm_logs:
-            stat = log.stat()
-            found.append(
-                {
-                    "path": str(log.relative_to(run_path)),
+                if not f.is_file():
+                    continue
+                resolved = f.resolve()
+                if resolved in found_by_path:
+                    continue
+                stat = f.stat()
+                found_by_path[resolved] = {
+                    "path": str(f.relative_to(run_path)),
                     "size_mb": round(stat.st_size / (1024 * 1024), 2),
                     "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                 }
-            )
+
+        found = list(found_by_path.values())
 
         # Sort by modification time, newest first
         found.sort(key=lambda x: x["modified"], reverse=True)

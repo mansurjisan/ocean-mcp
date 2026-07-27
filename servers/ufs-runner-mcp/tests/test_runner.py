@@ -212,6 +212,92 @@ class TestCreateExperiment:
         assert "ny_global = 361" in content
 
 
+class TestOverrideHonesty:
+    """Fix 2: documented flat/namelist overrides that silently no-op must
+    be reported back, not hidden behind a claimed 'Experiment Created'."""
+
+    def test_matched_flat_override_no_warning(self, runner, tmp_path):
+        """An override with a real {{placeholder}} succeeds as before —
+        no warning is raised."""
+        run_dir = str(tmp_path / "matched_flat")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"start_year": 2030},
+        )
+        warnings = result["override_warnings"]
+        assert warnings["unmatched_flat_keys"] == []
+        assert warnings["unmatched_namelist_groups"] == []
+        assert warnings["namelist_write_failures"] == []
+        content = (Path(run_dir) / "model_configure").read_text()
+        assert "2030" in content
+
+    def test_unmatched_flat_override_warns(self, runner, tmp_path):
+        """dt_ocean is documented (defaults.yaml) as an overridable flat
+        key, but no template file has a {{dt_ocean}} placeholder — the
+        override must be reported as having no effect."""
+        run_dir = str(tmp_path / "unmatched_flat")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"dt_ocean": 5.0, "start_year": 2031},
+        )
+        unmatched = result["override_warnings"]["unmatched_flat_keys"]
+        assert "dt_ocean" in unmatched
+        assert "start_year" not in unmatched
+
+    def test_matched_namelist_group_override_no_warning(self, runner, tmp_path):
+        """A nested override whose group exists in a real namelist file
+        succeeds silently, same as before this fix."""
+        run_dir = str(tmp_path / "matched_group")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"CORE": {"dt": 60.0, "rnday": 3.0}},
+        )
+        warnings = result["override_warnings"]
+        assert warnings["unmatched_namelist_groups"] == []
+        assert warnings["namelist_write_failures"] == []
+
+    def test_unmatched_namelist_group_warns(self, runner, tmp_path):
+        """A nested override group that matches no namelist file's groups
+        must be reported, not silently dropped."""
+        run_dir = str(tmp_path / "unmatched_group")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"NO_SUCH_GROUP": {"foo": 1}},
+        )
+        unmatched = result["override_warnings"]["unmatched_namelist_groups"]
+        assert "NO_SUCH_GROUP" in unmatched
+
+    def test_namelist_write_failure_surfaces_as_warning(
+        self, runner, tmp_path, monkeypatch
+    ):
+        """If _apply_overrides can't even read/write a namelist file, that
+        must show up in the tool output, not just a log-only warning."""
+        import ufs_runner_mcp.runner as runner_module
+
+        def boom(_path):
+            raise ValueError("corrupt namelist")
+
+        monkeypatch.setattr(runner_module.f90nml, "read", boom)
+
+        run_dir = str(tmp_path / "nml_fail")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"CORE": {"dt": 99.0}},
+        )
+        warnings = result["override_warnings"]
+        assert len(warnings["namelist_write_failures"]) >= 1
+        failed_names = {f["file"] for f in warnings["namelist_write_failures"]}
+        assert "param.nml" in failed_names
+        # The read blew up before any group could be applied anywhere, so
+        # the group is also (correctly) reported as unmatched.
+        assert "CORE" in warnings["unmatched_namelist_groups"]
+
+
 class TestStageInputData:
     """Test input data staging from user directories."""
 
@@ -437,6 +523,16 @@ class TestCollectOutputs:
         paths = [o["path"] for o in result["outputs"]]
         assert "output.nc" in paths
 
+    def test_slurm_log_not_double_counted(self, runner, schism_run_dir):
+        """slurm-<jobid>.out matches the general '*.out' pattern; it must
+        not also be picked up by a redundant explicit 'slurm-*.out' glob
+        and counted/listed twice."""
+        (Path(schism_run_dir) / "slurm-12345.out").write_text("log contents")
+        result = runner.collect_outputs(schism_run_dir)
+        paths = [o["path"] for o in result["outputs"]]
+        assert paths.count("slurm-12345.out") == 1
+        assert result["output_count"] == len(result["outputs"])
+
 
 class TestSecurityHardening:
     """Regression tests for the three sandbox-escape / injection fixes."""
@@ -467,6 +563,28 @@ class TestSecurityHardening:
         monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(tmp_path))
         assert validate_path(str(tmp_path / "run")) is None
         assert validate_path(str(tmp_path) + "-evil/run") is not None
+
+    # --- Fix 1: numbered RDHPCS mounts (/scratch3, /work2/noaa, ...) ---
+
+    def test_validate_path_numbered_scratch_mount_accepted(self):
+        """Real RDHPCS mounts like /scratch5 must be accepted, not just /scratch."""
+        assert validate_path("/scratch5/user/run") is None
+
+    def test_validate_path_numbered_work_mount_with_subdir_accepted(self):
+        assert validate_path("/work2/noaa/project") is None
+
+    def test_validate_path_numbered_contrib_mount_accepted(self):
+        assert validate_path("/contrib3/x") is None
+
+    def test_validate_path_work_attacker_still_rejected(self):
+        """Numbered-mount leniency must not reopen the /work-attacker escape."""
+        assert validate_path("/work-attacker") is not None
+        assert validate_path("/work-attacker/run") is not None
+
+    def test_validate_path_workfoo_still_rejected(self):
+        """A non-digit suffix on the base name must still be rejected."""
+        assert validate_path("/workfoo") is not None
+        assert validate_path("/workfoo/run") is not None
 
     # --- Fix 3: every user override value must be shell-safe ---
 

@@ -33,6 +33,35 @@ def get_allowed_prefixes() -> list[str]:
     return prefixes
 
 
+def _prefix_matches(resolved: Path, prefix: str) -> bool:
+    """Check whether *resolved* falls under *prefix*.
+
+    Real RDHPCS mounts are numbered (/scratch3, /scratch4, /work2/noaa, ...),
+    so a plain is_relative_to(prefix) check (or the raw-string-prefix check
+    it replaced) rejects every genuine mount except the exact, un-numbered
+    name. Only the path *component immediately after the filesystem root* is
+    given digit-suffix leniency — e.g. prefix "/scratch" matches resolved
+    component "scratch5" — via re.fullmatch on that single component, so
+    "work-attacker" / "workshop" / "scratchpad-evil" still fail (they are not
+    the base name plus only digits). Any deeper components of the prefix
+    (e.g. the "noaa" in a hypothetical "/work/noaa") must still match
+    exactly, same as the original is_relative_to check.
+    """
+    prefix_parts = Path(prefix).parts
+    resolved_parts = resolved.parts
+    if len(prefix_parts) < 2 or len(resolved_parts) < 2:
+        return False
+    base_name = prefix_parts[1]
+    pattern = re.compile(rf"^{re.escape(base_name)}\d*$")
+    if not pattern.fullmatch(resolved_parts[1]):
+        return False
+    remaining_prefix_parts = prefix_parts[2:]
+    if not remaining_prefix_parts:
+        return True
+    candidate = resolved_parts[2 : 2 + len(remaining_prefix_parts)]
+    return list(candidate) == list(remaining_prefix_parts)
+
+
 def validate_path(path: str, label: str = "path") -> str | None:
     """Validate that *path* is under an allowed path prefix.
 
@@ -40,12 +69,13 @@ def validate_path(path: str, label: str = "path") -> str | None:
     """
     # Compare on path-component boundaries, not raw string prefix:
     # str.startswith("/work") wrongly accepted "/work-attacker", "/workshop",
-    # "/scratchpad-evil" — a full sandbox escape. is_relative_to() (which is
-    # true for an exact match too) only accepts genuine descendants.
+    # "/scratchpad-evil" — a full sandbox escape. _prefix_matches (like
+    # is_relative_to, which it replaces) only accepts genuine descendants,
+    # while still tolerating numbered HPC mounts (see its docstring).
     resolved = Path(path).resolve()
     prefixes = get_allowed_prefixes()
     for prefix in prefixes:
-        if resolved.is_relative_to(Path(prefix).resolve()):
+        if _prefix_matches(resolved, prefix):
             return None
     allowed = ", ".join(prefixes)
     return (
