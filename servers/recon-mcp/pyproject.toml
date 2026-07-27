@@ -61,6 +61,9 @@ packages = ["src/recon_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit the live NHC reconnaissance archive (deselect with '-m \"not integration\"')",
+]
 
 [dependency-groups]
 dev = [

@@ -2,55 +2,75 @@
   "mcpServers": {
     "adcirc": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/adcirc-mcp", "python", "-m", "adcirc_mcp"]
+      "args": ["run", "--directory", "servers/adcirc-mcp", "python", "-m", "adcirc_mcp"]
+    },
+    "alert": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/alert-mcp", "python", "-m", "alert_mcp"]
     },
     "coops": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/coops-mcp", "python", "-m", "coops_mcp"]
+      "args": ["run", "--directory", "servers/coops-mcp", "python", "-m", "coops_mcp"]
     },
     "erddap": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/erddap-mcp", "python", "-m", "erddap_mcp"]
+      "args": ["run", "--directory", "servers/erddap-mcp", "python", "-m", "erddap_mcp"]
     },
     "goes": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/goes-mcp", "python", "-m", "goes_mcp"]
+      "args": ["run", "--directory", "servers/goes-mcp", "python", "-m", "goes_mcp"]
     },
-    "nhc": {
+    "hpc-system": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/nhc-mcp", "python", "-m", "nhc_mcp"]
-    },
-    "stofs": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/stofs-mcp", "python", "-m", "stofs_mcp"]
-    },
-    "ofs": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/ofs-mcp", "python", "-m", "ofs_mcp"]
-    },
-    "recon": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/recon-mcp", "python", "-m", "recon_mcp"]
-    },
-    "schism": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/schism-mcp", "python", "-m", "schism_mcp"]
-    },
-    "usgs": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/usgs-mcp", "python", "-m", "usgs_mcp"]
-    },
-    "winds": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/winds-mcp", "python", "-m", "winds_mcp"]
-    },
-    "rtofs": {
-      "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/rtofs-mcp", "python", "-m", "rtofs_mcp"]
+      "args": ["run", "--directory", "servers/hpc-system-mcp", "python", "-m", "hpc_system_mcp"]
     },
     "ndbc": {
       "command": "uv",
-      "args": ["run", "--directory", "/mnt/d/ocean-mcp/servers/ndbc-mcp", "python", "-m", "ndbc_mcp"]
+      "args": ["run", "--directory", "servers/ndbc-mcp", "python", "-m", "ndbc_mcp"]
+    },
+    "nhc": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/nhc-mcp", "python", "-m", "nhc_mcp"]
+    },
+    "ofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/ofs-mcp", "python", "-m", "ofs_mcp"]
+    },
+    "recon": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/recon-mcp", "python", "-m", "recon_mcp"]
+    },
+    "rtofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/rtofs-mcp", "python", "-m", "rtofs_mcp"]
+    },
+    "schism": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/schism-mcp", "python", "-m", "schism_mcp"]
+    },
+    "stofs": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/stofs-mcp", "python", "-m", "stofs_mcp"]
+    },
+    "ufs-runner": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/ufs-runner-mcp", "python", "-m", "ufs_runner_mcp"]
+    },
+    "usgs": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/usgs-mcp", "python", "-m", "usgs_mcp"]
+    },
+    "vdatum": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/vdatum-mcp", "python", "-m", "vdatum_mcp"]
+    },
+    "winds": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/winds-mcp", "python", "-m", "winds_mcp"]
+    },
+    "ww3": {
+      "command": "uv",
+      "args": ["run", "--directory", "servers/ww3-mcp", "python", "-m", "ww3_mcp"]
     }
   }
 }
