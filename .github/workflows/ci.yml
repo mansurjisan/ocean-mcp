@@ -79,7 +79,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
-      - run: uv tool install ruff
+      # Pinned: an unpinned ruff reddened main when 0.16.0 started formatting
+      # markdown code fences. Keep in sync with servers/recon-mcp/pyproject.toml.
+      - run: uv tool install ruff==0.15.2
       - name: Ruff check
         run: ruff check servers/ --select E,F,W --ignore E501
       - name: Ruff format check
