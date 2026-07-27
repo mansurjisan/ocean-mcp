@@ -1,13 +1,12 @@
 """Observation retrieval tools for NWS surface wind data."""
 
 from typing import Literal
-import json
 from datetime import datetime, timedelta, timezone
 
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import WindsClient
+from ..client import WindsClient, handle_winds_error
 from ..models import (
     Units,
     degrees_to_compass,
@@ -17,6 +16,7 @@ from ..models import (
     m_to_miles,
 )
 from ..server import mcp
+from ..utils import wrap_json
 
 
 def _get_client(ctx: Context) -> WindsClient:
@@ -143,7 +143,7 @@ async def winds_get_latest_observation(
         data = await client.get_latest_observation(station_id)
 
         if response_format == "json":
-            return json.dumps(data, indent=2)
+            return wrap_json(data, list_key=None, station_id=station_id.upper())
 
         props = data.get("properties", {})
         row = _format_observation_row(props, units)
@@ -161,7 +161,7 @@ async def winds_get_latest_observation(
 
         return "\n".join(lines)
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -178,6 +178,7 @@ async def winds_get_observations(
     hours: int = 24,
     units: Units = Units.METRIC,
     response_format: Literal["markdown", "json"] = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Get recent surface observations over a time window.
 
@@ -186,6 +187,10 @@ async def winds_get_observations(
         hours: Number of hours of observations to retrieve (default 24, max 168).
         units: Unit system — 'metric' or 'english' (default: metric).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON records returned (default 2000). NWS returns
+            observations newest-first, so the most recent max_records are
+            kept and the JSON flags any truncation. (Markdown is capped to
+            the most recent 200 rows regardless of this setting.)
     """
     try:
         if hours < 1 or hours > 168:
@@ -200,7 +205,15 @@ async def winds_get_observations(
         data = await client.get_observations(station_id, start_iso, end_iso)
 
         if response_format == "json":
-            return json.dumps(data, indent=2)
+            return wrap_json(
+                data,
+                list_key="features",
+                max_records=max_records,
+                keep="head",
+                recent=True,
+                station_id=station_id.upper(),
+                hours=hours,
+            )
 
         features = data.get("features", [])
         if not features:
@@ -217,7 +230,10 @@ async def winds_get_observations(
         lines.append("| Time | Wind Spd | Dir | Compass | Gust | Temp |")
         lines.append("| --- | --- | --- | --- | --- | --- |")
 
-        for f in features:
+        # NWS returns observations newest-first, so the head is the most
+        # recent — cap the display to the most recent 200 rows.
+        total = len(features)
+        for f in features[:200]:
             props = f.get("properties", {})
             row = _format_observation_row(props, units)
             lines.append(
@@ -225,15 +241,20 @@ async def winds_get_observations(
             )
 
         lines.append("")
-        lines.append(
-            f"*{len(features)} observations returned. Data from NWS Weather.gov API.*"
-        )
+        if total > 200:
+            lines.append(
+                f"*Showing most recent 200 of {total} observations. Data from NWS Weather.gov API.*"
+            )
+        else:
+            lines.append(
+                f"*{total} observations returned. Data from NWS Weather.gov API.*"
+            )
 
         return "\n".join(lines)
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -251,6 +272,7 @@ async def winds_get_history(
     end_date: str,
     units: Units = Units.METRIC,
     response_format: Literal["markdown", "json"] = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Get historical ASOS wind data from the Iowa Environmental Mesonet archive.
 
@@ -263,6 +285,11 @@ async def winds_get_history(
         end_date: End date in YYYY-MM-DD format.
         units: Unit system — 'metric' or 'english' (default: metric).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON records returned (default 2000). The IEM
+            archive returns rows oldest-first, so the most recent
+            max_records are kept and the JSON flags any truncation. (A date
+            range up to 366 days can be tens of thousands of 5-minute rows.
+            Markdown is capped to the most recent 200 rows regardless.)
     """
     try:
         # Validate dates
@@ -283,7 +310,16 @@ async def winds_get_history(
         data = await client.get_iem_history(station_id, start_date, end_date)
 
         if response_format == "json":
-            return json.dumps(data, indent=2)
+            return wrap_json(
+                data,
+                list_key="results",
+                max_records=max_records,
+                keep="tail",
+                recent=True,
+                station_id=station_id.upper(),
+                start_date=start_date,
+                end_date=end_date,
+            )
 
         results = data.get("results", [])
         if not results:
@@ -299,7 +335,12 @@ async def winds_get_history(
         )
         lines.append("| --- | --- | --- | --- | --- | --- |")
 
-        for row in results[:200]:  # Cap display rows
+        # IEM returns rows oldest-first, so the tail is the most recent —
+        # cap the display to the most recent 200 rows (kept in their
+        # original chronological order).
+        total = len(results)
+        display_rows = results[-200:] if total > 200 else results
+        for row in display_rows:
             valid = row.get("valid", "")
             sknt = row.get("sknt", "")
             drct = row.get("drct", "")
@@ -346,18 +387,21 @@ async def winds_get_history(
                 "| Time (UTC) | Wind Spd (m/s) | Dir (\u00b0) | Compass | Gust (m/s) | Temp (\u00b0C) |"
             )
 
-        total = len(results)
         lines.append("")
-        suffix = " (showing first 200)" if total > 200 else ""
-        lines.append(
-            f"*{total} observations{suffix}. Data from Iowa Environmental Mesonet ASOS archive.*"
-        )
+        if total > 200:
+            lines.append(
+                f"*Showing most recent 200 of {total} observations. Data from Iowa Environmental Mesonet ASOS archive.*"
+            )
+        else:
+            lines.append(
+                f"*{total} observations. Data from Iowa Environmental Mesonet ASOS archive.*"
+            )
 
         return "\n".join(lines)
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -375,6 +419,7 @@ async def winds_get_daily_summary(
     end_date: str,
     units: Units = Units.METRIC,
     response_format: Literal["markdown", "json"] = "markdown",
+    max_records: int = 2000,
 ) -> str:
     """Get daily wind statistics summary from IEM ASOS archive.
 
@@ -386,6 +431,10 @@ async def winds_get_daily_summary(
         end_date: End date in YYYY-MM-DD format.
         units: Unit system — 'metric' or 'english' (default: metric).
         response_format: Output format — 'markdown' (default) or 'json'.
+        max_records: Cap on JSON days returned (default 2000; a 366-day
+            request produces at most ~366 daily summaries, so this rarely
+            triggers). Days are oldest-first, so the most recent
+            max_records are kept and the JSON flags any truncation.
     """
     try:
         # Validate dates
@@ -492,8 +541,14 @@ async def winds_get_daily_summary(
                     if s["max_gust"] is not None:
                         s["max_gust"] = round(s["max_gust"], 1)
                     s["speed_unit"] = "kt"
-            return json.dumps(
-                {"station": station_id, "summaries": summary_data}, indent=2
+            return wrap_json(
+                {"station": station_id.upper(), "summaries": summary_data},
+                list_key="summaries",
+                max_records=max_records,
+                keep="tail",
+                recent=True,
+                start_date=start_date,
+                end_date=end_date,
             )
 
         spd_unit = "m/s" if units == Units.METRIC else "kt"
@@ -507,7 +562,11 @@ async def winds_get_daily_summary(
         )
         lines.append("| --- | --- | --- | --- | --- | --- |")
 
-        for s in summary_data:
+        # Days are oldest-first (sorted ascending), so the tail is the most
+        # recent — cap the display to the most recent 200 days.
+        total = len(summary_data)
+        display_summaries = summary_data[-200:] if total > 200 else summary_data
+        for s in display_summaries:
             mean = (
                 f"{convert(s['mean_speed']):.1f}"
                 if s["mean_speed"] is not None
@@ -526,15 +585,20 @@ async def winds_get_daily_summary(
             )
 
         lines.append("")
-        lines.append(
-            f"*{len(summary_data)} days summarized. Data from Iowa Environmental Mesonet ASOS archive.*"
-        )
+        if total > 200:
+            lines.append(
+                f"*Showing most recent 200 of {total} days. Data from Iowa Environmental Mesonet ASOS archive.*"
+            )
+        else:
+            lines.append(
+                f"*{total} days summarized. Data from Iowa Environmental Mesonet ASOS archive.*"
+            )
 
         return "\n".join(lines)
     except ValueError as e:
         return f"Validation Error: {e}"
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -579,7 +643,13 @@ async def winds_compare_stations(
                 errors.append(f"{sid.upper()}: {type(e).__name__}")
 
         if response_format == "json":
-            return json.dumps({"comparisons": results, "errors": errors}, indent=2)
+            return wrap_json(
+                {"comparisons": results, "errors": errors},
+                list_key="comparisons",
+                max_records=max(len(station_ids), 10),
+                keep="head",
+                recent=False,
+            )
 
         wind_unit = "kt" if units == Units.ENGLISH else "m/s"
         temp_unit = "\u00b0F" if units == Units.ENGLISH else "\u00b0C"
@@ -609,20 +679,4 @@ async def winds_compare_stations(
 
         return "\n".join(lines)
     except Exception as e:
-        return _handle_error(e)
-
-
-def _handle_error(e: Exception) -> str:
-    """Format an exception into a user-friendly error message."""
-    import httpx
-
-    if isinstance(e, httpx.HTTPStatusError):
-        status = e.response.status_code
-        if status == 404:
-            return "Error: Station not found. Verify the station ID (ICAO format, e.g., KJFK)."
-        return f"HTTP Error {status}: {e.response.reason_phrase}. The API may be temporarily unavailable."
-
-    if isinstance(e, httpx.TimeoutException):
-        return "Error: Request timed out. Please try again."
-
-    return f"Unexpected error: {type(e).__name__}: {e}"
+        return handle_winds_error(e)

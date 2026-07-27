@@ -1,5 +1,7 @@
 """Tests for utility functions: unit conversion, compass direction, CSV parsing."""
 
+import json
+
 from winds_mcp.models import (
     degrees_to_compass,
     ms_to_knots,
@@ -124,3 +126,104 @@ class TestIEMCSVParsing:
         csv_text = "station,valid,drct,sknt\n"
         result = WindsClient._parse_iem_csv(csv_text)
         assert result["results"] == []
+
+    def test_malformed_body_without_station_column_raises(self):
+        """A degraded IEM backend can return a 200 with an HTML/error body
+        instead of CSV; that has no 'station' column, which is the
+        server's own semantic error (WindsAPIError), not a silent empty
+        result or garbage rows."""
+        import pytest
+
+        from winds_mcp.client import WindsAPIError
+
+        with pytest.raises(WindsAPIError):
+            WindsClient._parse_iem_csv("<html>Service Unavailable</html>")
+
+
+class TestWrapJson:
+    """Tests for the shared JSON response wrapper (utils.wrap_json) used by
+    every JSON-emitting tool in this server."""
+
+    def test_single_object_envelope(self):
+        """A payload with list_key=None is never truncated and reports
+        returned=total=1."""
+        from winds_mcp.utils import wrap_json
+
+        result = wrap_json({"foo": "bar"}, list_key=None, station_id="KJFK")
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is False
+        assert parsed["returned"] == 1
+        assert parsed["total"] == 1
+        assert parsed["station_id"] == "KJFK"
+        assert parsed["data"] == {"foo": "bar"}
+        assert "retrieved_at" in parsed
+        assert "hint" not in parsed
+
+    def test_head_keep_truncates_to_first_n(self):
+        """keep='head' keeps the first max_records items."""
+        from winds_mcp.utils import wrap_json
+
+        data = {"features": list(range(10))}
+        result = wrap_json(data, list_key="features", max_records=3, keep="head")
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["returned"] == 3
+        assert parsed["total"] == 10
+        assert parsed["data"]["features"] == [0, 1, 2]
+        assert "hint" in parsed
+
+    def test_tail_keep_truncates_to_last_n(self):
+        """keep='tail' keeps the last max_records items (the most recent
+        end of an oldest-first series)."""
+        from winds_mcp.utils import wrap_json
+
+        data = {"results": list(range(10))}
+        result = wrap_json(data, list_key="results", max_records=3, keep="tail")
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["returned"] == 3
+        assert parsed["total"] == 10
+        assert parsed["data"]["results"] == [7, 8, 9]
+
+    def test_under_cap_is_not_truncated(self):
+        """A list at or under max_records is left untouched."""
+        from winds_mcp.utils import wrap_json
+
+        data = {"results": [1, 2]}
+        result = wrap_json(data, list_key="results", max_records=5, keep="tail")
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is False
+        assert parsed["returned"] == 2
+        assert parsed["total"] == 2
+        assert "hint" not in parsed
+
+    def test_hint_wording_reflects_recent_flag(self):
+        """recent=True labels the kept slice 'most recent'; recent=False
+        (order-unspecified lists, e.g. station listings) labels it 'first'."""
+        from winds_mcp.utils import wrap_json
+
+        recent_result = json.loads(
+            wrap_json(
+                {"results": list(range(5))},
+                list_key="results",
+                max_records=2,
+                keep="tail",
+                recent=True,
+            )
+        )
+        unspecified_result = json.loads(
+            wrap_json(
+                {"features": list(range(5))},
+                list_key="features",
+                max_records=2,
+                keep="head",
+                recent=False,
+            )
+        )
+
+        assert "most recent" in recent_result["hint"]
+        assert "first" in unspecified_result["hint"]
