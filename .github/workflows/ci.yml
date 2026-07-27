@@ -92,8 +92,12 @@ jobs:
       fail-fast: false
       matrix:
         server: [adcirc-mcp, alert-mcp, coops-mcp, erddap-mcp, goes-mcp, hpc-system-mcp, ndbc-mcp, nhc-mcp, ofs-mcp, recon-mcp, rtofs-mcp, schism-mcp, stofs-mcp, ufs-runner-mcp, usgs-mcp, vdatum-mcp, winds-mcp, ww3-mcp]
-    # On PRs, skip unchanged servers. On push to main, run all.
-    if: always()
+    # On PRs, skip unchanged servers. On push to main, run all. Gate on
+    # detect-changes actually succeeding (rather than `always()`): if it fails,
+    # needs.detect-changes.outputs[matrix.server] is empty, every step below is
+    # skipped (they're all gated on should-run == 'true'), and the job would
+    # otherwise report a false SUCCESS having run nothing.
+    if: ${{ !cancelled() && (github.event_name == 'push' || needs.detect-changes.result == 'success') }}
     steps:
       - name: Check if server changed
         id: should-run
