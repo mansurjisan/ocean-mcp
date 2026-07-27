@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+# A superseded push (new commit on the same PR/branch) cancels the previous
+# run's in-flight matrix instead of letting it burn CI minutes to completion.
+# Push-to-main runs are never cancelled — a half-finished check on main would
+# be worse than a slow one.
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -31,6 +39,12 @@ jobs:
       hpc-system-mcp: ${{ steps.filter.outputs.hpc-system-mcp }}
       ufs-runner-mcp: ${{ steps.filter.outputs.ufs-runner-mcp }}
       vdatum-mcp: ${{ steps.filter.outputs.vdatum-mcp }}
+      # Set when CI itself changes, so a PR touching only workflow files can
+      # still be validated by CI (see the canary-forcing logic in `test`).
+      workflows: ${{ steps.filter.outputs.workflows }}
+      # Full 3-version matrix on push-to-main; PRs stay at one version (3.12)
+      # to keep per-PR job count unchanged. See ci.yml comment on `test`.
+      python-versions: ${{ steps.pyversions.outputs.versions }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -73,6 +87,17 @@ jobs:
               - 'servers/ufs-runner-mcp/**'
             vdatum-mcp:
               - 'servers/vdatum-mcp/**'
+            workflows:
+              - '.github/workflows/**'
+
+      - name: Determine Python version matrix
+        id: pyversions
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo 'versions=["3.11","3.12","3.13"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'versions=["3.12"]' >> "$GITHUB_OUTPUT"
+          fi
 
   lint:
     runs-on: ubuntu-latest
@@ -94,17 +119,31 @@ jobs:
       fail-fast: false
       matrix:
         server: [adcirc-mcp, alert-mcp, coops-mcp, erddap-mcp, goes-mcp, hpc-system-mcp, ndbc-mcp, nhc-mcp, ofs-mcp, recon-mcp, rtofs-mcp, schism-mcp, stofs-mcp, ufs-runner-mcp, usgs-mcp, vdatum-mcp, winds-mcp, ww3-mcp]
-    # On PRs, skip unchanged servers. On push to main, run all. Gate on
-    # detect-changes actually succeeding (rather than `always()`): if it fails,
-    # needs.detect-changes.outputs[matrix.server] is empty, every step below is
-    # skipped (they're all gated on should-run == 'true'), and the job would
-    # otherwise report a false SUCCESS having run nothing.
+        # push-to-main: ["3.11","3.12","3.13"] -> 18 servers x 3 = 54 jobs.
+        # pull_request: ["3.12"] -> same per-PR job count as before this
+        # change (one cell per server, gated by should-run below). A PR that
+        # only affects a single server therefore costs 1 extra job at most
+        # (the forced canary below), not 3x, while push-to-main still gets
+        # full cross-version coverage immediately after merge.
+        python-version: ${{ fromJson(needs.detect-changes.outputs.python-versions) }}
+    # On PRs, skip unchanged servers (except the canary below). On push to
+    # main, run all. Gate on detect-changes actually succeeding (rather than
+    # `always()`): if it fails, needs.detect-changes.outputs[matrix.server] is
+    # empty, every step below is skipped (they're all gated on
+    # should-run == 'true'), and the job would otherwise report a false
+    # SUCCESS having run nothing.
     if: ${{ !cancelled() && (github.event_name == 'push' || needs.detect-changes.result == 'success') }}
     steps:
       - name: Check if server changed
         id: should-run
         run: |
           if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.detect-changes.outputs.workflows }}" == "true" && "${{ matrix.server }}" == "coops-mcp" ]]; then
+            # CI-only PRs (e.g. touching only ci.yml) don't match any
+            # per-server filter above, so nothing would otherwise run and CI
+            # changes could never be validated by CI. Force one fast,
+            # representative server (coops-mcp) to run as a canary.
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=${{ needs.detect-changes.outputs[matrix.server] }}" >> "$GITHUB_OUTPUT"
@@ -122,7 +161,7 @@ jobs:
       - uses: actions/setup-python@v6
         if: steps.should-run.outputs.run == 'true'
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         if: steps.should-run.outputs.run == 'true'

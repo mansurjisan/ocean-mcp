@@ -1,5 +1,7 @@
 # winds-mcp
 
+<!-- mcp-name: io.github.mansurjisan/winds-mcp -->
+
 MCP server providing access to NWS surface wind observations from ASOS, AWOS, and other stations.
 
 ## Data Sources

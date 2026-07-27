@@ -26,6 +26,24 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Parsed tag: server=${SERVER}, version=${VERSION}"
 
+      - uses: actions/checkout@v6
+
+      - name: Verify version matches tag
+        working-directory: servers/${{ steps.parse.outputs.server }}
+        run: |
+          TOML_VERSION=$(python3 -c "
+          import re
+          with open('pyproject.toml') as f:
+              match = re.search(r'^version\s*=\s*\"(.+?)\"', f.read(), re.MULTILINE)
+              print(match.group(1))
+          ")
+          TAG_VERSION="${{ steps.parse.outputs.version }}"
+          if [[ "${TOML_VERSION}" != "${TAG_VERSION}" ]]; then
+            echo "::error::Version mismatch: pyproject.toml has ${TOML_VERSION}, tag has ${TAG_VERSION}"
+            exit 1
+          fi
+          echo "Version verified: ${TOML_VERSION}"
+
   test:
     needs: parse-tag
     runs-on: ubuntu-latest
@@ -45,22 +63,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Verify version matches tag
-        working-directory: servers/${{ needs.parse-tag.outputs.server }}
-        run: |
-          TOML_VERSION=$(python -c "
-          import re
-          with open('pyproject.toml') as f:
-              match = re.search(r'^version\s*=\s*\"(.+?)\"', f.read(), re.MULTILINE)
-              print(match.group(1))
-          ")
-          TAG_VERSION="${{ needs.parse-tag.outputs.version }}"
-          if [[ "${TOML_VERSION}" != "${TAG_VERSION}" ]]; then
-            echo "::error::Version mismatch: pyproject.toml has ${TOML_VERSION}, tag has ${TAG_VERSION}"
-            exit 1
-          fi
-          echo "Version verified: ${TOML_VERSION}"
-
       - name: Install dependencies
         working-directory: servers/${{ needs.parse-tag.outputs.server }}
         run: uv sync --group dev
@@ -74,6 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -114,8 +117,32 @@ jobs:
 
       - name: Install mcp-publisher
         if: steps.check.outputs.exists == 'true'
+        env:
+          MCP_PUBLISHER_VERSION: "1.8.0"
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          ASSET="mcp-publisher_${OS}_${ARCH}.tar.gz"
+          # Pinned sha256 checksums from the v1.8.0 release's
+          # registry_1.8.0_checksums.txt (covers both mcp-publisher_* and
+          # registry_* assets despite the "registry_" filename prefix).
+          # Only linux runners are expected here (job runs on ubuntu-latest).
+          case "${ASSET}" in
+            mcp-publisher_linux_amd64.tar.gz)
+              SHA256="1370446bbe74d562608e8005a6ccce02d146a661fbd78674e11cc70b9618d6cf"
+              ;;
+            mcp-publisher_linux_arm64.tar.gz)
+              SHA256="c978982c60e1b4903a976de090f04dc4fac4a320daa50704fcad2dbc93433d62"
+              ;;
+            *)
+              echo "::error::No pinned checksum recorded for ${ASSET}; refusing to install mcp-publisher unverified"
+              exit 1
+              ;;
+          esac
+          curl -L -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/${ASSET}"
+          echo "${SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xz -f mcp-publisher.tar.gz mcp-publisher
 
       - name: Update version in server.json
         if: steps.check.outputs.exists == 'true'
