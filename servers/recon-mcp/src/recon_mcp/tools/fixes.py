@@ -1,5 +1,7 @@
 """Tool: recon_get_fixes — fetch and parse ATCF f-deck aircraft fix data."""
 
+from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -30,7 +32,8 @@ async def recon_get_fixes(
     basin: str,
     storm_number: int,
     year: int,
-    response_format: str = "markdown",
+    max_records: int = 2000,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get ATCF f-deck aircraft fix data for a tropical cyclone.
 
@@ -42,6 +45,10 @@ async def recon_get_fixes(
         basin: Basin code — 'al' (Atlantic), 'ep' (East Pacific), or 'cp' (Central Pacific).
         storm_number: Storm number within the season (e.g., 14 for AL142024).
         year: 4-digit year (e.g., 2024).
+        max_records: Cap on fix records returned (default 2000). The f-deck
+            is served chronologically oldest-first, so only the most recent
+            max_records fixes are kept, and the output flags any
+            truncation.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -70,6 +77,8 @@ async def recon_get_fixes(
             return format_json_response(
                 records,
                 context=f"ATCF f-deck fixes for {storm_label}",
+                max_records=max_records,
+                keep="tail",
             )
 
         columns = [
@@ -93,6 +102,8 @@ async def recon_get_fixes(
             ],
             count_label="fix records",
             source="NOAA NHC ATCF",
+            max_rows=max_records,
+            keep="tail",
         )
 
     except Exception as e:

@@ -55,8 +55,8 @@ A wrapped JSON response carries top-level metadata alongside the data:
   applicable (these may be nested under a `request_params`/`metadata` key — don't
   drop them).
 
-Reference wrappers: `coops`/`recon` `format_json_response`, `usgs` `_cap_waterml`,
-`ndbc` `_capped_obs_json`, `erddap` `cap_rows`. Tools that emit a bare list or an
+Reference wrappers: `coops` `format_json_response`, `usgs` `_cap_waterml`, `ndbc`
+`_capped_obs_json`, `erddap` `cap_rows`. Tools that emit a bare list or an
 unwrapped metadata dump are not "wrappers"; add a wrapper if a tool grows enough
 metadata to warrant one.
 

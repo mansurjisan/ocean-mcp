@@ -1,11 +1,14 @@
 """Unit tests for recon_mcp.utils parsers — no network access needed."""
 
+import json
+
 import pytest
 
 from recon_mcp.utils import (
     _parse_atcf_fix_latlon,
     _parse_hdob_latlon,
     _parse_vdm_latlon,
+    format_json_response,
     format_tabular_data,
     parse_atcf_fix_record,
     parse_atcf_latlon,
@@ -306,3 +309,93 @@ def test_format_tabular_data():
 def test_format_tabular_data_empty():
     result = format_tabular_data([], [("a", "A")], title="Empty")
     assert "0 records returned" in result
+
+
+def test_format_tabular_data_under_cap_not_truncated():
+    """When data fits under max_rows, no truncation footer is added."""
+    data = [{"name": f"Storm{i}"} for i in range(5)]
+    result = format_tabular_data(data, [("name", "Name")], max_rows=10)
+    assert "5 records returned" in result
+    assert "truncated" not in result.lower()
+
+
+def test_format_tabular_data_max_rows_keeps_head_by_default():
+    """keep='head' (the default) keeps the first max_rows rows."""
+    data = [{"name": f"Storm{i}"} for i in range(10)]
+    result = format_tabular_data(data, [("name", "Name")], max_rows=3)
+    assert "Storm0" in result
+    assert "Storm1" in result
+    assert "Storm2" in result
+    assert "Storm9" not in result
+    assert "Showing the first 3 of 10 records" in result
+    assert "(truncated)" in result
+
+
+def test_format_tabular_data_max_rows_keeps_tail_when_requested():
+    """keep='tail' keeps the most recent (last) max_rows rows."""
+    data = [{"name": f"Storm{i}"} for i in range(10)]
+    result = format_tabular_data(data, [("name", "Name")], max_rows=3, keep="tail")
+    assert "Storm7" in result
+    assert "Storm8" in result
+    assert "Storm9" in result
+    assert "Storm0" not in result
+    assert "Showing the most recent 3 of 10 records" in result
+
+
+# ---------------------------------------------------------------------------
+# format_json_response — truncation envelope
+# ---------------------------------------------------------------------------
+
+
+def test_format_json_response_list_not_truncated():
+    """A list under max_records carries truncated=False and matching counts."""
+    data = [{"i": i} for i in range(3)]
+    result = json.loads(format_json_response(data, max_records=10))
+
+    assert result["truncated"] is False
+    assert result["record_count"] == 3
+    assert result["total_count"] == 3
+    assert "hint" not in result
+    assert len(result["data"]) == 3
+    assert "retrieved_at" in result
+
+
+def test_format_json_response_list_truncated_head():
+    """keep='head' (default) keeps the first max_records records and hints."""
+    data = [{"i": i} for i in range(10)]
+    result = json.loads(format_json_response(data, max_records=3))
+
+    assert result["truncated"] is True
+    assert result["record_count"] == 3
+    assert result["total_count"] == 10
+    assert [d["i"] for d in result["data"]] == [0, 1, 2]
+    assert "hint" in result
+    assert "first" in result["hint"].lower()
+
+
+def test_format_json_response_list_truncated_tail():
+    """keep='tail' keeps the most recent (last) max_records records."""
+    data = [{"i": i} for i in range(10)]
+    result = json.loads(format_json_response(data, max_records=3, keep="tail"))
+
+    assert result["truncated"] is True
+    assert result["record_count"] == 3
+    assert result["total_count"] == 10
+    assert [d["i"] for d in result["data"]] == [7, 8, 9]
+    assert "most recent" in result["hint"].lower()
+
+
+def test_format_json_response_dict_passthrough():
+    """Dict payloads are merged in as-is (no list-shaped truncation applied)."""
+    payload = {"storm": "Milton", "missions": [1, 2, 3]}
+    result = json.loads(format_json_response(payload, context="test context"))
+
+    assert result["storm"] == "Milton"
+    assert result["missions"] == [1, 2, 3]
+    assert result["context"] == "test context"
+    assert "retrieved_at" in result
+
+
+def test_format_json_response_context_included():
+    result = json.loads(format_json_response([], context="some context"))
+    assert result["context"] == "some context"

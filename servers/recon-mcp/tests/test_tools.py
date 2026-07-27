@@ -22,13 +22,18 @@ import pytest
 import respx
 
 from recon_mcp.client import ReconClient, RetryTransport
-from recon_mcp.models import AOML_SFMR_BASE, ATCF_FIX_BASE, NHC_RECON_ARCHIVE_BASE
+from recon_mcp.models import (
+    AOML_SFMR_BASE,
+    ATCF_BDECK_BASE,
+    ATCF_FIX_BASE,
+    NHC_RECON_ARCHIVE_BASE,
+)
 
 # Import tool functions directly
 from recon_mcp.tools.fixes import recon_get_fixes
 from recon_mcp.tools.hdob import recon_get_hdobs
 from recon_mcp.tools.missions import recon_list_missions
-from recon_mcp.tools.sfmr import recon_list_sfmr
+from recon_mcp.tools.sfmr import recon_get_sfmr, recon_list_sfmr
 from recon_mcp.tools.vdm import recon_get_vdms
 
 # ---------------------------------------------------------------------------
@@ -740,6 +745,271 @@ class TestListSfmr:
         result = await recon_list_sfmr(ctx, year=2022, storm_name="Ian")
 
         assert "Ian" in result  # Title-cased in output
+
+
+# ===================================================================
+# Tests for output caps (max_records wiring + truncation envelope)
+# ===================================================================
+
+
+class TestOutputCaps:
+    """Tests that max_records is wired through to the JSON/markdown caps."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_hdobs_max_records_truncates_json(self, ctx: MagicMock) -> None:
+        """A small max_records truncates the JSON observation list and flags it."""
+        dir_url = f"{NHC_RECON_ARCHIVE_BASE}/2024/AHONT1/"
+        html = _load_fixture("directory_listing.html")
+        bulletin = _load_fixture("hdob_bulletin.txt")
+
+        respx.get(dir_url).mock(return_value=httpx.Response(200, text=html))
+        respx.get(dir_url + "URNT15-KNHC.202410091300.txt").mock(
+            return_value=httpx.Response(200, text=bulletin)
+        )
+        respx.get(dir_url + "URNT15-KNHC.202410091230.txt").mock(
+            return_value=httpx.Response(200, text=bulletin)
+        )
+        respx.get(dir_url + "URNT15-KNHC.202410091200.txt").mock(
+            return_value=httpx.Response(200, text=bulletin)
+        )
+
+        # 3 bulletins x 5 observations each = 15 total observations.
+        result = await recon_get_hdobs(
+            ctx,
+            year=2024,
+            basin="al",
+            limit=3,
+            max_records=5,
+            response_format="json",
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["record_count"] == 5
+        assert parsed["total_count"] == 15
+        assert "hint" in parsed
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_hdobs_max_records_under_total_not_truncated(
+        self, ctx: MagicMock
+    ) -> None:
+        """max_records above the total leaves truncated False."""
+        dir_url = f"{NHC_RECON_ARCHIVE_BASE}/2024/AHONT1/"
+        html = _load_fixture("directory_listing.html")
+        bulletin = _load_fixture("hdob_bulletin.txt")
+
+        respx.get(dir_url).mock(return_value=httpx.Response(200, text=html))
+        respx.get(dir_url + "URNT15-KNHC.202410091300.txt").mock(
+            return_value=httpx.Response(200, text=bulletin)
+        )
+
+        result = await recon_get_hdobs(
+            ctx,
+            year=2024,
+            basin="al",
+            limit=1,
+            max_records=2000,
+            response_format="json",
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is False
+        assert parsed["record_count"] == parsed["total_count"] == 5
+        assert "hint" not in parsed
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fixes_max_records_keeps_most_recent(self, ctx: MagicMock) -> None:
+        """ATCF f-decks are oldest-first; a max_records cap keeps the tail
+        (most recent fix), not the head."""
+        url = f"{ATCF_FIX_BASE}/fal142024.dat"
+        fdeck = _load_fixture("fdeck_sample.txt")
+        respx.get(url).mock(return_value=httpx.Response(200, text=fdeck))
+
+        result = await recon_get_fixes(
+            ctx,
+            basin="al",
+            storm_number=14,
+            year=2024,
+            max_records=1,
+            response_format="json",
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["record_count"] == 1
+        assert parsed["total_count"] == 3
+        # The fixture's 3rd (last) record is the most recent — 2024100915,
+        # min_pressure 950 — confirmed against the live f-deck's chronological
+        # ascending order (verified against ftp.nhc.noaa.gov/atcf/fix/).
+        assert parsed["data"][0]["min_pressure_mb"] == 950
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_missions_max_records_truncates_markdown(
+        self, ctx: MagicMock
+    ) -> None:
+        """A small max_records truncates the markdown table with a footer."""
+        dir_url = f"{NHC_RECON_ARCHIVE_BASE}/2024/AHONT1/"
+        html = _load_fixture("directory_listing.html")
+        respx.get(dir_url).mock(return_value=httpx.Response(200, text=html))
+
+        result = await recon_list_missions(
+            ctx, year=2024, product="hdob", basin="al", max_records=2
+        )
+
+        assert "Showing the first 2 of 3 files" in result
+        assert "(truncated)" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_list_sfmr_max_records_keeps_most_recent(
+        self, ctx: MagicMock
+    ) -> None:
+        """SFMR files are listed oldest-first; a cap keeps the most recent."""
+        url = f"{AOML_SFMR_BASE}/2022/ian/"
+        html = _load_fixture("sfmr_listing.html")
+        respx.get(url).mock(return_value=httpx.Response(200, text=html))
+
+        result = await recon_list_sfmr(
+            ctx, year=2022, storm_name="ian", max_records=1, response_format="json"
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["record_count"] == 1
+        assert parsed["total_count"] == 3
+        # Fixture files sort 20220926 < 20220927 < 20220928 — the most
+        # recent (0928) must be the one kept.
+        assert parsed["data"][0]["date"] == "20220928"
+
+
+# ===================================================================
+# Tests for recon_get_sfmr (radial wind profile, requires NetCDF download)
+# ===================================================================
+
+SAMPLE_BDECK_IAN = (
+    "AL, 09, 2022092600,   , BEST,   0,  197N,  0835W,  40,  998, TS,\n"
+    "AL, 09, 2022092700,   , BEST,   0,  213N,  0862W,  85,  965, HU,\n"
+)
+
+
+def _build_sfmr_nc_bytes(tmp_path, name: str, date_str: str) -> bytes:
+    """Build a minimal SFMR NetCDF file and return its raw bytes."""
+    from netCDF4 import Dataset
+
+    path = tmp_path / name
+    ds = Dataset(str(path), "w", format="NETCDF4")
+    try:
+        n = 5
+        ds.createDimension("obs", n)
+        date_var = ds.createVariable("DATE", "i4", ("obs",))
+        time_var = ds.createVariable("TIME", "i4", ("obs",))
+        lat_var = ds.createVariable("LAT", "f4", ("obs",))
+        lon_var = ds.createVariable("LON", "f4", ("obs",))
+        sws_var = ds.createVariable("SWS", "f4", ("obs",))
+        date_var[:] = [int(date_str)] * n
+        time_var[:] = [120000 + i * 100 for i in range(n)]
+        lat_var[:] = [20.0 + i * 0.01 for i in range(n)]
+        lon_var[:] = [-80.0 - i * 0.01 for i in range(n)]
+        sws_var[:] = [30.0 + i for i in range(n)]
+    finally:
+        ds.close()
+    return path.read_bytes()
+
+
+class TestGetSfmr:
+    """Tests for the recon_get_sfmr tool, including max_records wiring."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_sfmr_max_records_truncates_and_keeps_most_recent(
+        self, ctx: MagicMock, tmp_path
+    ) -> None:
+        """AOML lists files oldest-first; max_records must keep the most
+        recent files (not the oldest) and flag truncation in the envelope."""
+        sfmr_url = f"{AOML_SFMR_BASE}/2022/ian/"
+        btk_url = f"{ATCF_BDECK_BASE}/bal092022.dat"
+
+        listing_html = (
+            "<html><body><pre>"
+            '<a href="../">Parent Directory</a>'
+            '<a href="AFRC_SFMR20220926H1.nc">AFRC_SFMR20220926H1.nc</a>'
+            '<a href="AFRC_SFMR20220927U1.nc">AFRC_SFMR20220927U1.nc</a>'
+            '<a href="AFRC_SFMR20220928I1.nc">AFRC_SFMR20220928I1.nc</a>'
+            "</pre></body></html>"
+        )
+        respx.get(sfmr_url).mock(return_value=httpx.Response(200, text=listing_html))
+        respx.get(btk_url).mock(return_value=httpx.Response(200, text=SAMPLE_BDECK_IAN))
+
+        for fname, date_str in (
+            ("AFRC_SFMR20220926H1.nc", "20220926"),
+            ("AFRC_SFMR20220927U1.nc", "20220927"),
+            ("AFRC_SFMR20220928I1.nc", "20220928"),
+        ):
+            nc_bytes = _build_sfmr_nc_bytes(tmp_path, fname, date_str)
+            respx.get(sfmr_url + fname).mock(
+                return_value=httpx.Response(200, content=nc_bytes)
+            )
+
+        result = await recon_get_sfmr(
+            ctx,
+            year=2022,
+            storm_name="ian",
+            storm_number=9,
+            basin="al",
+            max_records=2,
+            response_format="json",
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is True
+        assert parsed["record_count"] == 2
+        assert parsed["total_count"] == 3
+        assert "hint" in parsed
+        filenames = {m["filename"] for m in parsed["missions"]}
+        assert filenames == {"AFRC_SFMR20220927U1.nc", "AFRC_SFMR20220928I1.nc"}
+        assert "AFRC_SFMR20220926H1.nc" not in filenames
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_get_sfmr_no_truncation_when_under_cap(
+        self, ctx: MagicMock, tmp_path
+    ) -> None:
+        """When available files are within max_records, nothing is truncated."""
+        sfmr_url = f"{AOML_SFMR_BASE}/2022/ian/"
+        btk_url = f"{ATCF_BDECK_BASE}/bal092022.dat"
+
+        listing_html = (
+            "<html><body><pre>"
+            '<a href="../">Parent Directory</a>'
+            '<a href="AFRC_SFMR20220926H1.nc">AFRC_SFMR20220926H1.nc</a>'
+            "</pre></body></html>"
+        )
+        respx.get(sfmr_url).mock(return_value=httpx.Response(200, text=listing_html))
+        respx.get(btk_url).mock(return_value=httpx.Response(200, text=SAMPLE_BDECK_IAN))
+
+        nc_bytes = _build_sfmr_nc_bytes(tmp_path, "AFRC_SFMR20220926H1.nc", "20220926")
+        respx.get(sfmr_url + "AFRC_SFMR20220926H1.nc").mock(
+            return_value=httpx.Response(200, content=nc_bytes)
+        )
+
+        result = await recon_get_sfmr(
+            ctx,
+            year=2022,
+            storm_name="ian",
+            storm_number=9,
+            basin="al",
+            max_records=10,
+            response_format="json",
+        )
+        parsed = json.loads(result)
+
+        assert parsed["truncated"] is False
+        assert parsed["record_count"] == parsed["total_count"] == 1
+        assert "hint" not in parsed
 
 
 # ===================================================================

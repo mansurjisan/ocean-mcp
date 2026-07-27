@@ -1,5 +1,7 @@
 """Tool: recon_get_vdms — fetch and parse Vortex Data Messages."""
 
+from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -34,7 +36,8 @@ async def recon_get_vdms(
     month: int | None = None,
     day: int | None = None,
     limit: int = 50,
-    response_format: str = "markdown",
+    max_records: int = 2000,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get Vortex Data Messages (VDMs) — storm center fix reports from recon aircraft.
 
@@ -50,6 +53,9 @@ async def recon_get_vdms(
         month: Optional month filter (1-12).
         day: Optional day filter (1-31).
         limit: Maximum number of VDMs to parse (default 50).
+        max_records: Cap on VDMs returned (default 2000). Files are already
+            fetched newest-first, so only the most recent max_records VDMs
+            are kept, and the output flags any truncation.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -110,6 +116,7 @@ async def recon_get_vdms(
                 vdms,
                 context=f"VDMs for {year} {basin.upper()}"
                 + (f" storm {storm_id}" if storm_id else ""),
+                max_records=max_records,
             )
 
         columns = [
@@ -139,6 +146,7 @@ async def recon_get_vdms(
             title="Vortex Data Messages",
             metadata_lines=metadata,
             count_label="VDMs",
+            max_rows=max_records,
         )
 
     except Exception as e:
