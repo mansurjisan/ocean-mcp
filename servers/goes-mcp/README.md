@@ -9,8 +9,9 @@ MCP server for **NOAA GOES satellite imagery** — visible, infrared, water vapo
 - **16 ABI spectral bands** — visible, near-IR, and infrared channels
 - **6 composite products** — GeoColor, AirMass, Sandwich, Fire Temperature, Dust, Derived Motion Winds
 - **Multiple coverages** — CONUS, Full Disk, and 5 regional sectors (SE, NE, Caribbean, Tropical Atlantic, Puerto Rico)
+- **Per-coverage resolutions** — CONUS, Full Disk, and regional sectors each have their own STAR CDN pixel ladder (CONUS is landscape; FD and sectors are square, at different sizes). Each tool defaults to a resolution that actually exists for its coverage — CONUS: `1250x750`, Full Disk: `1808x1808`, sectors: `1200x1200`
 - **Image embedding** — returns JPEG images directly via MCP `Image` type
-- **Flexible output** — image (default), markdown with URL, or JSON metadata
+- **Flexible output** — markdown with URL (default), embedded image, or JSON metadata
 
 ## Data Sources
 

@@ -3,16 +3,19 @@
 import asyncio
 import random
 import re
+from datetime import datetime
 from typing import Any
 
 import httpx
 
 from .models import (
     SLIDER_BASE_URL,
+    SLIDER_COVERAGES,
     SLIDER_PRODUCTS,
     SLIDER_SATELLITES,
-    SLIDER_SECTORS,
     STAR_CDN_BASE,
+    TIMESTAMPED_LATEST_PIXELS,
+    TIMESTAMPED_THUMBNAIL_PIXELS,
     satellite_key_to_id,
     validate_coverage,
     validate_product,
@@ -146,7 +149,7 @@ class GOESClient:
         sat_id = satellite_key_to_id(satellite)
         cov_path = validate_coverage(coverage)
         product = validate_product(product)
-        filename = validate_resolution(resolution)
+        filename = validate_resolution(resolution, cov_path)
         return f"{STAR_CDN_BASE}/{sat_id}/ABI/{cov_path}/{product}/{filename}"
 
     def build_sector_url(
@@ -170,7 +173,7 @@ class GOESClient:
         sat_id = satellite_key_to_id(satellite)
         sector_path = validate_sector(sector)
         product = validate_product(product)
-        filename = validate_resolution(resolution)
+        filename = validate_resolution(resolution, "SECTOR")
         return f"{STAR_CDN_BASE}/{sat_id}/ABI/{sector_path}/{product}/{filename}"
 
     def build_timestamped_url(
@@ -187,8 +190,12 @@ class GOESClient:
             satellite: Satellite key (e.g., 'goes-19').
             coverage: Coverage code (e.g., 'CONUS', 'FD').
             product: Product code (e.g., 'GEOCOLOR', '13').
-            timestamp: Timestamp in YYYYDDDHHmm format.
-            resolution: Resolution key (e.g., '1250x750').
+            timestamp: Timestamp in either YYYYDDDHHmm (11 digits, STAR CDN's
+                native day-of-year format) or YYYYMMDDHHmmss (14 digits, as
+                returned by goes_get_available_times/SLIDER) — the latter is
+                converted internally so the two tools chain together.
+            resolution: Resolution key (e.g., '1250x750'). Must be valid for
+                `coverage`'s ladder (CONUS vs. FD — see RESOLUTIONS_BY_KIND).
 
         Returns:
             Full URL to the timestamped image.
@@ -197,19 +204,31 @@ class GOESClient:
         cov_path = validate_coverage(coverage)
         product = validate_product(product)
 
-        # Validate timestamp format (YYYYDDDHHmm = 11 digits)
-        if not re.match(r"^\d{11}$", timestamp):
+        # Accept SLIDER's 14-digit YYYYMMDDHHmmss and convert it to STAR
+        # CDN's native 11-digit YYYYDDDHHmm day-of-year format.
+        if re.match(r"^\d{14}$", timestamp):
+            try:
+                dt = datetime.strptime(timestamp, "%Y%m%d%H%M%S")
+            except ValueError as e:
+                raise ValueError(f"Invalid timestamp '{timestamp}': {e}") from e
+            timestamp = dt.strftime("%Y%j%H%M")
+        elif not re.match(r"^\d{11}$", timestamp):
             raise ValueError(
-                f"Invalid timestamp '{timestamp}'. "
-                "Expected format: YYYYDDDHHmm (11 digits, DDD=day-of-year)"
+                f"Invalid timestamp '{timestamp}'. Expected YYYYDDDHHmm (11 "
+                "digits, DDD=day-of-year) or YYYYMMDDHHmmss (14 digits, as "
+                "returned by goes_get_available_times)."
             )
 
-        # Get pixel dimensions from resolution key
+        # Validate the resolution against this coverage's ladder, then
+        # resolve the actual WxH to embed in the filename — the dated
+        # archive has no literal "..._thumbnail.jpg"/"..._latest.jpg" entry,
+        # only real pixel sizes, and those sizes differ by coverage.
+        validate_resolution(resolution, cov_path)
         res_key = resolution.lower().strip()
         if res_key == "thumbnail":
-            w, h = "416", "250"
+            w, h = TIMESTAMPED_THUMBNAIL_PIXELS[cov_path].split("x")
         elif res_key == "latest":
-            w, h = "5000", "3000"
+            w, h = TIMESTAMPED_LATEST_PIXELS[cov_path].split("x")
         elif "x" in res_key:
             w, h = res_key.split("x")
         else:
@@ -239,7 +258,7 @@ class GOESClient:
             response = await client.get(url)
             response.raise_for_status()
             content_type = response.headers.get("content-type", "")
-            if "image" not in content_type and len(response.content) < 1000:
+            if "image" not in content_type or len(response.content) < 1000:
                 raise GOESAPIError(
                     f"Expected image but got {content_type}. "
                     "The image may not be available at this time."
@@ -268,21 +287,38 @@ class GOESClient:
 
         Args:
             satellite: Satellite key (e.g., 'goes-19').
-            sector: Sector or coverage code (e.g., 'CONUS', 'se').
+            sector: Coverage code — 'CONUS' or 'FD' (case-insensitive). SLIDER
+                does not publish timestamps for the regional SECTOR/xx
+                sub-sectors ('se', 'ne', 'car', 'taw', 'pr'); those are
+                STAR-CDN-only, so they're rejected here rather than 404ing.
             product: Product code (e.g., 'GEOCOLOR', '13').
             limit: Maximum number of timestamps to return.
 
         Returns:
             List of timestamps in YYYYMMDDHHmmss format, most recent first.
+
+        Raises:
+            GOESAPIError: If `sector` isn't one of the coverages SLIDER
+                publishes.
         """
         sat_key = satellite.lower().strip()
         slider_sat = SLIDER_SATELLITES.get(sat_key, sat_key)
 
-        # Map sector to SLIDER format
-        sector_clean = sector.lower().strip()
-        slider_sector = SLIDER_SECTORS.get(
-            sector, SLIDER_SECTORS.get(sector_clean, sector_clean)
-        )
+        # Map coverage to SLIDER's identifier (case-insensitive: 'fd' and
+        # 'FD' must both resolve). SECTOR/xx sub-sectors aren't published on
+        # SLIDER at all — reject with an actionable message instead of
+        # letting the request 404 downstream.
+        sector_key = sector.upper().strip()
+        if sector_key not in SLIDER_COVERAGES:
+            valid = ", ".join(sorted(SLIDER_COVERAGES.keys()))
+            raise GOESAPIError(
+                f"SLIDER does not publish timestamps for '{sector}'. Only "
+                f"{valid} are available via SLIDER — regional sectors like "
+                "'se'/'ne'/'car'/'taw'/'pr' aren't published there; use "
+                "goes_get_sector_image to fetch the latest image for those "
+                "directly. Valid options: " + valid
+            )
+        slider_sector = SLIDER_COVERAGES[sector_key]
 
         # Map product to SLIDER format
         product_clean = validate_product(product)

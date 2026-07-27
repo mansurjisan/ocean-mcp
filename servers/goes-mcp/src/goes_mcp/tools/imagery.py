@@ -10,9 +10,11 @@ from mcp.types import ToolAnnotations
 from ..client import GOESClient, handle_goes_error
 from ..models import (
     COVERAGES,
+    DEFAULT_RESOLUTION_BY_KIND,
     PRODUCTS,
     SATELLITES,
     SECTORS,
+    validate_coverage,
 )
 from ..server import mcp
 
@@ -35,7 +37,7 @@ async def goes_get_latest_image(
     satellite: str = "goes-19",
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
-    resolution: str = "1250x750",
+    resolution: str | None = None,
     response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get the most recent GOES satellite image.
@@ -48,11 +50,13 @@ async def goes_get_latest_image(
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
         coverage: Coverage area — 'CONUS' (Continental US) or 'FD' (Full Disk).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', 'Sandwich', 'FireTemperature', 'Dust', 'DMW').
-        resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest'.
+        resolution: Image resolution. Valid values are coverage-specific — CONUS: 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest' (defaults to '1250x750'); FD: 'thumbnail', '339x339', '678x678', '1808x1808', '5424x5424', '10848x10848', 'latest' (defaults to '1808x1808'). Use goes_list_products for the full tables.
         response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
+        if resolution is None:
+            resolution = DEFAULT_RESOLUTION_BY_KIND[validate_coverage(coverage)]
         url = client.build_latest_url(satellite, coverage, product, resolution)
         sat_info = SATELLITES.get(satellite.lower(), {})
         product_info = PRODUCTS.get(product, {})
@@ -108,24 +112,27 @@ async def goes_get_image(
     satellite: str = "goes-19",
     coverage: str = "CONUS",
     product: str = "GEOCOLOR",
-    resolution: str = "1250x750",
+    resolution: str | None = None,
     response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get a GOES satellite image for a specific timestamp.
 
-    Use goes_get_available_times to find valid timestamps first.
-    Timestamp format is YYYYDDDHHmm (DDD = day-of-year).
+    Use goes_get_available_times to find valid timestamps first — its output
+    (YYYYMMDDHHmmss, 14 digits) is accepted directly here, as is STAR CDN's
+    native YYYYDDDHHmm (11 digits, DDD = day-of-year).
 
     Args:
-        timestamp: Image timestamp in YYYYDDDHHmm format (11 digits). Use goes_get_available_times to discover valid timestamps.
+        timestamp: Image timestamp — either YYYYMMDDHHmmss (14 digits, as returned by goes_get_available_times) or YYYYDDDHHmm (11 digits, DDD = day-of-year).
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
         coverage: Coverage area — 'CONUS' (Continental US) or 'FD' (Full Disk).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', etc.).
-        resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000'.
+        resolution: Image resolution. Valid values are coverage-specific — CONUS: 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest' (defaults to '1250x750'); FD: 'thumbnail', '339x339', '678x678', '1808x1808', '5424x5424', '10848x10848', 'latest' (defaults to '1808x1808').
         response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
+        if resolution is None:
+            resolution = DEFAULT_RESOLUTION_BY_KIND[validate_coverage(coverage)]
         url = client.build_timestamped_url(
             satellite, coverage, product, timestamp, resolution
         )
@@ -184,7 +191,7 @@ async def goes_get_sector_image(
     sector: str = "se",
     satellite: str = "goes-19",
     product: str = "GEOCOLOR",
-    resolution: str = "1250x750",
+    resolution: str | None = None,
     response_format: Literal["markdown", "json", "image"] = "markdown",
 ):
     """Get latest GOES imagery for a regional sector.
@@ -197,11 +204,13 @@ async def goes_get_sector_image(
         sector: Regional sector — 'se', 'ne', 'car', 'taw', 'pr'.
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
         product: Product — band number ('01'-'16') or composite ('GEOCOLOR', 'AirMass', etc.).
-        resolution: Image resolution — 'thumbnail', '625x375', '1250x750', '2500x1500', '5000x3000', 'latest'.
+        resolution: Image resolution — 'thumbnail', '300x300', '600x600', '1200x1200', '2400x2400', 'latest'. Defaults to '1200x1200'. Note sectors use a different, square pixel ladder than CONUS/FD.
         response_format: Output — 'markdown' (default, URL reference — light on context), 'image' (embedded base64 JPEG), or 'json' (metadata).
     """
     try:
         client = _get_client(ctx)
+        if resolution is None:
+            resolution = DEFAULT_RESOLUTION_BY_KIND["SECTOR"]
         url = client.build_sector_url(satellite, sector, product, resolution)
         sat_info = SATELLITES.get(satellite.lower(), {})
         sector_info = SECTORS.get(sector.lower(), {})

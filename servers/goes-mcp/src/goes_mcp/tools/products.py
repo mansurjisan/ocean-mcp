@@ -11,7 +11,7 @@ from ..models import (
     ABI_BANDS,
     COMPOSITE_PRODUCTS,
     COVERAGES,
-    RESOLUTIONS,
+    RESOLUTIONS_BY_KIND,
     SATELLITES,
     SECTORS,
 )
@@ -50,7 +50,10 @@ async def goes_list_products(
             "composites": COMPOSITE_PRODUCTS,
             "coverages": {k: v["name"] for k, v in COVERAGES.items()},
             "sectors": {k: v["name"] for k, v in SECTORS.items()},
-            "resolutions": {k: v["pixels"] for k, v in RESOLUTIONS.items()},
+            "resolutions": {
+                kind: {k: v["pixels"] for k, v in table.items()}
+                for kind, table in RESOLUTIONS_BY_KIND.items()
+            },
         }
         return json.dumps(result, indent=2)
 
@@ -95,12 +98,22 @@ async def goes_list_products(
         lines.append(f"- **{code}** — {sec['name']}: {sec['description']}")
     lines.append("")
 
-    # Resolutions
+    # Resolutions (coverage-shaped: CONUS is landscape, FD and SECTOR are
+    # each square at their own pixel ladder — a size valid for one 404s on
+    # the others)
     lines.append("## Resolutions\n")
-    lines.append("| Key | Pixels | Approx Size |")
-    lines.append("|-----|--------|-------------|")
-    for key, res in RESOLUTIONS.items():
-        lines.append(f"| {key} | {res['pixels']} | {res['approx_size']} |")
+    lines.append(
+        "Resolution ladders are coverage-shaped — CONUS is landscape; FD "
+        "(Full Disk) and SECTOR are each square, at different pixel sizes. "
+        "'thumbnail' and 'latest' work for every coverage.\n"
+    )
+    for kind in ("CONUS", "FD", "SECTOR"):
+        lines.append(f"### {kind}\n")
+        lines.append("| Key | Pixels | Approx Size |")
+        lines.append("|-----|--------|-------------|")
+        for key, res in RESOLUTIONS_BY_KIND[kind].items():
+            lines.append(f"| {key} | {res['pixels']} | {res['approx_size']} |")
+        lines.append("")
 
     return "\n".join(lines)
 
@@ -124,11 +137,12 @@ async def goes_get_available_times(
     """Get available image timestamps for a GOES product.
 
     Queries the RAMMB/CIRA SLIDER API for the most recent image times.
-    Use these timestamps with goes_get_image to fetch historical images.
+    Use these timestamps with goes_get_image to fetch historical images —
+    its 14-digit YYYYMMDDHHmmss output is accepted directly by goes_get_image.
 
     Args:
         satellite: Satellite — 'goes-19' (East) or 'goes-18' (West).
-        sector: Coverage or sector code — 'CONUS', 'FD', 'se', 'ne', 'car', 'taw', 'pr'.
+        sector: Coverage code — 'CONUS' or 'FD' (case-insensitive). SLIDER only publishes timestamps for these two; the regional sectors ('se', 'ne', 'car', 'taw', 'pr') aren't available here — use goes_get_sector_image directly for those.
         product: Product code — band number ('01'-'16') or composite name ('GEOCOLOR', 'AirMass', etc.).
         limit: Maximum number of timestamps to return (default 10, max 100).
         response_format: Output format — 'markdown' (default) or 'json'.

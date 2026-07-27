@@ -201,12 +201,25 @@ COMPOSITE_PRODUCTS: dict[str, dict] = {
 PRODUCTS: dict[str, dict] = {**ABI_BANDS, **COMPOSITE_PRODUCTS}
 
 # --- Resolutions ---
-RESOLUTIONS: dict[str, dict] = {
+# STAR CDN resolution ladders are coverage-shaped, not one-size-fits-all:
+# CONUS is a landscape ladder, while FD (Full Disk) and SECTOR imagery are
+# each square at their own, different pixel sizes. Requesting a
+# CONUS-shaped resolution against FD or SECTOR (or vice versa) 404s —
+# verified live against cdn.star.nesdis.noaa.gov.
+COMMON_RESOLUTIONS: dict[str, dict] = {
     "thumbnail": {
         "filename": "thumbnail.jpg",
-        "pixels": "416x250",
-        "approx_size": "~130 KB",
+        "pixels": "small preview (exact size varies by coverage)",
+        "approx_size": "~40-130 KB",
     },
+    "latest": {
+        "filename": "latest.jpg",
+        "pixels": "alias for this coverage's largest ladder resolution",
+        "approx_size": "varies",
+    },
+}
+
+CONUS_RESOLUTIONS: dict[str, dict] = {
     "625x375": {
         "filename": "625x375.jpg",
         "pixels": "625x375",
@@ -227,23 +240,99 @@ RESOLUTIONS: dict[str, dict] = {
         "pixels": "5000x3000",
         "approx_size": "~9 MB",
     },
-    "latest": {
-        "filename": "latest.jpg",
-        "pixels": "5000x3000",
-        "approx_size": "~9 MB (alias for 5000x3000)",
+}
+
+FD_RESOLUTIONS: dict[str, dict] = {
+    "339x339": {
+        "filename": "339x339.jpg",
+        "pixels": "339x339",
+        "approx_size": "~40 KB",
+    },
+    "678x678": {
+        "filename": "678x678.jpg",
+        "pixels": "678x678",
+        "approx_size": "~150 KB",
+    },
+    "1808x1808": {
+        "filename": "1808x1808.jpg",
+        "pixels": "1808x1808",
+        "approx_size": "~1 MB",
+    },
+    "5424x5424": {
+        "filename": "5424x5424.jpg",
+        "pixels": "5424x5424",
+        "approx_size": "~8 MB",
+    },
+    "10848x10848": {
+        "filename": "10848x10848.jpg",
+        "pixels": "10848x10848",
+        "approx_size": "~25 MB",
     },
 }
 
-# --- SLIDER sector mapping ---
-# Maps our sector codes to SLIDER API sector identifiers
-SLIDER_SECTORS: dict[str, str] = {
+SECTOR_RESOLUTIONS: dict[str, dict] = {
+    "300x300": {
+        "filename": "300x300.jpg",
+        "pixels": "300x300",
+        "approx_size": "~40 KB",
+    },
+    "600x600": {
+        "filename": "600x600.jpg",
+        "pixels": "600x600",
+        "approx_size": "~150 KB",
+    },
+    "1200x1200": {
+        "filename": "1200x1200.jpg",
+        "pixels": "1200x1200",
+        "approx_size": "~600 KB",
+    },
+    "2400x2400": {
+        "filename": "2400x2400.jpg",
+        "pixels": "2400x2400",
+        "approx_size": "~2.5 MB",
+    },
+}
+
+# Resolution ladder to validate against, keyed by coverage "kind": 'CONUS'
+# and 'FD' are the two COVERAGES path segments; 'SECTOR' covers every
+# regional sub-sector (all of which share the same square SECTOR/xx ladder).
+RESOLUTIONS_BY_KIND: dict[str, dict[str, dict]] = {
+    "CONUS": {**COMMON_RESOLUTIONS, **CONUS_RESOLUTIONS},
+    "FD": {**COMMON_RESOLUTIONS, **FD_RESOLUTIONS},
+    "SECTOR": {**COMMON_RESOLUTIONS, **SECTOR_RESOLUTIONS},
+}
+
+# Per-coverage-kind default resolution, used when a tool call doesn't
+# specify one. CONUS keeps the historical 1250x750; FD and SECTOR get their
+# own defaults since 1250x750 doesn't exist in either of their ladders.
+DEFAULT_RESOLUTION_BY_KIND: dict[str, str] = {
+    "CONUS": "1250x750",
+    "FD": "1808x1808",
+    "SECTOR": "1200x1200",
+}
+
+# Pixel dimensions to embed in a *timestamped* archive filename for the
+# 'thumbnail'/'latest' aliases. The dated archive has no literal
+# "..._thumbnail.jpg" or "..._latest.jpg" entry — only real WxH sizes — so
+# these need resolving per coverage kind. (Only CONUS/FD are timestamped
+# through STAR CDN's dated archive; SECTOR imagery is latest-only.)
+TIMESTAMPED_THUMBNAIL_PIXELS: dict[str, str] = {
+    "CONUS": "416x250",
+    "FD": "339x339",
+}
+TIMESTAMPED_LATEST_PIXELS: dict[str, str] = {
+    "CONUS": "5000x3000",
+    "FD": "10848x10848",
+}
+
+# --- SLIDER coverage mapping ---
+# SLIDER (slider.cira.colostate.edu) only publishes timestamps for the full
+# CONUS and full-disk views (plus mesoscale_01/02, which this server doesn't
+# expose) — none of our regional SECTOR/xx sub-sectors (se, ne, car, taw,
+# pr) exist there; those are STAR-CDN-only. Verified live.
+SLIDER_COVERAGES: dict[str, str] = {
     "CONUS": "conus",
     "FD": "full_disk",
-    "se": "southeast",
-    "ne": "northeast",
-    "car": "caribbean",
-    "taw": "tropical_atlantic",
-    "pr": "puerto_rico",
 }
 
 # Maps our satellite keys to SLIDER satellite identifiers
@@ -350,20 +439,28 @@ def validate_sector(sector: str) -> str:
     raise ValueError(f"Unknown sector '{sector}'. Valid options: {valid}")
 
 
-def validate_resolution(resolution: str) -> str:
-    """Validate and return the filename for a resolution.
+def validate_resolution(resolution: str, kind: str) -> str:
+    """Validate and return the filename for a resolution within a coverage kind.
+
+    Resolutions are coverage-shaped (see RESOLUTIONS_BY_KIND) — a size valid
+    for CONUS is not necessarily valid for FD or SECTOR, and vice versa.
 
     Args:
         resolution: Resolution key like '1250x750', 'thumbnail', 'latest'.
+        kind: Which ladder to validate against — 'CONUS', 'FD', or 'SECTOR'.
 
     Returns:
         Filename like '1250x750.jpg'.
 
     Raises:
-        ValueError: If the resolution is not recognized.
+        ValueError: If the resolution is not valid for this coverage kind.
     """
+    table = RESOLUTIONS_BY_KIND[kind]
     lower = resolution.lower().strip()
-    if lower in RESOLUTIONS:
-        return RESOLUTIONS[lower]["filename"]
-    valid = ", ".join(sorted(RESOLUTIONS.keys()))
-    raise ValueError(f"Unknown resolution '{resolution}'. Valid options: {valid}")
+    if lower in table:
+        return table[lower]["filename"]
+    valid = ", ".join(sorted(table.keys()))
+    raise ValueError(
+        f"Unknown resolution '{resolution}' for {kind} coverage. "
+        f"Valid options for {kind}: {valid}"
+    )
