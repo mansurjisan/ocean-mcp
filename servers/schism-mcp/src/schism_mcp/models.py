@@ -2,7 +2,10 @@
 
 from enum import Enum
 
-SCHISM_DOCS_BASE = "https://schism-dev.github.io/schism"
+# Single source of truth for the SCHISM docs base URL — client.py imports
+# this instead of defining its own copy. The live site serves current docs
+# under /master/ (verified live 2026-07; the un-prefixed path 404s).
+SCHISM_DOCS_BASE = "https://schism-dev.github.io/schism/master"
 
 
 class NamelistSection(str, Enum):

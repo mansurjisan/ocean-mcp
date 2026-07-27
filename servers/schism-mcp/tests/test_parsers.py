@@ -160,9 +160,33 @@ class TestParseVgrid:
         result = parse_vgrid("")
         assert "error" in result
 
+    def test_parse_real_sandyduck_grid(self) -> None:
+        """Parse the real SZ vgrid.in from ufs-runner-mcp's schism_sandy_duck
+        template — this is ground truth: nvrt, kz, and h_s are all on line 2
+        together (e.g. "31 1 5000."), not nvrt alone on line 2 followed by
+        kz/h_s on line 3. A previous version of this parser expected the
+        latter layout and silently dropped kz/h_s for real files.
+        """
+        text = _load_fixture("vgrid_real_sandyduck.txt")
+        result = parse_vgrid(text)
+
+        assert result["ivcor"] == 2
+        assert result["type_name"] == "SZ"
+        assert result["nvrt"] == 31
+        assert result["kz"] == 1
+        assert result["h_s"] == 5000.0
+
 
 class TestParseBctides:
     """Tests for the bctides.in parser."""
+
+    def test_parse_ntip(self) -> None:
+        """Line 2 (ntip tip_dp) is parsed separately from nbfr."""
+        text = _load_fixture("bctides_sample.txt")
+        result = parse_bctides(text)
+
+        assert result["ntip"] == 0
+        assert result["tip_dp"] == 0.0
 
     def test_parse_constituents(self) -> None:
         """Parse bctides and verify constituent list."""
@@ -187,6 +211,55 @@ class TestParseBctides:
         """Parser handles files that are too short."""
         result = parse_bctides("just one line")
         assert "error" in result
+
+    def test_parse_real_sandyduck_bctides(self) -> None:
+        """Parse the real bctides.in from ufs-runner-mcp's schism_sandy_duck
+        template — this is ground truth for the ntip=0 case. Line 2 is
+        "ntip tip_dp" (0, 0.000), line 3 is the real nbfr line (0), and line
+        4 is nope (1). A previous version of this parser read line 2
+        directly as nbfr and never advanced to the real nope line, so it
+        reported num_open_boundaries=0 for this file instead of the correct
+        value of 1.
+        """
+        text = _load_fixture("bctides_real_sandyduck.txt")
+        result = parse_bctides(text)
+
+        assert "error" not in result
+        assert result["ntip"] == 0
+        assert result["tip_dp"] == 0.0
+        assert result["nbfr"] == 0
+        assert result["constituents"] == []
+        assert result["num_open_boundaries"] == 1
+        assert len(result["boundaries"]) == 1
+        assert result["boundaries"][0]["num_nodes"] == 23
+        assert result["boundaries"][0]["elevation_type"] == 4
+
+    def test_parse_ntip_greater_than_zero(self) -> None:
+        """Parse a file with ntip=1 tidal-potential term.
+
+        The per-constituent line count for ntip>0 (name line + a
+        species/amplitude/frequency/nodal-factor/earth-arg line — 2 lines
+        per term) comes from the authoritative pseudo-code on
+        https://schism-dev.github.io/schism/master/input-output/bctides.html
+        (verified live; no real ntip>0 sample file exists elsewhere in this
+        repo). This test checks that skipping the tidal-potential block
+        correctly lands on nbfr and then nope afterward.
+        """
+        text = _load_fixture("bctides_ntip_sample.txt")
+        result = parse_bctides(text)
+
+        assert "error" not in result
+        assert result["ntip"] == 1
+        assert result["tip_dp"] == 20.0
+        assert len(result["tidal_potential"]) == 1
+        term = result["tidal_potential"][0]
+        assert term["name"] == "M2"
+        assert term["species"] == 2
+        assert term["amplitude"] == 0.242334
+        assert term["frequency"] == 0.00014051890
+        assert result["nbfr"] == 0
+        assert result["num_open_boundaries"] == 1
+        assert result["boundaries"][0]["num_nodes"] == 23
 
 
 class TestValidateParamNml:

@@ -212,20 +212,25 @@ def parse_vgrid(text: str) -> dict:
 
     if ivcor == 2:
         # SZ coordinates
-        # Line 2: nvrt (total levels)
+        # Line 2: nvrt, kz (# of Z-levels), h_s (S-Z transition depth) — all
+        # three values together on the same line. Verified against a real
+        # SZ vgrid.in (servers/ufs-runner-mcp/.../schism_sandy_duck/vgrid.in),
+        # e.g. "31 1 5000.    ! nvrt, kz (# of Z-levels); h_s (transition
+        # depth between S and Z)". A previous version of this parser read
+        # nvrt alone from line 2 and kz/h_s from line 3, which doesn't match
+        # the real file format and silently dropped kz/h_s.
         if len(lines) >= 2:
-            try:
-                result["nvrt"] = int(lines[1].strip().split()[0])
-            except (ValueError, IndexError):
-                pass
-        # Line 3: kz (number of Z-levels) h_s (S-Z transition depth)
-        if len(lines) >= 3:
-            parts = lines[2].strip().split()
-            if len(parts) >= 2:
+            parts = lines[1].strip().split()
+            if len(parts) >= 1:
                 try:
-                    result["kz"] = int(parts[0])
-                    result["h_s"] = float(parts[1])
-                except (ValueError, IndexError):
+                    result["nvrt"] = int(parts[0])
+                except ValueError:
+                    pass
+            if len(parts) >= 3:
+                try:
+                    result["kz"] = int(parts[1])
+                    result["h_s"] = float(parts[2])
+                except ValueError:
                     pass
 
     elif ivcor == 1:
@@ -244,21 +249,84 @@ def parse_vgrid(text: str) -> dict:
 def parse_bctides(text: str) -> dict:
     """Parse bctides.in (SCHISM tidal boundary conditions).
 
-    Returns tidal constituent names/frequencies, boundary segment types, node counts.
+    File layout, per the authoritative pseudo-code on the SCHISM manual's
+    bctides.in page (https://schism-dev.github.io/schism/master/input-output/bctides.html,
+    verified live 2026-07) and cross-checked against a real sample file
+    (servers/ufs-runner-mcp/.../schism_sandy_duck/bctides.in):
+
+        line 1:  free-form header (start date/time; not machine-parsed)
+        line 2:  ntip tip_dp   - # of earth tidal-potential constituents,
+                                  cutoff depth for applying tidal potential
+        ntip blocks (only present if ntip > 0), each exactly 2 lines:
+            talpha(k)                              - constituent name
+            jspc(k) tamp(k) tfreq(k) tnf(k) tear(k) - species #, amplitude,
+                                                       angular frequency,
+                                                       nodal factor, earth
+                                                       equilibrium argument
+        nbfr    - # of tidal boundary-forcing frequencies
+        nbfr blocks, each exactly 2 lines:
+            alpha(k)               - constituent name
+            amig(k) ff(k) face(k)  - angular frequency, nodal factor, earth
+                                      equilibrium argument
+        nope    - # of open boundary segments
+        nope blocks: boundary header + optional per-type tidal data (below)
+
+    A previous version of this parser treated line 2 as nbfr directly,
+    skipping ntip/tip_dp entirely. That happened to produce the right nbfr
+    for files where ntip==0 (nothing to skip), but it never advanced past
+    the real nbfr line to reach nope, so num_open_boundaries came out wrong
+    for every file — including the real sample above (ntip=0, nbfr=0,
+    nope=1; the old code reported num_open_boundaries=0).
+
+    Returns tidal-potential terms, tidal boundary-forcing constituents,
+    boundary segment types, and node counts.
     """
     lines = text.strip().splitlines()
-    result: dict = {"constituents": [], "boundaries": []}
+    result: dict = {"tidal_potential": [], "constituents": [], "boundaries": []}
 
     if len(lines) < 3:
         return {"error": "File too short to be a valid bctides.in"}
 
     i = 0
 
-    # Line 1: ntip tip_dp (usually a comment or header info)
+    # Line 1: free-form header (start date/time)
     result["header"] = lines[i].strip()
     i += 1
 
-    # Line 2: nbfr (number of tidal frequencies for boundary forcing)
+    # Line 2: ntip tip_dp (# of earth tidal-potential terms, cutoff depth)
+    try:
+        parts = lines[i].strip().split()
+        ntip = int(parts[0])
+        result["ntip"] = ntip
+        if len(parts) >= 2:
+            result["tip_dp"] = float(parts[1])
+        i += 1
+    except (ValueError, IndexError):
+        return {"error": f"Cannot parse ntip/tip_dp from line: {lines[i]}"}
+
+    # Read ntip tidal-potential constituent definitions (2 lines each: a
+    # name line, then species/amplitude/frequency/nodal-factor/earth-arg).
+    for _ in range(ntip):
+        if i >= len(lines):
+            break
+        name = lines[i].strip()
+        i += 1
+        if i < len(lines):
+            parts = lines[i].strip().split()
+            entry: dict = {"name": name}
+            if len(parts) >= 5:
+                try:
+                    entry["species"] = int(parts[0])
+                    entry["amplitude"] = float(parts[1])
+                    entry["frequency"] = float(parts[2])
+                    entry["nodal_factor"] = float(parts[3])
+                    entry["earth_equil_arg"] = float(parts[4])
+                except ValueError:
+                    pass
+            result["tidal_potential"].append(entry)
+            i += 1
+
+    # nbfr (number of tidal frequencies for boundary forcing)
     try:
         nbfr = int(lines[i].strip().split()[0])
         result["nbfr"] = nbfr

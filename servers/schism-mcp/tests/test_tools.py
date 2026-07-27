@@ -7,9 +7,12 @@ No network access required for most tests.
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
+import respx
 
 from schism_mcp.client import RetryTransport, SchismClient
+from schism_mcp.models import SCHISM_DOCS_BASE
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -222,3 +225,79 @@ class TestDiagnoseError:
 
         result = await schism_diagnose_error(ctx, error_text="Random unknown error")
         assert "No known error patterns" in result
+
+
+class TestDocTools:
+    """Tests for documentation search/fetch tools.
+
+    schism_search_docs never hits the network (it filters a static known-page
+    list), but schism_fetch_docs does — those tests mock the SCHISM docs site
+    with respx so they run without network access. Regression coverage for
+    the actual live URLs (a site restructure is exactly the kind of bug static
+    mocks can't catch) lives in test_live.py.
+    """
+
+    @pytest.mark.asyncio
+    async def test_search_docs_param_nml(self, ctx: MagicMock) -> None:
+        """Search for 'param.nml' resolves to the real param.html page."""
+        from schism_mcp.tools.docs import schism_search_docs
+
+        result = await schism_search_docs(ctx, query="param.nml")
+        assert "param.nml" in result
+        assert f"{SCHISM_DOCS_BASE}/input-output/param.html" in result
+
+    @pytest.mark.asyncio
+    async def test_search_docs_no_results(self, ctx: MagicMock) -> None:
+        """A query matching no known page returns a helpful message."""
+        from schism_mcp.tools.docs import schism_search_docs
+
+        result = await schism_search_docs(ctx, query="zzz_nonexistent_topic_zzz")
+        assert "No results found" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_direct_path(self, ctx: MagicMock) -> None:
+        """Fetching an explicit .html path hits that exact URL under the
+        current /master/ docs base and returns its stripped text content."""
+        from schism_mcp.tools.docs import schism_fetch_docs
+
+        html = (
+            "<html><body><h1>param.nml</h1><p>Main SCHISM namelist.</p></body></html>"
+        )
+        route = respx.get(f"{SCHISM_DOCS_BASE}/input-output/param.html").mock(
+            return_value=httpx.Response(200, text=html)
+        )
+
+        result = await schism_fetch_docs(ctx, topic="input-output/param.html")
+
+        assert route.called
+        assert "Main SCHISM namelist" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_search_fallback(self, ctx: MagicMock) -> None:
+        """A non-.html topic is resolved via search_docs first, then fetched."""
+        from schism_mcp.tools.docs import schism_fetch_docs
+
+        html = "<html><body><p>bctides.in defines tidal boundary conditions.</p></body></html>"
+        route = respx.get(f"{SCHISM_DOCS_BASE}/input-output/bctides.html").mock(
+            return_value=httpx.Response(200, text=html)
+        )
+
+        result = await schism_fetch_docs(ctx, topic="bctides.in")
+
+        assert route.called
+        assert "tidal boundary conditions" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_404_reports_error(self, ctx: MagicMock) -> None:
+        """A broken/stale URL surfaces as a documentation error, not a crash."""
+        from schism_mcp.tools.docs import schism_fetch_docs
+
+        respx.get(f"{SCHISM_DOCS_BASE}/input-output/does-not-exist.html").mock(
+            return_value=httpx.Response(404, text="Not Found")
+        )
+
+        result = await schism_fetch_docs(ctx, topic="input-output/does-not-exist.html")
+        assert "error" in result.lower()
