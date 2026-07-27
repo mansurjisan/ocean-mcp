@@ -11,7 +11,13 @@ import httpx
 import pytest
 import respx
 
-from adcirc_mcp.client import ADCIRCClient, RetryTransport, WIKI_API_URL
+from adcirc_mcp.client import (
+    ADCIRCClient,
+    ADCIRCClientError,
+    RetryTransport,
+    WIKI_API_URL,
+    handle_adcirc_error,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -147,6 +153,56 @@ class TestParseFort15Tool:
         assert "M2" in result
         assert "S2" in result
 
+    @pytest.mark.asyncio
+    async def test_parse_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing fort.15 path surfaces a clear ADCIRC Error, not a raw repr."""
+        from adcirc_mcp.tools.parsing import adcirc_parse_fort15
+
+        result = await adcirc_parse_fort15(
+            ctx, file_path="/nonexistent/does_not_exist_fort15.txt"
+        )
+        assert result.startswith("ADCIRC Error:")
+        assert "file not found" in result.lower()
+
+
+class TestParseFort14Tool:
+    """Tests for the adcirc_parse_fort14 tool."""
+
+    @pytest.mark.asyncio
+    async def test_parse_from_content(self, ctx: MagicMock) -> None:
+        """Parse fort.14 header from content string."""
+        from adcirc_mcp.tools.parsing import adcirc_parse_fort14
+
+        content = _load_fixture("fort14_header.txt")
+        result = await adcirc_parse_fort14(ctx, content=content)
+        assert "Fort.14 Mesh Summary" in result
+        assert "500" in result  # nodes
+
+    @pytest.mark.asyncio
+    async def test_partial_scan_boundary_caveat(self, ctx: MagicMock) -> None:
+        """A header-only scan that never reaches the boundary section says so
+        explicitly instead of silently omitting boundary info."""
+        from adcirc_mcp.tools.parsing import adcirc_parse_fort14
+
+        # fixture declares 1000 elements / 500 nodes but only has 5 node lines,
+        # so the boundary section (starting around line 2 + 500 + 1000) is far
+        # beyond what's actually in the file.
+        content = _load_fixture("fort14_header.txt")
+        result = await adcirc_parse_fort14(ctx, content=content)
+        assert "Open boundaries" in result
+        assert "not present in the scanned header region" in result
+
+    @pytest.mark.asyncio
+    async def test_parse_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing fort.14 path surfaces a clear ADCIRC Error, not a raw repr."""
+        from adcirc_mcp.tools.parsing import adcirc_parse_fort14
+
+        result = await adcirc_parse_fort14(
+            ctx, file_path="/nonexistent/does_not_exist_fort14.txt"
+        )
+        assert result.startswith("ADCIRC Error:")
+        assert "file not found" in result.lower()
+
 
 class TestValidateConfig:
     """Tests for the adcirc_validate_config tool."""
@@ -183,6 +239,17 @@ class TestValidateConfig:
             max_depth=20.0,
         )
         assert "CFL" in result
+
+    @pytest.mark.asyncio
+    async def test_validate_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing fort15_path surfaces a clear ADCIRC Error, not a raw repr."""
+        from adcirc_mcp.tools.validation import adcirc_validate_config
+
+        result = await adcirc_validate_config(
+            ctx, fort15_path="/nonexistent/does_not_exist_fort15.txt"
+        )
+        assert result.startswith("ADCIRC Error:")
+        assert "file not found" in result.lower()
 
 
 class TestDiagnoseError:
@@ -252,3 +319,78 @@ class TestDocTools:
 
         result = await adcirc_fetch_docs(ctx, topic="Fort.15")
         assert "fort.15" in result.lower()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_page_not_found(self, ctx: MagicMock) -> None:
+        """A wiki 'page not found' response surfaces a clear ADCIRC Error with
+        the actionable next step baked into the message, not a raw repr."""
+        from adcirc_mcp.tools.docs import adcirc_fetch_docs
+
+        mock_response = {"error": {"info": "The page you specified doesn't exist"}}
+        respx.get(WIKI_API_URL).mock(
+            return_value=httpx.Response(200, json=mock_response)
+        )
+
+        result = await adcirc_fetch_docs(ctx, topic="Nonexistent Page")
+        assert result.startswith("ADCIRC Error:")
+        assert "adcirc_search_docs" in result
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_http_error(self, ctx: MagicMock) -> None:
+        """An upstream HTTP error surfaces a clear ADCIRC Error, not a raw repr."""
+        from adcirc_mcp.tools.docs import adcirc_fetch_docs
+
+        respx.get(WIKI_API_URL).mock(return_value=httpx.Response(503))
+
+        result = await adcirc_fetch_docs(ctx, topic="Fort.15")
+        assert result.startswith("ADCIRC Error:")
+        assert "503" in result
+
+
+class TestHandleAdcircError:
+    """Direct unit tests for the handle_adcirc_error formatter."""
+
+    def test_client_error(self) -> None:
+        """ADCIRCClientError is passed through with the server prefix."""
+        result = handle_adcirc_error(ADCIRCClientError("File too large (150.0 MB)."))
+        assert result == "ADCIRC Error: File too large (150.0 MB)."
+
+    def test_file_not_found(self) -> None:
+        """FileNotFoundError names the problem and a concrete next step."""
+        try:
+            open("/nonexistent/does_not_exist.txt")
+        except FileNotFoundError as e:
+            result = handle_adcirc_error(e)
+        assert result.startswith("ADCIRC Error:")
+        assert "file not found" in result.lower()
+        assert "file_path" in result
+
+    def test_os_error(self) -> None:
+        """A generic OSError is distinguished from FileNotFoundError."""
+        result = handle_adcirc_error(OSError("disk quota exceeded"))
+        assert result.startswith("ADCIRC Error:")
+        assert "could not read file" in result.lower()
+
+    def test_http_status_error(self) -> None:
+        """httpx.HTTPStatusError names the status code and suggests a next step."""
+        request = httpx.Request("GET", "https://wiki.adcirc.org/api.php")
+        response = httpx.Response(500, request=request)
+        error = httpx.HTTPStatusError("fail", request=request, response=response)
+        result = handle_adcirc_error(error)
+        assert result.startswith("ADCIRC Error:")
+        assert "500" in result
+        assert "adcirc_search_docs" in result
+
+    def test_timeout_error(self) -> None:
+        """httpx.TimeoutException gets a clear timeout message."""
+        result = handle_adcirc_error(httpx.TimeoutException("timed out"))
+        assert result.startswith("ADCIRC Error:")
+        assert "timed out" in result.lower()
+
+    def test_generic_exception_fallback(self) -> None:
+        """An unrecognized exception type still gets the server prefix, not a
+        bare repr — the type name is included instead of being swallowed."""
+        result = handle_adcirc_error(ValueError("something unexpected"))
+        assert result == "ADCIRC Error: ValueError: something unexpected"

@@ -70,6 +70,44 @@ class ADCIRCClientError(Exception):
     pass
 
 
+def handle_adcirc_error(e: Exception) -> str:
+    """Format an exception into a clear, actionable ADCIRC error message.
+
+    Replaces a bare ``f"Error ...: {e}"`` so the caller sees the failure
+    category and a concrete next step instead of a raw exception repr.
+    """
+    if isinstance(e, ADCIRCClientError):
+        return f"ADCIRC Error: {e}"
+    if isinstance(e, FileNotFoundError):
+        return (
+            f"ADCIRC Error: file not found ({e.filename or e}). "
+            "Check that file_path points to an existing fort.* file."
+        )
+    if isinstance(e, PermissionError):
+        return (
+            f"ADCIRC Error: permission denied reading ({e.filename or e}). "
+            "Check the file's read permissions and try again."
+        )
+    if isinstance(e, OSError):
+        return (
+            f"ADCIRC Error: could not read file — {e}. "
+            "Verify file_path is correct and accessible."
+        )
+    if isinstance(e, httpx.HTTPStatusError):
+        status = e.response.status_code
+        return (
+            f"ADCIRC Error: HTTP {status} fetching the ADCIRC wiki. "
+            "The page may not exist — try adcirc_search_docs to find the correct "
+            "title, or retry if this is a transient server error."
+        )
+    if isinstance(e, httpx.TimeoutException):
+        return (
+            "ADCIRC Error: request to the ADCIRC wiki timed out. "
+            "Try again, or narrow the query with adcirc_search_docs."
+        )
+    return f"ADCIRC Error: {type(e).__name__}: {e}"
+
+
 class ADCIRCClient:
     """Async client for local file reading and ADCIRC wiki access."""
 
@@ -129,7 +167,8 @@ class ADCIRCClient:
 
         if "error" in data:
             raise ADCIRCClientError(
-                f"Wiki page not found: {data['error'].get('info', page_title)}"
+                f"Wiki page not found: {data['error'].get('info', page_title)}. "
+                "Try adcirc_search_docs to find the correct page title."
             )
 
         html = data.get("parse", {}).get("text", {}).get("*", "")

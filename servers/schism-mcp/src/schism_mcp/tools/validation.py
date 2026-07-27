@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import SchismClient
+from ..client import SchismClient, handle_schism_error
 from ..server import mcp
 from ..utils import (
     match_error_pattern,
@@ -116,7 +116,7 @@ async def schism_validate_config(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error validating configuration: {e}"
+        return handle_schism_error(e)
 
 
 @mcp.tool(

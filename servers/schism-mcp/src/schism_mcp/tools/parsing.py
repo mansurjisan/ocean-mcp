@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import SchismClient
+from ..client import SchismClient, handle_schism_error
 from ..server import mcp
 from ..utils import parse_bctides, parse_hgrid_header, parse_param_nml, parse_vgrid
 
@@ -79,7 +79,7 @@ async def schism_parse_param_nml(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing param.nml: {e}"
+        return handle_schism_error(e)
 
 
 @mcp.tool(
@@ -125,13 +125,30 @@ async def schism_parse_hgrid(
         lines.append(f"- **Nodes**: {parsed.get('num_nodes', 'N/A'):,}")
         lines.append(f"- **Elements**: {parsed.get('num_elements', 'N/A'):,}")
 
+        # bounding_box/max_depth are computed from at most nodes_scanned of the
+        # node list (read_file_header caps how much of the file is read), so a
+        # large mesh's true extent/max depth may not be reflected — surface the
+        # scan size instead of silently presenting a partial result as complete.
+        nodes_scanned = parsed.get("nodes_scanned")
+        total_nodes = parsed.get("num_nodes")
+        partial_scan = (
+            isinstance(nodes_scanned, int)
+            and isinstance(total_nodes, int)
+            and nodes_scanned < total_nodes
+        )
+        scan_note = (
+            f" (from first {nodes_scanned:,} of {total_nodes:,} nodes)"
+            if partial_scan
+            else ""
+        )
+
         if "bounding_box" in parsed:
             bb = parsed["bounding_box"]
             lines.append(
-                f"- **Bounding box**: ({bb['min_x']}, {bb['min_y']}) to ({bb['max_x']}, {bb['max_y']})"
+                f"- **Bounding box**{scan_note}: ({bb['min_x']}, {bb['min_y']}) to ({bb['max_x']}, {bb['max_y']})"
             )
         if "max_depth" in parsed:
-            lines.append(f"- **Max depth**: {parsed['max_depth']} m")
+            lines.append(f"- **Max depth**{scan_note}: {parsed['max_depth']} m")
         if "num_open_boundaries" in parsed:
             lines.append(f"- **Open boundaries**: {parsed['num_open_boundaries']}")
         if "total_open_boundary_nodes" in parsed:
@@ -141,7 +158,7 @@ async def schism_parse_hgrid(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing hgrid.gr3: {e}"
+        return handle_schism_error(e)
 
 
 @mcp.tool(
@@ -192,7 +209,7 @@ async def schism_parse_vgrid(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing vgrid.in: {e}"
+        return handle_schism_error(e)
 
 
 @mcp.tool(
@@ -272,4 +289,4 @@ async def schism_parse_bctides(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing bctides.in: {e}"
+        return handle_schism_error(e)
