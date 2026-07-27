@@ -10,12 +10,12 @@ from .alert_manager import AlertManager
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[dict]:
-    """Manage the shared AlertManager lifecycle."""
+    """Manage the shared AlertManager (and its underlying HTTP client) lifecycle."""
     manager = AlertManager()
     try:
         yield {"alert_manager": manager}
     finally:
-        pass
+        await manager.close()
 
 
 mcp = FastMCP("alert_mcp", lifespan=app_lifespan)

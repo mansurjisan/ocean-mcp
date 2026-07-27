@@ -4,12 +4,14 @@ import pytest
 from unittest.mock import MagicMock
 
 from alert_mcp.alert_manager import AlertManager
+from alert_mcp.client import AlertHTTPClient
 
 
 @pytest.fixture
 def manager():
-    """Create a fresh AlertManager."""
-    return AlertManager()
+    """Create a fresh AlertManager with backoff_factor=0 so RetryTransport
+    replays any transient-failure mocks instantly instead of sleeping."""
+    return AlertManager(client=AlertHTTPClient(backoff_factor=0))
 
 
 @pytest.fixture

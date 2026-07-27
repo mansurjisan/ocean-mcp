@@ -30,13 +30,20 @@ async def coral_create_alert(
     """Create a new threshold alert for a NOAA CO-OPS station.
 
     Monitors the latest value for the given product and triggers when the
-    value crosses the threshold according to the operator.
+    value crosses the threshold according to the operator. Performs an
+    immediate live check against CO-OPS as part of creation: if the
+    station_id/product combination is invalid, the alert is rejected up
+    front instead of silently never firing.
 
     Args:
         station_id: NOAA CO-OPS station ID (e.g. '8518750' for The Battery).
         operator: Comparison operator — one of >, <, >=, <=.
         threshold: Numeric threshold value (metric units, MLLW datum).
         product: CO-OPS data product to monitor (default: 'water_level').
+            One of: water_level, hourly_height, high_low, predictions,
+            air_gap, air_pressure, air_temperature, water_temperature,
+            humidity, conductivity, salinity, visibility, wind, currents,
+            currents_predictions.
         interval_minutes: Check interval in minutes (default: 5).
     """
     manager = _get_manager(ctx)
@@ -51,6 +58,18 @@ async def coral_create_alert(
     except AlertError as e:
         return f"**Error:** {e}"
 
+    # Probe once immediately so a bad station/product combination is caught
+    # up front rather than discovered later by silent, endlessly-repeating
+    # polling.
+    probe = await manager.check_alert(alert["id"])
+    if probe["status"] == "coops_error":
+        manager.delete_alert(alert["id"])
+        return f"**Error:** {probe['message']}"
+
+    last_value_row = (
+        f"| **Last Value** | {probe['value']} |\n" if probe["value"] is not None else ""
+    )
+
     return (
         f"## Alert Created\n\n"
         f"| Field | Value |\n"
@@ -61,6 +80,7 @@ async def coral_create_alert(
         f"| **Condition** | value {alert['operator']} {alert['threshold']} |\n"
         f"| **Interval** | {interval_minutes} min |\n"
         f"| **Status** | Active |\n"
+        f"{last_value_row}"
     )
 
 
@@ -120,7 +140,12 @@ async def coral_check_alerts(ctx: Context) -> str:
 
     lines = ["## Alert Check Results\n"]
     for r in results:
-        icon = "TRIGGERED" if r["triggered"] else "OK"
+        if r["triggered"]:
+            icon = "TRIGGERED"
+        elif r.get("status", "ok") != "ok":
+            icon = r["status"].upper()
+        else:
+            icon = "OK"
         lines.append(f"- **[{icon}]** `{r['alert_id']}`: {r['message']}")
 
     return "\n".join(lines)
@@ -149,6 +174,32 @@ async def coral_pause_alert(ctx: Context, alert_id: str) -> str:
     return (
         f"Alert `{alert['id']}` for station {alert['station_id']} "
         f"({alert['operator']} {alert['threshold']}) is now **paused**."
+    )
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
+async def coral_resume_alert(ctx: Context, alert_id: str) -> str:
+    """Resume a paused alert so it is checked again during check cycles.
+
+    Args:
+        alert_id: The alert ID to resume.
+    """
+    manager = _get_manager(ctx)
+    try:
+        alert = manager.resume_alert(alert_id)
+    except AlertError as e:
+        return f"**Error:** {e}"
+
+    return (
+        f"Alert `{alert['id']}` for station {alert['station_id']} "
+        f"({alert['operator']} {alert['threshold']}) is now **active**."
     )
 
 

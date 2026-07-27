@@ -19,9 +19,9 @@ async def test_server_starts_and_lists_tools():
             tools = await session.list_tools()
             tool_names = {t.name for t in tools.tools}
 
-            # alert-mcp should register 6 tools
-            assert len(tools.tools) >= 6, (
-                f"Expected at least 6 tools, got {len(tools.tools)}"
+            # alert-mcp should register 7 tools
+            assert len(tools.tools) >= 7, (
+                f"Expected at least 7 tools, got {len(tools.tools)}"
             )
 
             expected = {
@@ -31,6 +31,7 @@ async def test_server_starts_and_lists_tools():
                 "coral_get_alert_history",
                 "coral_list_alerts",
                 "coral_pause_alert",
+                "coral_resume_alert",
             }
             missing = expected - tool_names
             assert not missing, f"Missing tools: {missing}"
