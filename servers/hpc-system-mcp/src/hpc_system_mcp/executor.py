@@ -34,8 +34,6 @@ _ALLOWED_COMMANDS = {
     "groups",
     # PBS / WCOSS2
     "qstat",
-    "qsub",
-    "qdel",
     "qselect",
     "pbsnodes",
 }
@@ -87,6 +85,22 @@ def _validate_command(cmd: list[str]) -> str | None:
     return None
 
 
+async def _kill_and_reap(proc: asyncio.subprocess.Process) -> None:
+    """Best-effort cleanup of a subprocess after its await timed out.
+
+    ``asyncio.wait_for`` only cancels our *await* on ``communicate()`` — the
+    child process itself keeps running in the background (e.g. a `du`
+    walking a large Lustre tree can run for minutes after the tool call
+    already returned an error), and its pipes stay open. Kill and reap it
+    so nothing is orphaned.
+    """
+    try:
+        proc.kill()
+    except ProcessLookupError:
+        pass  # already exited
+    await proc.wait()
+
+
 class CommandExecutor:
     """Runs whitelisted HPC commands and returns their output."""
 
@@ -127,6 +141,7 @@ class CommandExecutor:
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
+            await _kill_and_reap(proc)
             raise ExecutorError(f"Command timed out after {timeout}s: {' '.join(cmd)}")
         except FileNotFoundError:
             raise ExecutorError(f"Command not found: {cmd[0]}")
@@ -190,6 +205,7 @@ class CommandExecutor:
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
+            await _kill_and_reap(proc)
             raise ExecutorError(f"Module command timed out: module {action}")
 
         # module list/avail write to stderr

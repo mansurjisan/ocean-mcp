@@ -1,5 +1,7 @@
 """Tools for disk quota and storage usage queries."""
 
+import re
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -9,6 +11,35 @@ from ..server import mcp
 
 def _get_executor(ctx: Context) -> CommandExecutor:
     return ctx.request_context.lifespan_context["executor"]
+
+
+_DU_TRUNCATION_MARKER = "... (truncated)"
+_DU_SIZE_UNITS = {
+    "": 1,
+    "K": 1024,
+    "M": 1024**2,
+    "G": 1024**3,
+    "T": 1024**4,
+    "P": 1024**5,
+}
+_DU_SIZE_RE = re.compile(r"^([\d.]+)\s*([KMGTP]?)", re.IGNORECASE)
+
+
+def _du_size_to_bytes(size_str: str) -> float:
+    """Best-effort parse of a `du -h` size (e.g. '1.2G') into bytes, for sorting.
+
+    Returns 0 for anything unparseable so a stray line just sorts last
+    instead of raising.
+    """
+    match = _DU_SIZE_RE.match(size_str.strip())
+    if not match:
+        return 0.0
+    number, suffix = match.groups()
+    try:
+        value = float(number)
+    except ValueError:
+        return 0.0
+    return value * _DU_SIZE_UNITS.get(suffix.upper(), 1)
 
 
 @mcp.tool(
@@ -106,48 +137,92 @@ async def hpc_storage_usage(
 ) -> str:
     """Show disk usage summary for a directory.
 
-    Uses 'du' to report sizes of subdirectories, sorted by size.
+    Uses 'du' to report sizes of subdirectories, sorted by size (largest
+    first), plus the directory's overall total.
 
     Args:
         directory: Path to check (e.g. '/scratch5/purged/Mansur.Jisan').
         max_depth: How many directory levels deep to report (default 1).
     """
     import os
-    import re as _re
 
     executor = _get_executor(ctx)
 
     # Validate path - no shell metacharacters
-    if _re.search(r"[;&|`$(){}]", directory):
+    if re.search(r"[;&|`$(){}]", directory):
         return f"Error: Unsafe characters in path: '{directory}'"
     if not os.path.isdir(directory):
         return f"Error: Directory '{directory}' does not exist."
 
     depth = min(max(1, max_depth), 3)  # Cap at 3 to avoid huge output
 
+    # NOTE: `--summarize` and `--max-depth` are mutually exclusive in GNU du
+    # ("du: warning: summarizing conflicts with --max-depth", exit 1). That
+    # used to be the primary command here — it always failed and silently
+    # fell back to the equivalent command below, so every call paid for two
+    # full directory traversals (expensive on a large Lustre tree).
+    # `--max-depth` alone already reports the directory's own grand total as
+    # its last line, so that's the only command needed.
     try:
         output = await executor.run(
-            ["du", "-h", f"--max-depth={depth}", "--summarize", directory],
+            ["du", "-h", f"--max-depth={depth}", directory],
             timeout=60,
         )
-    except ExecutorError:
-        # --summarize and --max-depth conflict; try without --summarize
-        try:
-            output = await executor.run(
-                ["du", "-h", f"--max-depth={depth}", directory],
-                timeout=60,
-            )
-        except ExecutorError as e:
-            return f"Error: {e}"
+    except ExecutorError as e:
+        return f"Error: {e}"
 
-    # Sort by size (largest first) for readability
+    # The executor caps raw output at 10000 chars and appends this marker;
+    # a tree with enough entries at this depth can exceed that. Detect it so
+    # we never mistake the truncation marker (or a partial trailing line)
+    # for the real total.
+    was_truncated = output.endswith(_DU_TRUNCATION_MARKER)
     lines = output.strip().split("\n")
-    total_line = lines[-1] if lines else ""
+    if was_truncated:
+        lines = lines[:-1]  # drop the "... (truncated)" marker line itself
+
+    rows: list[tuple[float, str, str]] = []  # (bytes, size_str, path)
+    for line in lines:
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue  # skip a stray/partial line rather than mis-render it
+        size_str, path = parts
+        rows.append((_du_size_to_bytes(size_str), size_str, path))
+
+    # `du` always prints the queried directory's own total last — but only
+    # trust that when the output wasn't cut off, since a truncated tail
+    # could be a partial number rather than the real total.
+    if was_truncated or not rows:
+        total_str = "unknown (output truncated — try a smaller max_depth or a more specific directory)"
+        details = rows
+    else:
+        total_str = rows[-1][1]
+        details = rows[:-1]
+
+    details.sort(key=lambda row: row[0], reverse=True)
+
+    max_rows = 50
+    shown = details[:max_rows]
+    body = (
+        "\n".join(f"{size}\t{path}" for _, size, path in shown)
+        if shown
+        else "(no subdirectories)"
+    )
+
+    footer = ""
+    if was_truncated:
+        footer = (
+            "\n\n*`du` output was too large and got truncated; the list "
+            "below may be incomplete. Try a smaller `max_depth` or a more "
+            "specific `directory`.*"
+        )
+    elif len(details) > max_rows:
+        footer = f"\n\n*Showing {max_rows} of {len(details)} entries, largest first.*"
 
     return (
         f"## Storage Usage: {directory}\n"
-        f"```\n{output}\n```\n"
-        f"\n**Total**: {total_line.split()[0] if total_line else 'unknown'}"
+        f"```\n{body}\n```\n"
+        f"\n**Total**: {total_str}"
+        f"{footer}"
     )
 
 
@@ -172,9 +247,7 @@ async def hpc_df(
     executor = _get_executor(ctx)
     cmd = ["df", "-h"]
     if filesystem:
-        import re as _re
-
-        if _re.search(r"[;&|`$(){}]", filesystem):
+        if re.search(r"[;&|`$(){}]", filesystem):
             return f"Error: Unsafe characters in path: '{filesystem}'"
         cmd.append(filesystem)
 

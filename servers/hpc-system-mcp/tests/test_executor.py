@@ -1,5 +1,8 @@
 """Tests for the command executor."""
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from hpc_system_mcp.executor import (
@@ -44,6 +47,13 @@ class TestValidateCommand:
 
     def test_empty_command(self):
         assert _validate_command([]) is not None
+
+    def test_qsub_qdel_not_allowlisted(self):
+        """This server is read-only/query-only — qsub/qdel are removed from
+        the allowlist since no tool constructs them and qdel can delete
+        another user's job if the executing account has permission."""
+        assert _validate_command(["qsub", "job.sh"]) is not None
+        assert _validate_command(["qdel", "12345"]) is not None
 
 
 class TestCommandExecutor:
@@ -133,3 +143,61 @@ class TestCommandExecutor:
     async def test_not_found_command(self, executor):
         with pytest.raises(ExecutorError, match="not found"):
             await executor.run(["saccount_params"])  # Won't exist locally
+
+
+class TestTimeoutOrphanCleanup:
+    """A command that times out must not leave an orphaned subprocess.
+
+    ``asyncio.wait_for`` only cancels our *await* on ``communicate()`` — the
+    child process itself keeps running in the background unless explicitly
+    killed and reaped. Both timeout sites (run, run_module) must do this.
+    """
+
+    @staticmethod
+    def _mock_slow_proc() -> MagicMock:
+        mock_proc = MagicMock()
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock(return_value=-9)
+
+        async def _slow_communicate():
+            await asyncio.sleep(10)
+            return b"", b""
+
+        mock_proc.communicate = _slow_communicate
+        return mock_proc
+
+    @pytest.mark.asyncio
+    async def test_run_kills_and_reaps_on_timeout(self, executor, monkeypatch):
+        mock_proc = self._mock_slow_proc()
+
+        async def _fake_create_subprocess_exec(*args, **kwargs):
+            return mock_proc
+
+        monkeypatch.setattr(
+            "hpc_system_mcp.executor.asyncio.create_subprocess_exec",
+            _fake_create_subprocess_exec,
+        )
+
+        with pytest.raises(ExecutorError, match="timed out"):
+            await executor.run(["id"], timeout=0.05)
+
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_run_module_kills_and_reaps_on_timeout(self, executor, monkeypatch):
+        mock_proc = self._mock_slow_proc()
+
+        async def _fake_create_subprocess_exec(*args, **kwargs):
+            return mock_proc
+
+        monkeypatch.setattr(
+            "hpc_system_mcp.executor.asyncio.create_subprocess_exec",
+            _fake_create_subprocess_exec,
+        )
+
+        with pytest.raises(ExecutorError, match="Module command timed out"):
+            await executor.run_module("list", timeout=0.05)
+
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()
