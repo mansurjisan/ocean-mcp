@@ -1,5 +1,7 @@
 # vdatum-mcp
 
+<!-- mcp-name: io.github.mansurjisan/vdatum-mcp -->
+
 MCP server for vertical datum conversions using [coastalmodeling-vdatum](https://github.com/oceanmodeling/coastalmodeling-vdatum).
 
 Converts elevations between NAVD88, MLLW, MLW, MHW, MHHW, LMSL, xGEOID20b, IGLD85, and LWD.
