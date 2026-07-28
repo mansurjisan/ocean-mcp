@@ -278,26 +278,19 @@ async def ufs_list_templates(
     with ufs_create_experiment.
     """
     runner = _get_runner(ctx)
-    templates_dir = runner._templates_dir
+    result = await asyncio.to_thread(runner.list_templates)
 
-    if not templates_dir.exists():
+    if not result["templates_dir_exists"]:
         return "No templates directory found. Templates need to be installed."
 
-    templates = [
-        d.name
-        for d in templates_dir.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    ]
-
+    templates = result["templates"]
     if not templates:
         return (
             "No templates available. Add template directories to the templates/ folder."
         )
 
     lines = ["## Available Templates"]
-    for t in sorted(templates):
-        files = list((templates_dir / t).rglob("*"))
-        file_count = len([f for f in files if f.is_file()])
-        lines.append(f"- **{t}** ({file_count} files)")
+    for t in templates:
+        lines.append(f"- **{t['name']}** ({t['file_count']} files)")
 
     return "\n".join(lines)

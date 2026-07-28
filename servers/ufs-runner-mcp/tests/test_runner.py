@@ -246,6 +246,24 @@ class TestOverrideHonesty:
         assert "dt_ocean" in unmatched
         assert "start_year" not in unmatched
 
+    def test_ocn_tasks_override_alone_no_warning(self, runner, tmp_path):
+        """ocn_tasks never appears as a literal {{ocn_tasks}} placeholder —
+        it only feeds _compute_derived_vars (OCN_petlist_bounds via
+        total_tasks_minus1, the srun task count via total_tasks). Overriding
+        it alone is a real, working override (it changes the rendered
+        output) and must NOT be reported as having no effect."""
+        run_dir = str(tmp_path / "ocn_tasks_only")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"ocn_tasks": 80},
+        )
+        unmatched = result["override_warnings"]["unmatched_flat_keys"]
+        assert "ocn_tasks" not in unmatched
+        # sanity: the override did actually change the rendered output
+        content = (Path(run_dir) / "ufs.configure").read_text()
+        assert "OCN_petlist_bounds:             160 239" in content
+
     def test_matched_namelist_group_override_no_warning(self, runner, tmp_path):
         """A nested override whose group exists in a real namelist file
         succeeds silently, same as before this fix."""
@@ -533,6 +551,21 @@ class TestCollectOutputs:
         assert paths.count("slurm-12345.out") == 1
         assert result["output_count"] == len(result["outputs"])
 
+    def test_symlinked_output_not_merged_with_its_target(self, runner, schism_run_dir):
+        """latest.nc -> history.nc is a common UFS pattern: two distinct,
+        both-meaningful directory entries pointing at the same file. Dedup
+        must key on the directory entry, not the resolved inode, or one of
+        the two gets silently dropped from the listing."""
+        run_path = Path(schism_run_dir)
+        (run_path / "history.nc").write_bytes(b"real output data")
+        (run_path / "latest.nc").symlink_to(run_path / "history.nc")
+
+        result = runner.collect_outputs(schism_run_dir)
+        paths = [o["path"] for o in result["outputs"]]
+        assert "history.nc" in paths
+        assert "latest.nc" in paths
+        assert result["output_count"] == len(result["outputs"])
+
 
 class TestSecurityHardening:
     """Regression tests for the three sandbox-escape / injection fixes."""
@@ -585,6 +618,61 @@ class TestSecurityHardening:
         """A non-digit suffix on the base name must still be rejected."""
         assert validate_path("/workfoo") is not None
         assert validate_path("/workfoo/run") is not None
+
+    # --- Fix 1 follow-up: symlinked allowed roots must not be rejected ---
+
+    def test_validate_path_symlinked_allowed_root_accepted(self, monkeypatch, tmp_path):
+        """Real HPC sites symlink allowed roots (e.g. /work -> /lustre/work).
+
+        The input path is resolved (collapsing the symlink) before checking,
+        so the configured prefix must be resolved the same way, or a
+        legitimately-allowed path through the symlink is wrongly rejected.
+        """
+        real_dir = tmp_path / "lustre_work"
+        real_dir.mkdir()
+        (real_dir / "myexperiment").mkdir()
+        symlink_root = tmp_path / "work_symlink"
+        symlink_root.symlink_to(real_dir)
+
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(symlink_root))
+        assert validate_path(str(symlink_root / "myexperiment")) is None
+
+    def test_validate_path_env_prefix_digit_leniency_only_first_component(
+        self, monkeypatch, tmp_path
+    ):
+        """Digit-suffix leniency only applies to the component right after
+        the filesystem root — it must not spread to deeper components of a
+        custom, multi-component env-configured prefix."""
+        prefix_dir = tmp_path / "myproj"
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(prefix_dir))
+        # genuine descendant: still allowed
+        assert validate_path(str(prefix_dir / "run")) is None
+        # a sibling of the deep component "myproj" with a numeric suffix must
+        # NOT be tolerated — only the root's immediate child gets leniency
+        sibling = str(tmp_path) + "/myproj2/run"
+        assert validate_path(sibling) is not None
+
+    def test_validate_path_relative_env_prefix_resolved_against_cwd(
+        self, monkeypatch, tmp_path
+    ):
+        """A relative UFS_RUNNER_ALLOWED_PATHS entry used to silently become
+        a no-op; it must instead resolve against the current working
+        directory, same as pathlib would naturally do."""
+        (tmp_path / "relative_scratch").mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", "relative_scratch")
+        assert validate_path(str(tmp_path / "relative_scratch" / "run")) is None
+
+    def test_validate_path_root_prefix_does_not_allow_everything(self, monkeypatch):
+        """UFS_RUNNER_ALLOWED_PATHS='/' must not silently become an allow-all
+        (it would defeat the sandbox entirely) — it's dropped as a
+        degenerate config value instead, leaving the built-in prefixes as
+        the only effective ones."""
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", "/")
+        assert validate_path("/etc/passwd") is not None
+        assert validate_path("/home/user/run") is not None
+        # built-ins are unaffected
+        assert validate_path("/scratch/user/run") is None
 
     # --- Fix 3: every user override value must be shell-safe ---
 
