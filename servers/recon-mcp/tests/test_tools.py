@@ -928,26 +928,42 @@ class TestGetSfmr:
     async def test_get_sfmr_max_records_truncates_and_keeps_most_recent(
         self, ctx: MagicMock, tmp_path
     ) -> None:
-        """AOML lists files oldest-first; max_records must keep the most
-        recent files (not the oldest) and flag truncation in the envelope."""
+        """AOML's raw directory listing groups files by agency prefix
+        (AFRC_* vs NOAA_*), not chronologically — live Ian/Ida/Laura
+        directories all mix both agencies. max_records must keep the
+        files with the most recent *decoded date*, not the files that
+        happen to sort last as raw strings, and flag truncation in the
+        envelope.
+
+        Fixture mirrors the real 2022/ian directory shape: sorting these
+        four filenames as raw strings groups both AFRC_* entries before
+        both NOAA_* entries (since 'A' < 'N'), which would wrongly keep
+        the tail-2 as {NOAA_SFMR20220926H1.nc, NOAA_SFMR20220928H1.nc} —
+        dropping the genuinely newest file (AFRC_SFMR20220929U1.nc) and
+        keeping a file older (0926) than one it displaced (AFRC 0927).
+        Sorting by decoded date instead correctly keeps the 0928/0929
+        pair.
+        """
         sfmr_url = f"{AOML_SFMR_BASE}/2022/ian/"
         btk_url = f"{ATCF_BDECK_BASE}/bal092022.dat"
 
         listing_html = (
             "<html><body><pre>"
             '<a href="../">Parent Directory</a>'
-            '<a href="AFRC_SFMR20220926H1.nc">AFRC_SFMR20220926H1.nc</a>'
+            '<a href="NOAA_SFMR20220926H1.nc">NOAA_SFMR20220926H1.nc</a>'
             '<a href="AFRC_SFMR20220927U1.nc">AFRC_SFMR20220927U1.nc</a>'
-            '<a href="AFRC_SFMR20220928I1.nc">AFRC_SFMR20220928I1.nc</a>'
+            '<a href="NOAA_SFMR20220928H1.nc">NOAA_SFMR20220928H1.nc</a>'
+            '<a href="AFRC_SFMR20220929U1.nc">AFRC_SFMR20220929U1.nc</a>'
             "</pre></body></html>"
         )
         respx.get(sfmr_url).mock(return_value=httpx.Response(200, text=listing_html))
         respx.get(btk_url).mock(return_value=httpx.Response(200, text=SAMPLE_BDECK_IAN))
 
         for fname, date_str in (
-            ("AFRC_SFMR20220926H1.nc", "20220926"),
+            ("NOAA_SFMR20220926H1.nc", "20220926"),
             ("AFRC_SFMR20220927U1.nc", "20220927"),
-            ("AFRC_SFMR20220928I1.nc", "20220928"),
+            ("NOAA_SFMR20220928H1.nc", "20220928"),
+            ("AFRC_SFMR20220929U1.nc", "20220929"),
         ):
             nc_bytes = _build_sfmr_nc_bytes(tmp_path, fname, date_str)
             respx.get(sfmr_url + fname).mock(
@@ -967,11 +983,15 @@ class TestGetSfmr:
 
         assert parsed["truncated"] is True
         assert parsed["record_count"] == 2
-        assert parsed["total_count"] == 3
+        assert parsed["total_count"] == 4
         assert "hint" in parsed
         filenames = {m["filename"] for m in parsed["missions"]}
-        assert filenames == {"AFRC_SFMR20220927U1.nc", "AFRC_SFMR20220928I1.nc"}
-        assert "AFRC_SFMR20220926H1.nc" not in filenames
+        # Correct (date-sorted) tail-2: the 0928 and 0929 files.
+        assert filenames == {"NOAA_SFMR20220928H1.nc", "AFRC_SFMR20220929U1.nc"}
+        # Raw-filename sort would wrongly keep this (0926) instead of the
+        # genuinely newest file (0929, dropped entirely by the old bug).
+        assert "NOAA_SFMR20220926H1.nc" not in filenames
+        assert "AFRC_SFMR20220929U1.nc" in filenames
 
     @respx.mock
     @pytest.mark.asyncio

@@ -196,8 +196,11 @@ async def recon_get_sfmr(
         max_records: Cap on SFMR NetCDF files downloaded and processed
             (default 10). Each file triggers a network download and NetCDF
             parse, so unlike other recon tools' output caps this also
-            bounds request volume — the AOML archive lists files
-            oldest-first, so the most recent max_records files are kept.
+            bounds request volume — files are decoded and sorted by their
+            embedded flight date, and the most recent max_records are kept.
+            (AOML's raw directory listing is grouped by agency prefix,
+            e.g. all AFRC_* entries before NOAA_*, not chronological order,
+            so the date must be decoded from each filename first.)
             Ignored when filename is given.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
@@ -230,17 +233,24 @@ async def recon_get_sfmr(
             html = await client.list_directory(sfmr_url)
             entries = parse_directory_listing(html)
             nc_entries = [e for e in entries if e["filename"].endswith(".nc")]
-            # AOML lists files oldest-first; keep the tail (most recent
-            # max_records) rather than the oldest, so a storm with more
-            # missions than max_records surfaces its latest passes.
-            nc_entries.sort(key=lambda e: e["filename"])
-            total_available = len(nc_entries)
+            # AOML's raw directory listing is grouped by agency prefix
+            # (all AFRC_* entries sort before NOAA_*, or vice versa),
+            # NOT chronological order — a storm's directory routinely mixes
+            # both agencies, so sorting on the raw filename string does not
+            # yield global chronological order. Decode each filename's
+            # embedded date first (same helper recon_list_sfmr uses) and
+            # sort/keep the tail (most recent max_records) by that decoded
+            # date, so a storm with more missions than max_records surfaces
+            # its latest passes.
+            decoded_entries = [_decode_sfmr_filename(e["filename"]) for e in nc_entries]
+            decoded_entries.sort(key=lambda d: d.get("date") or "")
+            total_available = len(decoded_entries)
             selected = (
-                nc_entries[-max_records:]
+                decoded_entries[-max_records:]
                 if total_available > max_records
-                else nc_entries
+                else decoded_entries
             )
-            filenames_to_process = [e["filename"] for e in selected]
+            filenames_to_process = [d["filename"] for d in selected]
 
         if not filenames_to_process:
             return (
