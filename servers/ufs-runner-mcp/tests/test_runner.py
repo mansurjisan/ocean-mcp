@@ -212,6 +212,110 @@ class TestCreateExperiment:
         assert "ny_global = 361" in content
 
 
+class TestOverrideHonesty:
+    """Fix 2: documented flat/namelist overrides that silently no-op must
+    be reported back, not hidden behind a claimed 'Experiment Created'."""
+
+    def test_matched_flat_override_no_warning(self, runner, tmp_path):
+        """An override with a real {{placeholder}} succeeds as before —
+        no warning is raised."""
+        run_dir = str(tmp_path / "matched_flat")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"start_year": 2030},
+        )
+        warnings = result["override_warnings"]
+        assert warnings["unmatched_flat_keys"] == []
+        assert warnings["unmatched_namelist_groups"] == []
+        assert warnings["namelist_write_failures"] == []
+        content = (Path(run_dir) / "model_configure").read_text()
+        assert "2030" in content
+
+    def test_unmatched_flat_override_warns(self, runner, tmp_path):
+        """dt_ocean is documented (defaults.yaml) as an overridable flat
+        key, but no template file has a {{dt_ocean}} placeholder — the
+        override must be reported as having no effect."""
+        run_dir = str(tmp_path / "unmatched_flat")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"dt_ocean": 5.0, "start_year": 2031},
+        )
+        unmatched = result["override_warnings"]["unmatched_flat_keys"]
+        assert "dt_ocean" in unmatched
+        assert "start_year" not in unmatched
+
+    def test_ocn_tasks_override_alone_no_warning(self, runner, tmp_path):
+        """ocn_tasks never appears as a literal {{ocn_tasks}} placeholder —
+        it only feeds _compute_derived_vars (OCN_petlist_bounds via
+        total_tasks_minus1, the srun task count via total_tasks). Overriding
+        it alone is a real, working override (it changes the rendered
+        output) and must NOT be reported as having no effect."""
+        run_dir = str(tmp_path / "ocn_tasks_only")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"ocn_tasks": 80},
+        )
+        unmatched = result["override_warnings"]["unmatched_flat_keys"]
+        assert "ocn_tasks" not in unmatched
+        # sanity: the override did actually change the rendered output
+        content = (Path(run_dir) / "ufs.configure").read_text()
+        assert "OCN_petlist_bounds:             160 239" in content
+
+    def test_matched_namelist_group_override_no_warning(self, runner, tmp_path):
+        """A nested override whose group exists in a real namelist file
+        succeeds silently, same as before this fix."""
+        run_dir = str(tmp_path / "matched_group")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"CORE": {"dt": 60.0, "rnday": 3.0}},
+        )
+        warnings = result["override_warnings"]
+        assert warnings["unmatched_namelist_groups"] == []
+        assert warnings["namelist_write_failures"] == []
+
+    def test_unmatched_namelist_group_warns(self, runner, tmp_path):
+        """A nested override group that matches no namelist file's groups
+        must be reported, not silently dropped."""
+        run_dir = str(tmp_path / "unmatched_group")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"NO_SUCH_GROUP": {"foo": 1}},
+        )
+        unmatched = result["override_warnings"]["unmatched_namelist_groups"]
+        assert "NO_SUCH_GROUP" in unmatched
+
+    def test_namelist_write_failure_surfaces_as_warning(
+        self, runner, tmp_path, monkeypatch
+    ):
+        """If _apply_overrides can't even read/write a namelist file, that
+        must show up in the tool output, not just a log-only warning."""
+        import ufs_runner_mcp.runner as runner_module
+
+        def boom(_path):
+            raise ValueError("corrupt namelist")
+
+        monkeypatch.setattr(runner_module.f90nml, "read", boom)
+
+        run_dir = str(tmp_path / "nml_fail")
+        result = runner.create_experiment(
+            model_type="schism",
+            run_dir=run_dir,
+            overrides={"CORE": {"dt": 99.0}},
+        )
+        warnings = result["override_warnings"]
+        assert len(warnings["namelist_write_failures"]) >= 1
+        failed_names = {f["file"] for f in warnings["namelist_write_failures"]}
+        assert "param.nml" in failed_names
+        # The read blew up before any group could be applied anywhere, so
+        # the group is also (correctly) reported as unmatched.
+        assert "CORE" in warnings["unmatched_namelist_groups"]
+
+
 class TestStageInputData:
     """Test input data staging from user directories."""
 
@@ -437,6 +541,31 @@ class TestCollectOutputs:
         paths = [o["path"] for o in result["outputs"]]
         assert "output.nc" in paths
 
+    def test_slurm_log_not_double_counted(self, runner, schism_run_dir):
+        """slurm-<jobid>.out matches the general '*.out' pattern; it must
+        not also be picked up by a redundant explicit 'slurm-*.out' glob
+        and counted/listed twice."""
+        (Path(schism_run_dir) / "slurm-12345.out").write_text("log contents")
+        result = runner.collect_outputs(schism_run_dir)
+        paths = [o["path"] for o in result["outputs"]]
+        assert paths.count("slurm-12345.out") == 1
+        assert result["output_count"] == len(result["outputs"])
+
+    def test_symlinked_output_not_merged_with_its_target(self, runner, schism_run_dir):
+        """latest.nc -> history.nc is a common UFS pattern: two distinct,
+        both-meaningful directory entries pointing at the same file. Dedup
+        must key on the directory entry, not the resolved inode, or one of
+        the two gets silently dropped from the listing."""
+        run_path = Path(schism_run_dir)
+        (run_path / "history.nc").write_bytes(b"real output data")
+        (run_path / "latest.nc").symlink_to(run_path / "history.nc")
+
+        result = runner.collect_outputs(schism_run_dir)
+        paths = [o["path"] for o in result["outputs"]]
+        assert "history.nc" in paths
+        assert "latest.nc" in paths
+        assert result["output_count"] == len(result["outputs"])
+
 
 class TestSecurityHardening:
     """Regression tests for the three sandbox-escape / injection fixes."""
@@ -467,6 +596,83 @@ class TestSecurityHardening:
         monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(tmp_path))
         assert validate_path(str(tmp_path / "run")) is None
         assert validate_path(str(tmp_path) + "-evil/run") is not None
+
+    # --- Fix 1: numbered RDHPCS mounts (/scratch3, /work2/noaa, ...) ---
+
+    def test_validate_path_numbered_scratch_mount_accepted(self):
+        """Real RDHPCS mounts like /scratch5 must be accepted, not just /scratch."""
+        assert validate_path("/scratch5/user/run") is None
+
+    def test_validate_path_numbered_work_mount_with_subdir_accepted(self):
+        assert validate_path("/work2/noaa/project") is None
+
+    def test_validate_path_numbered_contrib_mount_accepted(self):
+        assert validate_path("/contrib3/x") is None
+
+    def test_validate_path_work_attacker_still_rejected(self):
+        """Numbered-mount leniency must not reopen the /work-attacker escape."""
+        assert validate_path("/work-attacker") is not None
+        assert validate_path("/work-attacker/run") is not None
+
+    def test_validate_path_workfoo_still_rejected(self):
+        """A non-digit suffix on the base name must still be rejected."""
+        assert validate_path("/workfoo") is not None
+        assert validate_path("/workfoo/run") is not None
+
+    # --- Fix 1 follow-up: symlinked allowed roots must not be rejected ---
+
+    def test_validate_path_symlinked_allowed_root_accepted(self, monkeypatch, tmp_path):
+        """Real HPC sites symlink allowed roots (e.g. /work -> /lustre/work).
+
+        The input path is resolved (collapsing the symlink) before checking,
+        so the configured prefix must be resolved the same way, or a
+        legitimately-allowed path through the symlink is wrongly rejected.
+        """
+        real_dir = tmp_path / "lustre_work"
+        real_dir.mkdir()
+        (real_dir / "myexperiment").mkdir()
+        symlink_root = tmp_path / "work_symlink"
+        symlink_root.symlink_to(real_dir)
+
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(symlink_root))
+        assert validate_path(str(symlink_root / "myexperiment")) is None
+
+    def test_validate_path_env_prefix_digit_leniency_only_first_component(
+        self, monkeypatch, tmp_path
+    ):
+        """Digit-suffix leniency only applies to the component right after
+        the filesystem root — it must not spread to deeper components of a
+        custom, multi-component env-configured prefix."""
+        prefix_dir = tmp_path / "myproj"
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", str(prefix_dir))
+        # genuine descendant: still allowed
+        assert validate_path(str(prefix_dir / "run")) is None
+        # a sibling of the deep component "myproj" with a numeric suffix must
+        # NOT be tolerated — only the root's immediate child gets leniency
+        sibling = str(tmp_path) + "/myproj2/run"
+        assert validate_path(sibling) is not None
+
+    def test_validate_path_relative_env_prefix_resolved_against_cwd(
+        self, monkeypatch, tmp_path
+    ):
+        """A relative UFS_RUNNER_ALLOWED_PATHS entry used to silently become
+        a no-op; it must instead resolve against the current working
+        directory, same as pathlib would naturally do."""
+        (tmp_path / "relative_scratch").mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", "relative_scratch")
+        assert validate_path(str(tmp_path / "relative_scratch" / "run")) is None
+
+    def test_validate_path_root_prefix_does_not_allow_everything(self, monkeypatch):
+        """UFS_RUNNER_ALLOWED_PATHS='/' must not silently become an allow-all
+        (it would defeat the sandbox entirely) — it's dropped as a
+        degenerate config value instead, leaving the built-in prefixes as
+        the only effective ones."""
+        monkeypatch.setenv("UFS_RUNNER_ALLOWED_PATHS", "/")
+        assert validate_path("/etc/passwd") is not None
+        assert validate_path("/home/user/run") is not None
+        # built-ins are unaffected
+        assert validate_path("/scratch/user/run") is None
 
     # --- Fix 3: every user override value must be shell-safe ---
 

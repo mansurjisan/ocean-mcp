@@ -1,5 +1,7 @@
 """Tools for monitoring and managing submitted UFS experiments."""
 
+import asyncio
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -34,7 +36,9 @@ async def ufs_get_run_status(
     """
     try:
         runner = _get_runner(ctx)
-        result = runner.get_run_status(run_dir=run_dir, job_id=job_id)
+        result = await asyncio.to_thread(
+            runner.get_run_status, run_dir=run_dir, job_id=job_id
+        )
 
         if "sacct_output" in result:
             return (
@@ -69,7 +73,7 @@ async def ufs_cancel_run(
     """
     try:
         runner = _get_runner(ctx)
-        result = runner.cancel_run(job_id)
+        result = await asyncio.to_thread(runner.cancel_run, job_id)
         return f"Cancel requested for job {result['job_id']}."
 
     except RunnerError as e:
@@ -99,7 +103,7 @@ async def ufs_collect_outputs(
     """
     try:
         runner = _get_runner(ctx)
-        result = runner.collect_outputs(run_dir)
+        result = await asyncio.to_thread(runner.collect_outputs, run_dir)
 
         if result["output_count"] == 0:
             return f"No output files found in {result['run_dir']}."

@@ -1,5 +1,7 @@
 """Tools for creating, validating, and submitting UFS experiments."""
 
+import asyncio
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -46,6 +48,10 @@ async def ufs_create_experiment(
         input_data_dir: Path to an existing UFS run directory to copy input data
             from (mesh files, forcing data, executables). Files are symlinked
             when possible. Template files are not overwritten.
+
+    Note: if an override key doesn't match a real placeholder or namelist
+    group in the template, it has no effect — the response includes a
+    warning section listing exactly which overrides were dropped.
     """
     try:
         import json as _json
@@ -53,7 +59,8 @@ async def ufs_create_experiment(
         override_dict = _json.loads(overrides) if overrides else None
 
         runner = _get_runner(ctx)
-        result = runner.create_experiment(
+        result = await asyncio.to_thread(
+            runner.create_experiment,
             model_type=model_type,
             run_dir=run_dir,
             template=template,
@@ -82,6 +89,10 @@ async def ufs_create_experiment(
             for f in result["staged_files"]:
                 lines.append(f"- {f}")
 
+        warnings = _format_override_warnings(result.get("override_warnings"))
+        if warnings:
+            lines += ["", "### Override Warnings"] + warnings
+
         lines.append(
             "\nNext: call `ufs_validate_experiment` to check the setup, "
             "then `ufs_submit_experiment` to submit."
@@ -92,6 +103,41 @@ async def ufs_create_experiment(
         return f"Error: {e}"
     except Exception as e:
         return f"Unexpected error: {e}"
+
+
+def _format_override_warnings(override_warnings: dict | None) -> list[str]:
+    """Render the honest-override report into warning lines, if any.
+
+    Returns an empty list when every override actually matched something —
+    keeping today's silent-success behavior for the common case.
+    """
+    if not override_warnings:
+        return []
+
+    lines: list[str] = []
+
+    unmatched_flat = override_warnings.get("unmatched_flat_keys") or []
+    if unmatched_flat:
+        lines.append(
+            "- **Warning: the following overrides had no effect (no matching "
+            "placeholder found):** " + ", ".join(unmatched_flat)
+        )
+
+    unmatched_groups = override_warnings.get("unmatched_namelist_groups") or []
+    if unmatched_groups:
+        lines.append(
+            "- **Warning: the following namelist-group overrides had no "
+            "effect (no matching group found in any namelist file):** "
+            + ", ".join(unmatched_groups)
+        )
+
+    for failure in override_warnings.get("namelist_write_failures") or []:
+        lines.append(
+            f"- **Warning: failed to apply overrides to `{failure['file']}`:** "
+            f"{failure['error']}"
+        )
+
+    return lines
 
 
 @mcp.tool(
@@ -115,7 +161,7 @@ async def ufs_validate_experiment(
     """
     try:
         runner = _get_runner(ctx)
-        result = runner.validate_experiment(run_dir)
+        result = await asyncio.to_thread(runner.validate_experiment, run_dir)
 
         lines = [
             "## Experiment Validation",
@@ -180,7 +226,8 @@ async def ufs_submit_experiment(
     """
     try:
         runner = _get_runner(ctx)
-        result = runner.submit_experiment(
+        result = await asyncio.to_thread(
+            runner.submit_experiment,
             run_dir=run_dir,
             account=account,
             partition=partition,
@@ -231,26 +278,19 @@ async def ufs_list_templates(
     with ufs_create_experiment.
     """
     runner = _get_runner(ctx)
-    templates_dir = runner._templates_dir
+    result = await asyncio.to_thread(runner.list_templates)
 
-    if not templates_dir.exists():
+    if not result["templates_dir_exists"]:
         return "No templates directory found. Templates need to be installed."
 
-    templates = [
-        d.name
-        for d in templates_dir.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    ]
-
+    templates = result["templates"]
     if not templates:
         return (
             "No templates available. Add template directories to the templates/ folder."
         )
 
     lines = ["## Available Templates"]
-    for t in sorted(templates):
-        files = list((templates_dir / t).rglob("*"))
-        file_count = len([f for f in files if f.is_file()])
-        lines.append(f"- **{t}** ({file_count} files)")
+    for t in templates:
+        lines.append(f"- **{t['name']}** ({t['file_count']} files)")
 
     return "\n".join(lines)
