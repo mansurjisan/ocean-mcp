@@ -1,5 +1,7 @@
 """Tool: recon_list_missions — list reconnaissance data files from the NHC archive."""
 
+from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -33,7 +35,8 @@ async def recon_list_missions(
     month: int | None = None,
     day: int | None = None,
     limit: int = 50,
-    response_format: str = "markdown",
+    max_records: int = 2000,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """List available reconnaissance data files from the NHC archive.
 
@@ -48,6 +51,10 @@ async def recon_list_missions(
         month: Optional month filter (1-12) to narrow results by filename date.
         day: Optional day filter (1-31) to narrow results by filename date.
         limit: Maximum number of files to return (default 50).
+        max_records: Cap on files returned (default 2000). Entries are
+            already sorted newest-filename-first, so only the most recent
+            max_records files are kept, and the output flags any
+            truncation.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -95,6 +102,7 @@ async def recon_list_missions(
             return format_json_response(
                 entries,
                 context=f"{product.upper()} files for {year}, basin={basin.upper()}",
+                max_records=max_records,
             )
 
         columns = [
@@ -118,6 +126,7 @@ async def recon_list_missions(
             title=f"Reconnaissance Archive — {product.upper()} Files",
             metadata_lines=metadata,
             count_label="files",
+            max_rows=max_records,
         )
 
     except Exception as e:

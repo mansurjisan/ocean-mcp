@@ -517,6 +517,8 @@ def format_tabular_data(
     metadata_lines: list[str] | None = None,
     count_label: str = "records",
     source: str = "NOAA NHC Reconnaissance Archive",
+    max_rows: int = 2000,
+    keep: str = "head",
 ) -> str:
     """Format a list of dicts as a markdown table.
 
@@ -527,6 +529,17 @@ def format_tabular_data(
         metadata_lines: Optional lines shown below the title.
         count_label: Label for the count footer.
         source: Data source attribution.
+        max_rows: Cap on rows rendered (default 2000). A wide date range or
+            a high ``limit`` can pull in far more observations/bulletins
+            than are useful to render; rendering them all floods the
+            model's context.
+        keep: Which end of ``data`` to keep when truncating — "head"
+            (default) for sources already ordered newest-first (or with
+            unspecified order — the NHC archive tools sort their file
+            listing newest-filename-first before this is ever called), or
+            "tail" for oldest-first sources (e.g. ATCF f-deck fixes, which
+            the upstream archive serves chronologically ascending) so the
+            most recent rows survive truncation.
     """
     lines: list[str] = []
 
@@ -537,32 +550,88 @@ def format_tabular_data(
         lines.append(" | ".join(f"**{m}**" for m in metadata_lines))
         lines.append("")
 
+    total = len(data)
+    truncated = total > max_rows
+    if truncated:
+        rows = data[-max_rows:] if keep == "tail" else data[:max_rows]
+    else:
+        rows = data
+
     # Header
     headers = [col[1] for col in columns]
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("| " + " | ".join("---" for _ in headers) + " |")
 
     # Rows
-    for row in data:
+    for row in rows:
         cells = [str(row.get(col[0], "")) for col in columns]
         lines.append("| " + " | ".join(cells) + " |")
 
     lines.append("")
-    lines.append(f"*{len(data)} {count_label} returned. Data from {source}.*")
+    if truncated:
+        which = "most recent" if keep == "tail" else "first"
+        lines.append(
+            f"*Showing the {which} {len(rows)} of {total} {count_label} "
+            f"(truncated). Narrow your query (a smaller limit, or a "
+            f"specific month/day) or call with response_format='json' and "
+            f"a higher max_records for more. Data from {source}.*"
+        )
+    else:
+        lines.append(f"*{len(rows)} {count_label} returned. Data from {source}.*")
 
     return "\n".join(lines)
 
 
-def format_json_response(data: dict | list, context: str = "") -> str:
-    """Format data as a JSON string with optional context."""
+def format_json_response(
+    data: dict | list,
+    context: str = "",
+    max_records: int = 2000,
+    keep: str = "head",
+) -> str:
+    """Format data as a JSON string with a truncation envelope.
+
+    Args:
+        data: Either a bare list of records, or a dict payload (already
+            carrying its own metadata) to merge in as-is — capping only
+            applies to list ``data``; a dict is passed through unchanged
+            aside from ``retrieved_at``.
+        context: Optional human-readable context string.
+        max_records: Cap on the number of records embedded (default 2000,
+            matching the repo-wide convention) when ``data`` is a list. A
+            long archive listing or multi-bulletin pull can otherwise
+            flood the model's context.
+        keep: Which end of a list ``data`` to keep when truncating —
+            "head" (default) for sources already ordered newest-first (or
+            order-unspecified, matching how each tool's own ``limit``
+            already truncates), or "tail" for oldest-first sources (e.g.
+            ATCF f-deck fixes) so the most recent records survive
+            truncation.
+    """
     wrapper: dict = {}
     if context:
         wrapper["context"] = context
+
     if isinstance(data, list):
-        wrapper["record_count"] = len(data)
-        wrapper["data"] = data
+        total = len(data)
+        truncated = total > max_records
+        if truncated:
+            records = data[-max_records:] if keep == "tail" else data[:max_records]
+        else:
+            records = data
+        wrapper["truncated"] = truncated
+        wrapper["record_count"] = len(records)
+        wrapper["total_count"] = total
+        if truncated:
+            which = "most recent" if keep == "tail" else "first"
+            wrapper["hint"] = (
+                f"Showing the {which} {len(records)} of {total} records. "
+                "Narrow your query (a smaller limit, a specific month/day, "
+                "or a storm_id filter) or increase max_records for more."
+            )
+        wrapper["data"] = records
     else:
         wrapper.update(data)
+
     wrapper["retrieved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return json.dumps(wrapper, indent=2)
 

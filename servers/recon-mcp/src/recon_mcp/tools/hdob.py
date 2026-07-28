@@ -1,5 +1,7 @@
 """Tool: recon_get_hdobs — fetch and parse HDOB flight-level observations."""
 
+from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -33,7 +35,8 @@ async def recon_get_hdobs(
     month: int | None = None,
     day: int | None = None,
     limit: int = 20,
-    response_format: str = "markdown",
+    max_records: int = 2000,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get HDOB (High Density Observation) flight-level reconnaissance data.
 
@@ -48,6 +51,10 @@ async def recon_get_hdobs(
         month: Optional month filter (1-12).
         day: Optional day filter (1-31).
         limit: Maximum number of HDOB bulletins to parse (default 20).
+        max_records: Cap on observations returned (default 2000). Bulletins
+            are already fetched newest-first, so only the most recent
+            max_records observations are kept, and the output flags any
+            truncation.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -107,6 +114,7 @@ async def recon_get_hdobs(
             return format_json_response(
                 all_observations,
                 context=f"HDOB observations from {bulletin_count} bulletins, {year} {basin.upper()}",
+                max_records=max_records,
             )
 
         columns = [
@@ -138,6 +146,7 @@ async def recon_get_hdobs(
             title="HDOB Flight-Level Observations",
             metadata_lines=metadata,
             count_label="observations",
+            max_rows=max_records,
         )
 
     except Exception as e:

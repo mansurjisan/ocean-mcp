@@ -1,5 +1,7 @@
 """Tools: recon_list_sfmr and recon_get_sfmr — SFMR radial wind profile analysis."""
 
+from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
@@ -66,7 +68,8 @@ async def recon_list_sfmr(
     ctx: Context,
     year: int,
     storm_name: str,
-    response_format: str = "markdown",
+    max_records: int = 2000,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """List available SFMR NetCDF files for a storm from the AOML archive.
 
@@ -80,6 +83,9 @@ async def recon_list_sfmr(
     Args:
         year: Year of the storm (e.g., 2022).
         storm_name: Lowercase storm name (e.g., 'ian', 'laura').
+        max_records: Cap on files returned in JSON output (default 2000).
+            Files are listed oldest-first, so only the most recent
+            max_records are kept, and the output flags any truncation.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -113,6 +119,8 @@ async def recon_list_sfmr(
             return format_json_response(
                 decoded,
                 context=f"SFMR files for {storm_name.title()} ({year}) from AOML archive",
+                max_records=max_records,
+                keep="tail",
             )
 
         lines = [
@@ -160,7 +168,8 @@ async def recon_get_sfmr(
     filename: str | None = None,
     bin_size_km: float = 5.0,
     max_radius_km: float = 500.0,
-    response_format: str = "markdown",
+    max_records: int = 10,
+    response_format: Literal["markdown", "json"] = "markdown",
 ) -> str:
     """Get SFMR radial wind profile for a storm — surface wind speed vs. distance from center.
 
@@ -180,9 +189,19 @@ async def recon_get_sfmr(
         storm_name: Lowercase storm name (e.g., 'ian', 'laura').
         storm_number: ATCF storm number within the season (e.g., 9 for AL09).
         basin: Basin code — 'al' (Atlantic, default), 'ep' (East Pacific).
-        filename: Specific SFMR filename to process. If None, processes up to 10 files.
+        filename: Specific SFMR filename to process. If None, processes up
+            to max_records files.
         bin_size_km: Radial bin width in km (default 5).
         max_radius_km: Maximum radius to include in km (default 500).
+        max_records: Cap on SFMR NetCDF files downloaded and processed
+            (default 10). Each file triggers a network download and NetCDF
+            parse, so unlike other recon tools' output caps this also
+            bounds request volume — files are decoded and sorted by their
+            embedded flight date, and the most recent max_records are kept.
+            (AOML's raw directory listing is grouped by agency prefix,
+            e.g. all AFRC_* entries before NOAA_*, not chronological order,
+            so the date must be decoded from each filename first.)
+            Ignored when filename is given.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     temp_files: list = []
@@ -207,14 +226,31 @@ async def recon_get_sfmr(
         # 2. Get list of SFMR files
         sfmr_url = client.build_sfmr_url(year, storm_name)
 
+        total_available: int | None = None
         if filename:
             filenames_to_process = [filename]
         else:
             html = await client.list_directory(sfmr_url)
             entries = parse_directory_listing(html)
             nc_entries = [e for e in entries if e["filename"].endswith(".nc")]
-            nc_entries.sort(key=lambda e: e["filename"])
-            filenames_to_process = [e["filename"] for e in nc_entries[:10]]
+            # AOML's raw directory listing is grouped by agency prefix
+            # (all AFRC_* entries sort before NOAA_*, or vice versa),
+            # NOT chronological order — a storm's directory routinely mixes
+            # both agencies, so sorting on the raw filename string does not
+            # yield global chronological order. Decode each filename's
+            # embedded date first (same helper recon_list_sfmr uses) and
+            # sort/keep the tail (most recent max_records) by that decoded
+            # date, so a storm with more missions than max_records surfaces
+            # its latest passes.
+            decoded_entries = [_decode_sfmr_filename(e["filename"]) for e in nc_entries]
+            decoded_entries.sort(key=lambda d: d.get("date") or "")
+            total_available = len(decoded_entries)
+            selected = (
+                decoded_entries[-max_records:]
+                if total_available > max_records
+                else decoded_entries
+            )
+            filenames_to_process = [d["filename"] for d in selected]
 
         if not filenames_to_process:
             return (
@@ -272,17 +308,33 @@ async def recon_get_sfmr(
             )
 
         if response_format == "json":
+            # total_available is None when a specific filename was requested
+            # (single-file mode, never truncated).
+            total_files = (
+                total_available if total_available is not None else len(all_missions)
+            )
+            truncated = total_available is not None and total_available > max_records
+            payload: dict = {
+                "storm": storm_name.title(),
+                "year": year,
+                "basin": basin.upper(),
+                "storm_id": f"{basin.upper()}{storm_number:02d}{year}",
+                "track_points": len(track),
+                "bin_size_km": bin_size_km,
+                "max_radius_km": max_radius_km,
+                "truncated": truncated,
+                "record_count": len(all_missions),
+                "total_count": total_files,
+                "missions": all_missions,
+            }
+            if truncated:
+                payload["hint"] = (
+                    f"Showing the most recent {len(all_missions)} of "
+                    f"{total_files} available SFMR files. Increase "
+                    "max_records for more."
+                )
             return format_json_response(
-                {
-                    "storm": storm_name.title(),
-                    "year": year,
-                    "basin": basin.upper(),
-                    "storm_id": f"{basin.upper()}{storm_number:02d}{year}",
-                    "track_points": len(track),
-                    "bin_size_km": bin_size_km,
-                    "max_radius_km": max_radius_km,
-                    "missions": all_missions,
-                },
+                payload,
                 context=f"SFMR radial wind profiles for {storm_name.title()} ({year})",
             )
 
@@ -335,10 +387,19 @@ async def recon_get_sfmr(
 
             lines.append("")
 
-        lines.append(
-            f"*{len(all_missions)} mission(s) processed. "
-            f"Data from AOML HRD SFMR Archive.*"
-        )
+        if total_available is not None and total_available > max_records:
+            lines.append(
+                f"*Showing the most recent {len(all_missions)} of "
+                f"{total_available} available SFMR files (truncated). "
+                "Increase max_records for more, or call with "
+                "response_format='json' for structured output. "
+                "Data from AOML HRD SFMR Archive.*"
+            )
+        else:
+            lines.append(
+                f"*{len(all_missions)} mission(s) processed. "
+                f"Data from AOML HRD SFMR Archive.*"
+            )
 
         return "\n".join(lines)
 
