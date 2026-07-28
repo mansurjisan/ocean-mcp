@@ -101,7 +101,7 @@ async def vdatum_convert(
 
     # Convert
     try:
-        from coastalmodeling_vdatum import vdatum
+        from .._vendor.coastalmodeling_vdatum import vdatum
 
         lat_arr = np.array(lats)
         lon_arr = np.array(lons)
@@ -109,11 +109,6 @@ async def vdatum_convert(
 
         clat, clon, cz = vdatum.convert(
             vd_from, vd_to, lat_arr, lon_arr, z_arr, online=online
-        )
-    except ImportError:
-        return (
-            "**Error:** coastalmodeling-vdatum not installed.\n"
-            "Install with: `pip install git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git`"
         )
     except Exception as e:
         return f"**Error:** Conversion failed: {e}"

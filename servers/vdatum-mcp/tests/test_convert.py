@@ -102,10 +102,9 @@ class TestVdatumConvert:
     async def test_single_point_conversion(self, mock_ctx):
         """Single-point conversion formats correctly (vdatum lib mocked).
 
-        convert.py does `from coastalmodeling_vdatum import vdatum` at call
-        time, so patching sys.modules makes that local import resolve to the
-        mock. (The previous version patched a nonexistent module attribute and
-        its body was `pass`, so it asserted nothing and errored on entry.)
+        convert.py does `from .._vendor.coastalmodeling_vdatum import vdatum`
+        at call time, so patching sys.modules makes that local import resolve
+        to the mock.
         """
         mock_vdatum = MagicMock()
         mock_vdatum.convert.return_value = (
@@ -115,7 +114,9 @@ class TestVdatumConvert:
         )
         fake_mod = MagicMock()
         fake_mod.vdatum = mock_vdatum
-        with patch.dict("sys.modules", {"coastalmodeling_vdatum": fake_mod}):
+        with patch.dict(
+            "sys.modules", {"vdatum_mcp._vendor.coastalmodeling_vdatum": fake_mod}
+        ):
             result = await vdatum_convert(
                 mock_ctx,
                 datum_from="navd88",
@@ -141,20 +142,6 @@ class TestVdatumConvert:
         # The function imports vdatum internally, so we patch the import
         with patch("vdatum_mcp.tools.convert.vdatum_convert"):
             assert callable(vdatum_convert)
-
-    @pytest.mark.asyncio
-    async def test_missing_library(self, mock_ctx):
-        """Test graceful handling when coastalmodeling-vdatum not installed."""
-        with patch.dict("sys.modules", {"coastalmodeling_vdatum": None}):
-            result = await vdatum_convert(
-                mock_ctx,
-                datum_from="navd88",
-                datum_to="mllw",
-                lat="30",
-                lon="-80",
-                z="1.0",
-            )
-            assert "Error" in result
 
 
 class TestVdatumListDatums:
