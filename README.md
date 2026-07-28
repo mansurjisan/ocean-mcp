@@ -3,7 +3,8 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-14_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![CI](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -25,9 +26,11 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 | [adcirc-mcp](servers/adcirc-mcp/) | [![PyPI](https://img.shields.io/pypi/v/adcirc-mcp)](https://pypi.org/project/adcirc-mcp/) | ADCIRC model setup debugging, parameter lookup, config validation |
 | [schism-mcp](servers/schism-mcp/) | [![PyPI](https://img.shields.io/pypi/v/schism-mcp)](https://pypi.org/project/schism-mcp/) | SCHISM model setup debugging, parameter lookup, config validation |
 
-**No API keys required** — all servers use free, publicly available datasets.
+**No API keys required for the data servers** — all servers above use free, publicly available datasets. The exceptions are `hpc-system-mcp` and `ufs-runner-mcp` (below), which require actual NOAA RDHPCS cluster access and, in `ufs-runner-mcp`'s case, submit real Slurm jobs.
 
-Additional servers live in this repo but are not yet published to PyPI (install from source): `vdatum-mcp` (vertical datum conversion), `hpc-system-mcp` and `ufs-runner-mcp` (NOAA RDHPCS / UFS-Coastal HPC workflows), and `alert-mcp` (CO-OPS threshold alerting).
+Additional servers live in this repo but are not yet published to PyPI (install from source): `vdatum-mcp` (vertical datum conversion), `hpc-system-mcp` and `ufs-runner-mcp` (NOAA RDHPCS / UFS-Coastal HPC workflows — require cluster access), and `alert-mcp` (CO-OPS threshold alerting).
+
+There is also a 19th server in this repo, `nos-workflow-mcp`, which is experimental and still a work in progress (its full implementation lives on an unmerged branch — `main` carries only a minimal subset). It's intentionally left out of the table above and not yet ready for general use.
 
 ## Quick Start
 
@@ -213,10 +216,15 @@ Each server is fully self-contained with its own `pyproject.toml`, dependencies,
 **Shared patterns across servers:**
 - FastMCP for MCP server framework
 - httpx for async HTTP clients
-- Pydantic for parameter validation
-- Read-only tools (no data modification)
-- Dual markdown/JSON output formats
+- Pydantic models, with `Literal[...]` types for constrained parameters
+- Read-only tools by default — the data-fetching servers only fetch, never
+  modify, anything. `ufs-runner-mcp` (submits/cancels Slurm jobs) and
+  `alert-mcp` (creates/pauses/deletes in-memory alert state) are the two
+  exceptions, each with a small number of tools marked `readOnlyHint=False`
+- `response_format` output as markdown (default), json, geojson, or image, depending on the tool
 - Actionable error messages with suggestions
+
+See [CONVENTIONS.md](CONVENTIONS.md) for the full response/behavior contract (output caps, `retrieved_at`, error format, HTTP retries, dependency bounds).
 
 ## Citation
 
@@ -228,7 +236,7 @@ If you use this project in your research or work, please cite:
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
   url       = {https://github.com/mansurjisan/ocean-mcp},
-  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, RTOFS, and WW3 data}
+  note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, RTOFS, WW3, NDBC, USGS, winds, GOES, ADCIRC, and SCHISM data}
 }
 ```
 
