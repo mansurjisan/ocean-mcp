@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import ADCIRCClient
+from ..client import ADCIRCClient, handle_adcirc_error
 from ..server import mcp
 from ..utils import parse_fort13, parse_fort14_header, parse_fort15, parse_fort22_header
 
@@ -130,7 +130,7 @@ async def adcirc_parse_fort15(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing fort.15: {e}"
+        return handle_adcirc_error(e)
 
 
 @mcp.tool(
@@ -175,8 +175,28 @@ async def adcirc_parse_fort14(
         lines.append(f"- **Grid name**: {parsed.get('grid_name', 'N/A')}")
         lines.append(f"- **Nodes**: {parsed.get('num_nodes', 'N/A'):,}")
         lines.append(f"- **Elements**: {parsed.get('num_elements', 'N/A'):,}")
+
+        # The boundary section starts at line 2 + num_nodes + num_elements, which
+        # this header-only scan almost never reaches for a real mesh — if it
+        # wasn't reached, say so explicitly instead of silently dropping the
+        # field (silence could otherwise read as "zero boundaries").
+        num_nodes = parsed.get("num_nodes")
+        num_elements = parsed.get("num_elements")
+        text_line_count = len(text.strip().splitlines())
+        boundary_start = (
+            2 + num_nodes + num_elements
+            if isinstance(num_nodes, int) and isinstance(num_elements, int)
+            else None
+        )
+
         if "num_open_boundaries" in parsed:
             lines.append(f"- **Open boundaries**: {parsed['num_open_boundaries']}")
+        elif boundary_start is not None and boundary_start >= text_line_count:
+            lines.append(
+                "- **Open boundaries**: not present in the scanned header region "
+                f"(boundary section starts around line {boundary_start + 1}, beyond "
+                f"the {text_line_count} lines scanned)"
+            )
         if "total_open_boundary_nodes" in parsed:
             lines.append(
                 f"- **Total open boundary nodes**: {parsed['total_open_boundary_nodes']}"
@@ -184,7 +204,7 @@ async def adcirc_parse_fort14(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing fort.14: {e}"
+        return handle_adcirc_error(e)
 
 
 @mcp.tool(
@@ -234,7 +254,7 @@ async def adcirc_parse_fort13(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing fort.13: {e}"
+        return handle_adcirc_error(e)
 
 
 @mcp.tool(
@@ -285,4 +305,4 @@ async def adcirc_parse_fort22(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing fort.22: {e}"
+        return handle_adcirc_error(e)

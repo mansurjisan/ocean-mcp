@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import ADCIRCClient, ADCIRCClientError
+from ..client import ADCIRCClient, handle_adcirc_error
 from ..models import ADCIRC_WIKI_BASE
 from ..server import mcp
 
@@ -51,12 +51,8 @@ async def adcirc_fetch_docs(
         lines.append(content)
 
         return "\n".join(lines)
-    except ADCIRCClientError as e:
-        return (
-            f"Wiki error: {e}. Try `adcirc_search_docs` to find the correct page title."
-        )
     except Exception as e:
-        return f"Error fetching documentation: {e}"
+        return handle_adcirc_error(e)
 
 
 @mcp.tool(
@@ -96,4 +92,4 @@ async def adcirc_search_docs(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error searching wiki: {e}"
+        return handle_adcirc_error(e)

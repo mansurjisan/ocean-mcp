@@ -11,7 +11,12 @@ import httpx
 import pytest
 import respx
 
-from schism_mcp.client import RetryTransport, SchismClient
+from schism_mcp.client import (
+    RetryTransport,
+    SchismClient,
+    SchismClientError,
+    handle_schism_error,
+)
 from schism_mcp.models import SCHISM_DOCS_BASE
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -136,6 +141,17 @@ class TestParseParamNmlTool:
         assert "100.0" in result  # dt
         assert "30.0" in result  # rnday
 
+    @pytest.mark.asyncio
+    async def test_parse_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing param.nml path surfaces a clear SCHISM Error, not a raw repr."""
+        from schism_mcp.tools.parsing import schism_parse_param_nml
+
+        result = await schism_parse_param_nml(
+            ctx, file_path="/nonexistent/does_not_exist_param.nml"
+        )
+        assert result.startswith("SCHISM Error:")
+        assert "file not found" in result.lower()
+
 
 class TestParseHgridTool:
     """Tests for the schism_parse_hgrid tool."""
@@ -149,6 +165,30 @@ class TestParseHgridTool:
         result = await schism_parse_hgrid(ctx, content=content)
         assert "hgrid.gr3 Mesh Summary" in result
         assert "1,100" in result  # nodes
+
+    @pytest.mark.asyncio
+    async def test_bounding_box_notes_partial_scan(self, ctx: MagicMock) -> None:
+        """Bounding box/max depth computed from a partial node scan say so,
+        instead of presenting a partial result as if it covered the full mesh."""
+        from schism_mcp.tools.parsing import schism_parse_hgrid
+
+        # fixture declares 1,100 nodes but only has 5 node data lines.
+        content = _load_fixture("hgrid_header.txt")
+        result = await schism_parse_hgrid(ctx, content=content)
+        assert "Bounding box" in result
+        assert "from first 5 of 1,100 nodes" in result
+        assert "Max depth" in result
+
+    @pytest.mark.asyncio
+    async def test_parse_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing hgrid.gr3 path surfaces a clear SCHISM Error, not a raw repr."""
+        from schism_mcp.tools.parsing import schism_parse_hgrid
+
+        result = await schism_parse_hgrid(
+            ctx, file_path="/nonexistent/does_not_exist_hgrid.gr3"
+        )
+        assert result.startswith("SCHISM Error:")
+        assert "file not found" in result.lower()
 
 
 class TestParseVgridTool:
@@ -202,6 +242,17 @@ class TestValidateConfig:
         content = _load_fixture("param_nml_errors.txt")
         result = await schism_validate_config(ctx, param_nml_content=content)
         assert "error" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_validate_file_not_found(self, ctx: MagicMock) -> None:
+        """A missing param_nml_path surfaces a clear SCHISM Error, not a raw repr."""
+        from schism_mcp.tools.validation import schism_validate_config
+
+        result = await schism_validate_config(
+            ctx, param_nml_path="/nonexistent/does_not_exist_param.nml"
+        )
+        assert result.startswith("SCHISM Error:")
+        assert "file not found" in result.lower()
 
 
 class TestDiagnoseError:
@@ -301,3 +352,65 @@ class TestDocTools:
 
         result = await schism_fetch_docs(ctx, topic="input-output/does-not-exist.html")
         assert "error" in result.lower()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetch_docs_http_error(self, ctx: MagicMock) -> None:
+        """An upstream HTTP error surfaces a clear SCHISM Error, not a raw repr."""
+        from schism_mcp.tools.docs import schism_fetch_docs
+
+        route = respx.get(f"{SCHISM_DOCS_BASE}/input-output/param.html").mock(
+            return_value=httpx.Response(503)
+        )
+
+        result = await schism_fetch_docs(ctx, topic="input-output/param.html")
+        assert route.called
+        assert result.startswith("SCHISM Error:")
+        assert "503" in result
+
+
+class TestHandleSchismError:
+    """Direct unit tests for the handle_schism_error formatter."""
+
+    def test_client_error(self) -> None:
+        """SchismClientError is passed through with the server prefix."""
+        result = handle_schism_error(SchismClientError("File too large (150.0 MB)."))
+        assert result == "SCHISM Error: File too large (150.0 MB)."
+
+    def test_file_not_found(self) -> None:
+        """FileNotFoundError names the problem and a concrete next step."""
+        try:
+            open("/nonexistent/does_not_exist.txt")
+        except FileNotFoundError as e:
+            result = handle_schism_error(e)
+        assert result.startswith("SCHISM Error:")
+        assert "file not found" in result.lower()
+        assert "file_path" in result
+
+    def test_os_error(self) -> None:
+        """A generic OSError is distinguished from FileNotFoundError."""
+        result = handle_schism_error(OSError("disk quota exceeded"))
+        assert result.startswith("SCHISM Error:")
+        assert "could not read file" in result.lower()
+
+    def test_http_status_error(self) -> None:
+        """httpx.HTTPStatusError names the status code and suggests a next step."""
+        request = httpx.Request("GET", "https://schism-dev.github.io/schism/x.html")
+        response = httpx.Response(500, request=request)
+        error = httpx.HTTPStatusError("fail", request=request, response=response)
+        result = handle_schism_error(error)
+        assert result.startswith("SCHISM Error:")
+        assert "500" in result
+        assert "schism_search_docs" in result
+
+    def test_timeout_error(self) -> None:
+        """httpx.TimeoutException gets a clear timeout message."""
+        result = handle_schism_error(httpx.TimeoutException("timed out"))
+        assert result.startswith("SCHISM Error:")
+        assert "timed out" in result.lower()
+
+    def test_generic_exception_fallback(self) -> None:
+        """An unrecognized exception type still gets the server prefix, not a
+        bare repr — the type name is included instead of being swallowed."""
+        result = handle_schism_error(ValueError("something unexpected"))
+        assert result == "SCHISM Error: ValueError: something unexpected"

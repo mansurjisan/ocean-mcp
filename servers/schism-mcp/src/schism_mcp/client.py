@@ -166,6 +166,44 @@ KNOWN_PAGES: list[dict[str, str]] = [
 ]
 
 
+def handle_schism_error(e: Exception) -> str:
+    """Format an exception into a clear, actionable SCHISM error message.
+
+    Replaces a bare ``f"Error ...: {e}"`` so the caller sees the failure
+    category and a concrete next step instead of a raw exception repr.
+    """
+    if isinstance(e, SchismClientError):
+        return f"SCHISM Error: {e}"
+    if isinstance(e, FileNotFoundError):
+        return (
+            f"SCHISM Error: file not found ({e.filename or e}). "
+            "Check that file_path points to an existing SCHISM input file."
+        )
+    if isinstance(e, PermissionError):
+        return (
+            f"SCHISM Error: permission denied reading ({e.filename or e}). "
+            "Check the file's read permissions and try again."
+        )
+    if isinstance(e, OSError):
+        return (
+            f"SCHISM Error: could not read file — {e}. "
+            "Verify file_path is correct and accessible."
+        )
+    if isinstance(e, httpx.HTTPStatusError):
+        status = e.response.status_code
+        return (
+            f"SCHISM Error: HTTP {status} fetching SCHISM documentation. "
+            "The page may not exist — try schism_search_docs to find the correct "
+            "page, or retry if this is a transient server error."
+        )
+    if isinstance(e, httpx.TimeoutException):
+        return (
+            "SCHISM Error: request to the SCHISM documentation site timed out. "
+            "Try again, or narrow the query with schism_search_docs."
+        )
+    return f"SCHISM Error: {type(e).__name__}: {e}"
+
+
 class SchismClient:
     """Async client for local file reading and SCHISM documentation access."""
 

@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import ADCIRCClient
+from ..client import ADCIRCClient, handle_adcirc_error
 from ..server import mcp
 from ..utils import (
     check_cfl,
@@ -131,7 +131,7 @@ async def adcirc_validate_config(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error validating configuration: {e}"
+        return handle_adcirc_error(e)
 
 
 @mcp.tool(

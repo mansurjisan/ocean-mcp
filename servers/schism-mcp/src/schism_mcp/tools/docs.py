@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import SchismClient, SchismClientError
+from ..client import SchismClient, handle_schism_error
 from ..models import SCHISM_DOCS_BASE
 from ..server import mcp
 
@@ -62,10 +62,8 @@ async def schism_fetch_docs(
         lines.append(content)
 
         return "\n".join(lines)
-    except SchismClientError as e:
-        return f"Documentation error: {e}. Try `schism_search_docs` to find the correct page."
     except Exception as e:
-        return f"Error fetching documentation: {e}"
+        return handle_schism_error(e)
 
 
 @mcp.tool(
@@ -102,4 +100,4 @@ async def schism_search_docs(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error searching documentation: {e}"
+        return handle_schism_error(e)
