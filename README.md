@@ -4,7 +4,7 @@ A monorepo of independently installable MCP servers for ocean and coastal data w
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
 [![CI](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-15_servers-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Servers
@@ -217,7 +217,10 @@ Each server is fully self-contained with its own `pyproject.toml`, dependencies,
 - FastMCP for MCP server framework
 - httpx for async HTTP clients
 - Pydantic models, with `Literal[...]` types for constrained parameters
-- Read-only tools (no data modification)
+- Read-only tools by default — the data-fetching servers only fetch, never
+  modify, anything. `ufs-runner-mcp` (submits/cancels Slurm jobs) and
+  `alert-mcp` (creates/pauses/deletes in-memory alert state) are the two
+  exceptions, each with a small number of tools marked `readOnlyHint=False`
 - `response_format` output as markdown (default), json, geojson, or image, depending on the tool
 - Actionable error messages with suggestions
 

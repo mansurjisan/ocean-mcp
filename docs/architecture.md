@@ -88,8 +88,18 @@ def _get_client(ctx: Context) -> MyClient:
 
 ## Tool Design Principles
 
-1. **Read-only**: all tools are read-only with `readOnlyHint=True`. No data
-   modification.
+1. **Read-only, with two named exceptions**: the data-fetching servers
+   (the large majority of the repo) expose every tool with
+   `readOnlyHint=True` — no data modification. `ufs-runner-mcp`
+   (`ufs_create_experiment`, `ufs_submit_experiment`, `ufs_cancel_run`) and
+   `alert-mcp` (`coral_create_alert`, `coral_check_alerts`,
+   `coral_pause_alert`, `coral_delete_alert`) are the two servers that
+   depart from this by design, each setting `readOnlyHint=False` on a
+   small number of tools; the most disruptive of those
+   (`ufs_cancel_run`, `coral_delete_alert`) also set
+   `destructiveHint=True`. `ufs-runner-mcp` also submits and cancels real
+   Slurm jobs, which is why SECURITY.md calls it out (alongside
+   `hpc-system-mcp`) for extra security scrutiny.
 2. **`response_format` as `Literal[...]`**: every data tool takes a
    `response_format` parameter typed as a `Literal` of exactly the values it
    branches on. Across the repo this covers `markdown` (the default,
