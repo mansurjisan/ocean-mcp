@@ -1,0 +1,183 @@
+{
+  "context": "SFMR radial wind profiles for Ian (2022)",
+  "storm": "Ian",
+  "year": 2022,
+  "basin": "AL",
+  "storm_id": "AL092022",
+  "track_points": 89,
+  "bin_size_km": 10.0,
+  "max_radius_km": 200.0,
+  "missions": [
+    {
+      "filename": "NOAA_SFMR20220928H1.nc",
+      "date": "20220928",
+      "aircraft": "NOAA N42RF (P-3)",
+      "n_obs": 23808,
+      "profile": [
+        {
+          "radius_min_km": 0.0,
+          "radius_max_km": 10.0,
+          "mean_wind_ms": 12.4,
+          "max_wind_ms": 28.3,
+          "min_wind_ms": 7.3,
+          "samples": 385
+        },
+        {
+          "radius_min_km": 10.0,
+          "radius_max_km": 20.0,
+          "mean_wind_ms": 21.5,
+          "max_wind_ms": 50.5,
+          "min_wind_ms": 9.6,
+          "samples": 301
+        },
+        {
+          "radius_min_km": 20.0,
+          "radius_max_km": 30.0,
+          "mean_wind_ms": 46.6,
+          "max_wind_ms": 64.5,
+          "min_wind_ms": 17.7,
+          "samples": 186
+        },
+        {
+          "radius_min_km": 30.0,
+          "radius_max_km": 40.0,
+          "mean_wind_ms": 57.7,
+          "max_wind_ms": 67.1,
+          "min_wind_ms": 42.2,
+          "samples": 209
+        },
+        {
+          "radius_min_km": 40.0,
+          "radius_max_km": 50.0,
+          "mean_wind_ms": 50.4,
+          "max_wind_ms": 66.3,
+          "min_wind_ms": 35.1,
+          "samples": 201
+        },
+        {
+          "radius_min_km": 50.0,
+          "radius_max_km": 60.0,
+          "mean_wind_ms": 41.7,
+          "max_wind_ms": 54.6,
+          "min_wind_ms": 32.4,
+          "samples": 196
+        },
+        {
+          "radius_min_km": 60.0,
+          "radius_max_km": 70.0,
+          "mean_wind_ms": 37.7,
+          "max_wind_ms": 44.3,
+          "min_wind_ms": 31.1,
+          "samples": 153
+        },
+        {
+          "radius_min_km": 70.0,
+          "radius_max_km": 80.0,
+          "mean_wind_ms": 31.4,
+          "max_wind_ms": 39.3,
+          "min_wind_ms": 27.6,
+          "samples": 445
+        },
+        {
+          "radius_min_km": 80.0,
+          "radius_max_km": 90.0,
+          "mean_wind_ms": 31.6,
+          "max_wind_ms": 35.2,
+          "min_wind_ms": 25.3,
+          "samples": 265
+        },
+        {
+          "radius_min_km": 90.0,
+          "radius_max_km": 100.0,
+          "mean_wind_ms": 28.4,
+          "max_wind_ms": 34.7,
+          "min_wind_ms": 23.8,
+          "samples": 396
+        },
+        {
+          "radius_min_km": 100.0,
+          "radius_max_km": 110.0,
+          "mean_wind_ms": 27.6,
+          "max_wind_ms": 34.1,
+          "min_wind_ms": 23.1,
+          "samples": 401
+        },
+        {
+          "radius_min_km": 110.0,
+          "radius_max_km": 120.0,
+          "mean_wind_ms": 24.7,
+          "max_wind_ms": 30.7,
+          "min_wind_ms": 19.6,
+          "samples": 463
+        },
+        {
+          "radius_min_km": 120.0,
+          "radius_max_km": 130.0,
+          "mean_wind_ms": 23.7,
+          "max_wind_ms": 28.7,
+          "min_wind_ms": 17.9,
+          "samples": 401
+        },
+        {
+          "radius_min_km": 130.0,
+          "radius_max_km": 140.0,
+          "mean_wind_ms": 21.7,
+          "max_wind_ms": 27.1,
+          "min_wind_ms": 16.0,
+          "samples": 382
+        },
+        {
+          "radius_min_km": 140.0,
+          "radius_max_km": 150.0,
+          "mean_wind_ms": 21.1,
+          "max_wind_ms": 25.2,
+          "min_wind_ms": 15.5,
+          "samples": 778
+        },
+        {
+          "radius_min_km": 150.0,
+          "radius_max_km": 160.0,
+          "mean_wind_ms": 21.2,
+          "max_wind_ms": 25.8,
+          "min_wind_ms": 17.9,
+          "samples": 688
+        },
+        {
+          "radius_min_km": 160.0,
+          "radius_max_km": 170.0,
+          "mean_wind_ms": 21.3,
+          "max_wind_ms": 24.2,
+          "min_wind_ms": 16.6,
+          "samples": 477
+        },
+        {
+          "radius_min_km": 170.0,
+          "radius_max_km": 180.0,
+          "mean_wind_ms": 21.0,
+          "max_wind_ms": 24.1,
+          "min_wind_ms": 15.7,
+          "samples": 596
+        },
+        {
+          "radius_min_km": 180.0,
+          "radius_max_km": 190.0,
+          "mean_wind_ms": 21.6,
+          "max_wind_ms": 23.9,
+          "min_wind_ms": 16.2,
+          "samples": 612
+        },
+        {
+          "radius_min_km": 190.0,
+          "radius_max_km": 200.0,
+          "mean_wind_ms": 20.9,
+          "max_wind_ms": 23.8,
+          "min_wind_ms": 17.6,
+          "samples": 449
+        }
+      ],
+      "peak_wind_ms": 67.1,
+      "peak_radius_km": "30-40"
+    }
+  ],
+  "retrieved_at": "2026-07-27T05:37:24+00:00"
+}

@@ -1,0 +1,367 @@
+{
+  "storm_id": "AL092022",
+  "source": "HURDAT2",
+  "track_points": [
+    {
+      "datetime": "20220922 1800 UTC",
+      "lat": 12.3,
+      "lon": -66.3,
+      "max_wind": 30,
+      "min_pressure": 1006,
+      "status": "LO",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20220923 0000 UTC",
+      "lat": 12.9,
+      "lon": -67.2,
+      "max_wind": 30,
+      "min_pressure": 1006,
+      "status": "LO",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20220923 0600 UTC",
+      "lat": 13.7,
+      "lon": -68.1,
+      "max_wind": 30,
+      "min_pressure": 1006,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20220923 1200 UTC",
+      "lat": 14.2,
+      "lon": -69.3,
+      "max_wind": 30,
+      "min_pressure": 1006,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20220923 1800 UTC",
+      "lat": 14.6,
+      "lon": -70.6,
+      "max_wind": 30,
+      "min_pressure": 1006,
+      "status": "TD",
+      "category": "Tropical Depression"
+    },
+    {
+      "datetime": "20220924 0000 UTC",
+      "lat": 14.7,
+      "lon": -71.7,
+      "max_wind": 35,
+      "min_pressure": 1005,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220924 0600 UTC",
+      "lat": 14.7,
+      "lon": -72.9,
+      "max_wind": 35,
+      "min_pressure": 1005,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220924 1200 UTC",
+      "lat": 14.5,
+      "lon": -74.4,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220924 1800 UTC",
+      "lat": 14.4,
+      "lon": -75.8,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220925 0000 UTC",
+      "lat": 14.6,
+      "lon": -77.2,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220925 0600 UTC",
+      "lat": 14.6,
+      "lon": -78.3,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220925 1200 UTC",
+      "lat": 15.0,
+      "lon": -79.4,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220925 1800 UTC",
+      "lat": 15.8,
+      "lon": -80.1,
+      "max_wind": 40,
+      "min_pressure": 1003,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220926 0000 UTC",
+      "lat": 16.8,
+      "lon": -80.9,
+      "max_wind": 50,
+      "min_pressure": 991,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220926 0600 UTC",
+      "lat": 17.7,
+      "lon": -81.7,
+      "max_wind": 65,
+      "min_pressure": 985,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220926 1200 UTC",
+      "lat": 18.7,
+      "lon": -82.4,
+      "max_wind": 70,
+      "min_pressure": 981,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220926 1800 UTC",
+      "lat": 19.7,
+      "lon": -83.0,
+      "max_wind": 80,
+      "min_pressure": 976,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220927 0000 UTC",
+      "lat": 20.8,
+      "lon": -83.3,
+      "max_wind": 85,
+      "min_pressure": 965,
+      "status": "HU",
+      "category": "Category 2"
+    },
+    {
+      "datetime": "20220927 0600 UTC",
+      "lat": 21.8,
+      "lon": -83.6,
+      "max_wind": 100,
+      "min_pressure": 956,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220927 0830 UTC",
+      "lat": 22.2,
+      "lon": -83.7,
+      "max_wind": 110,
+      "min_pressure": 947,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220927 1200 UTC",
+      "lat": 22.6,
+      "lon": -83.6,
+      "max_wind": 100,
+      "min_pressure": 963,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220927 1800 UTC",
+      "lat": 23.5,
+      "lon": -83.3,
+      "max_wind": 105,
+      "min_pressure": 951,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220928 0000 UTC",
+      "lat": 24.4,
+      "lon": -83.0,
+      "max_wind": 105,
+      "min_pressure": 947,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220928 0200 UTC",
+      "lat": 24.6,
+      "lon": -82.9,
+      "max_wind": 110,
+      "min_pressure": 952,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220928 0600 UTC",
+      "lat": 25.2,
+      "lon": -82.9,
+      "max_wind": 120,
+      "min_pressure": 945,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20220928 1200 UTC",
+      "lat": 26.0,
+      "lon": -82.7,
+      "max_wind": 140,
+      "min_pressure": 937,
+      "status": "HU",
+      "category": "Category 5"
+    },
+    {
+      "datetime": "20220928 1800 UTC",
+      "lat": 26.6,
+      "lon": -82.4,
+      "max_wind": 135,
+      "min_pressure": 938,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20220928 1905 UTC",
+      "lat": 26.7,
+      "lon": -82.2,
+      "max_wind": 130,
+      "min_pressure": 941,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20220928 2035 UTC",
+      "lat": 26.8,
+      "lon": -82.0,
+      "max_wind": 125,
+      "min_pressure": 945,
+      "status": "HU",
+      "category": "Category 4"
+    },
+    {
+      "datetime": "20220929 0000 UTC",
+      "lat": 27.2,
+      "lon": -81.7,
+      "max_wind": 100,
+      "min_pressure": 960,
+      "status": "HU",
+      "category": "Category 3"
+    },
+    {
+      "datetime": "20220929 0600 UTC",
+      "lat": 27.7,
+      "lon": -81.1,
+      "max_wind": 65,
+      "min_pressure": 985,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220929 1200 UTC",
+      "lat": 28.4,
+      "lon": -80.6,
+      "max_wind": 60,
+      "min_pressure": 987,
+      "status": "TS",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20220929 1800 UTC",
+      "lat": 28.9,
+      "lon": -80.1,
+      "max_wind": 65,
+      "min_pressure": 986,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220930 0000 UTC",
+      "lat": 29.6,
+      "lon": -79.4,
+      "max_wind": 70,
+      "min_pressure": 986,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220930 0600 UTC",
+      "lat": 30.3,
+      "lon": -79.1,
+      "max_wind": 75,
+      "min_pressure": 984,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220930 1200 UTC",
+      "lat": 31.5,
+      "lon": -79.0,
+      "max_wind": 75,
+      "min_pressure": 980,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220930 1800 UTC",
+      "lat": 33.3,
+      "lon": -79.2,
+      "max_wind": 70,
+      "min_pressure": 978,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20220930 1805 UTC",
+      "lat": 33.3,
+      "lon": -79.2,
+      "max_wind": 70,
+      "min_pressure": 978,
+      "status": "HU",
+      "category": "Category 1"
+    },
+    {
+      "datetime": "20221001 0000 UTC",
+      "lat": 34.4,
+      "lon": -79.3,
+      "max_wind": 50,
+      "min_pressure": 990,
+      "status": "EX",
+      "category": "Tropical Storm"
+    },
+    {
+      "datetime": "20221001 0600 UTC",
+      "lat": 35.3,
+      "lon": -79.7,
+      "max_wind": 30,
+      "min_pressure": 999,
+      "status": "EX",
+      "category": "Tropical Depression"
+    }
+  ],
+  "count": 40
+}
