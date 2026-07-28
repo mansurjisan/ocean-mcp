@@ -46,7 +46,7 @@ jobs:
       # to keep per-PR job count unchanged. See ci.yml comment on `test`.
       python-versions: ${{ steps.pyversions.outputs.versions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -102,7 +102,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       # Pinned: an unpinned ruff reddened main when 0.16.0 started formatting
       # markdown code fences. Keep in sync with servers/recon-mcp/pyproject.toml.
@@ -149,7 +149,7 @@ jobs:
             echo "run=${{ needs.detect-changes.outputs[matrix.server] }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.should-run.outputs.run == 'true'
 
       - uses: astral-sh/setup-uv@v7
