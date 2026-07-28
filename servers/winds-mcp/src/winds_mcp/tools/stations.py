@@ -1,12 +1,14 @@
 """Station discovery tools for NWS surface wind observations."""
 
 from typing import Literal
+
 from mcp.server.fastmcp import Context
 from mcp.types import ToolAnnotations
 
-from ..client import WindsClient
+from ..client import WindsClient, handle_winds_error
 from ..models import US_STATES
 from ..server import mcp
+from ..utils import wrap_json
 
 
 def _get_client(ctx: Context) -> WindsClient:
@@ -26,7 +28,7 @@ def _format_nws_station(feature: dict) -> str:
     if lat is not None and lon is not None:
         ns = "N" if lat >= 0 else "S"
         ew = "W" if lon < 0 else "E"
-        parts.append(f"({abs(lat):.4f}\u00b0{ns}, {abs(lon):.4f}\u00b0{ew})")
+        parts.append(f"({abs(lat):.4f}°{ns}, {abs(lon):.4f}°{ew})")
     if elev is not None:
         parts.append(f"Elev: {elev:.0f}m")
 
@@ -54,7 +56,10 @@ async def winds_list_stations(
 
     Args:
         state: US state 2-letter code (e.g., 'NY', 'FL', 'CA').
-        limit: Maximum number of stations to return (default 50).
+        limit: Maximum number of stations to return (default 50). Also caps
+            the JSON response — the NWS API itself never returns more than
+            this many, so JSON truncation only fires if `limit` is raised
+            beyond what a single request should return.
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
@@ -66,9 +71,14 @@ async def winds_list_stations(
         data = await client.get_stations_by_state(state_upper, limit=limit)
 
         if response_format == "json":
-            import json
-
-            return json.dumps(data, indent=2)
+            return wrap_json(
+                data,
+                list_key="features",
+                max_records=limit,
+                keep="head",
+                recent=False,
+                state=state_upper,
+            )
 
         features = data.get("features", [])
 
@@ -87,7 +97,7 @@ async def winds_list_stations(
 
         return "\n".join(lines)
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -114,9 +124,7 @@ async def winds_get_station(
         data = await client.get_station(station_id)
 
         if response_format == "json":
-            import json
-
-            return json.dumps(data, indent=2)
+            return wrap_json(data, list_key=None, station_id=station_id.upper())
 
         props = data.get("properties", {})
         coords = data.get("geometry", {}).get("coordinates", [None, None])
@@ -141,7 +149,7 @@ async def winds_get_station(
 
         return "\n".join(lines)
     except Exception as e:
-        return _handle_error(e)
+        return handle_winds_error(e)
 
 
 @mcp.tool(
@@ -164,25 +172,36 @@ async def winds_find_nearest_stations(
     Args:
         latitude: Latitude in decimal degrees (e.g., 40.7).
         longitude: Longitude in decimal degrees (e.g., -74.0).
-        limit: Maximum number of stations to return (default 5).
+        limit: Maximum number of stations to return (default 5). NWS returns
+            all stations near the point untrimmed; this caps both the
+            markdown list and the JSON response (which flags truncation if
+            more were available).
         response_format: Output format — 'markdown' (default) or 'json'.
     """
     try:
         client = _get_client(ctx)
-        data = await client.get_nearest_stations(latitude, longitude, limit=limit)
+        data = await client.get_nearest_stations(latitude, longitude)
 
         if response_format == "json":
-            import json
+            return wrap_json(
+                data,
+                list_key="features",
+                max_records=limit,
+                keep="head",
+                recent=False,
+                latitude=latitude,
+                longitude=longitude,
+            )
 
-            return json.dumps(data, indent=2)
-
-        features = data.get("features", [])
+        all_features = data.get("features", [])
+        total = len(all_features)
+        features = all_features[:limit]
 
         lines = [f"## Nearest Stations to ({latitude:.4f}, {longitude:.4f})"]
         lines.append(f"**Found**: {len(features)} stations")
         lines.append("")
 
-        for i, f in enumerate(features, 1):
+        for f in features:
             lines.append(f"- {_format_nws_station(f)}")
 
         if not features:
@@ -191,27 +210,12 @@ async def winds_find_nearest_stations(
             )
 
         lines.append("")
+        if total > limit:
+            lines.append(
+                f"*Showing nearest {limit} of {total} stations found. Raise `limit` to see more.*"
+            )
         lines.append("*Stations ordered by proximity. Data from NWS Weather.gov API.*")
 
         return "\n".join(lines)
     except Exception as e:
-        return _handle_error(e)
-
-
-def _handle_error(e: Exception) -> str:
-    """Format an exception into a user-friendly error message."""
-    import httpx
-
-    if isinstance(e, httpx.HTTPStatusError):
-        status = e.response.status_code
-        if status == 404:
-            return "Error: Station not found. Verify the station ID (ICAO format, e.g., KJFK) using winds_list_stations or winds_find_nearest_stations."
-        return f"HTTP Error {status}: {e.response.reason_phrase}. The NWS API may be temporarily unavailable."
-
-    if isinstance(e, httpx.TimeoutException):
-        return "Error: Request timed out. The NWS API may be experiencing high load. Please try again."
-
-    if isinstance(e, WindsClient):
-        return f"API Error: {e}"
-
-    return f"Unexpected error: {type(e).__name__}: {e}"
+        return handle_winds_error(e)
