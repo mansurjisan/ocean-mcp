@@ -35,13 +35,28 @@ _STATION_RE = re.compile(r"^[a-zA-Z0-9]+$")
 #                                       there is no "v" key on these records)
 #   currents_predictions            -> {"current_predictions":
 #                                        {"cp": [{"Velocity_Major": ...}]}}
-# Products outside this map (e.g. "datums", "daily_mean") aren't a single
-# comparable time series in the same way and are rejected at creation time
-# rather than silently failing to parse forever.
+#   one_minute_water_level / ofs_water_level -> {"data": [{"v": ...}, ...]}
+#                                       (same shape as water_level, verified
+#                                       live)
+#
+# check_alert always queries with "date": "latest" (see below), which rules
+# out CO-OPS's archived/verified-data-only products regardless of their
+# response shape: querying them with date=latest returns CO-OPS's HTTP-200
+# error envelope ("No data was found...") at every station, every time, so
+# an alert on one of them would always fail the create-time probe (or, pre
+# this fix pass, silently never fire). Confirmed live for both
+# "hourly_height" and "high_low" (across multiple stations) and for
+# "daily_mean" (across multiple Great Lakes stations, and every date within
+# roughly the last month — it only has data for older, fully-verified date
+# ranges). All three are therefore deliberately left out of this map (as is
+# "datums", which also isn't a single comparable time series in the same
+# way). "air_gap" was
+# checked the same way and does NOT have this problem — it returns live data
+# via date=latest at any station that actually carries an air-gap sensor
+# (e.g. station 8517986); it only errors at stations without the sensor,
+# which is the correct, intended validation behavior.
 _PRODUCT_VALUE_PATH: dict[str, tuple[tuple[str, ...], str]] = {
     "water_level": (("data",), "v"),
-    "hourly_height": (("data",), "v"),
-    "high_low": (("data",), "v"),
     "predictions": (("predictions",), "v"),
     "air_gap": (("data",), "v"),
     "air_pressure": (("data",), "v"),
@@ -54,6 +69,8 @@ _PRODUCT_VALUE_PATH: dict[str, tuple[tuple[str, ...], str]] = {
     "wind": (("data",), "s"),
     "currents": (("data",), "s"),
     "currents_predictions": (("current_predictions", "cp"), "Velocity_Major"),
+    "one_minute_water_level": (("data",), "v"),
+    "ofs_water_level": (("data",), "v"),
 }
 
 VALID_PRODUCTS = frozenset(_PRODUCT_VALUE_PATH)
@@ -182,10 +199,13 @@ class AlertManager:
             ``status``, and ``message``. ``status`` is one of:
 
             - ``"ok"``: a value was fetched and compared successfully.
-            - ``"coops_error"``: CO-OPS returned an HTTP-200 error envelope
-              (e.g. a bad station_id, or a product this station doesn't
-              support) — the alert's configuration likely needs fixing.
-            - ``"http_error"``: a transport failure or non-2xx HTTP status.
+            - ``"coops_error"``: CO-OPS returned its ``{"error": {...}}``
+              envelope, on either HTTP 200 (e.g. a product this station
+              doesn't currently support) or HTTP 400 (e.g. a bad
+              station_id, or a product/station combination CO-OPS rejects
+              outright) — the alert's configuration likely needs fixing.
+            - ``"http_error"``: a transport failure, or a non-2xx HTTP
+              status whose body wasn't CO-OPS's error-envelope shape.
             - ``"no_data"``: the request succeeded but returned no records.
             - ``"parse_error"``: a record was present but malformed.
 

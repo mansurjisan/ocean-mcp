@@ -60,14 +60,29 @@ class RetryTransport(httpx.AsyncHTTPTransport):
 
 
 class CoopsAPIError(Exception):
-    """Raised when CO-OPS's datagetter responds HTTP 200 with an error envelope.
+    """Raised when CO-OPS's datagetter responds with an error envelope.
 
     Verified live against
-    https://api.tidesandcurrents.noaa.gov/api/prod/datagetter: a bad
-    ``station`` or an unsupported product/station combination returns HTTP
-    200 with body ``{"error": {"message": "..."}}`` — ``raise_for_status()``
-    never catches this (200 is not an error status), so the parsed body must
-    be checked explicitly.
+    https://api.tidesandcurrents.noaa.gov/api/prod/datagetter: CO-OPS uses
+    the SAME ``{"error": {"message": "..."}}`` body shape on TWO different
+    status codes depending on what's wrong:
+
+    - HTTP 200, when the request is structurally valid but the product
+      genuinely isn't offered at that station right now (e.g.
+      ``product=air_gap``/``salinity``/``conductivity`` at a station
+      lacking that sensor) — message: "No data was found. This product may
+      not be offered at this station...".
+    - HTTP 400, when the request itself is malformed or invalid (a bad
+      ``station`` id, a datum the station doesn't support, or a
+      product/station combination CO-OPS rejects outright rather than just
+      reporting "not available") — e.g. "Wrong Station ID: Please submit a
+      valid station ID" or "There is no MLLW for the station: 9999999".
+
+    Because both cases share the same body shape, the body must be parsed
+    and checked for the ``"error"`` key independent of status code —
+    checking only after ``raise_for_status()`` (which only 200 survives)
+    would silently swallow every HTTP 400 case into a generic
+    ``httpx.HTTPStatusError``, discarding the real NOAA diagnostic text.
     """
 
 
@@ -99,18 +114,37 @@ class AlertHTTPClient:
 
         Automatically sets ``format=json`` and ``application``.
 
+        The body is parsed and checked for CO-OPS's ``{"error": {...}}``
+        envelope BEFORE ``raise_for_status()`` runs, since CO-OPS puts that
+        same envelope on both HTTP 200 and HTTP 400 responses (see
+        ``CoopsAPIError``) — checking after ``raise_for_status()`` would
+        never see the body on the 400 path. ``raise_for_status()`` only
+        runs once the body has been ruled out as a CO-OPS error envelope, so
+        a non-2xx response with some other body shape (e.g. an upstream
+        gateway error page) still raises the standard
+        ``httpx.HTTPStatusError``.
+
         Raises:
-            CoopsAPIError: If the response body carries an ``"error"`` key.
-            httpx.HTTPError: On transport failures or non-2xx status codes.
+            CoopsAPIError: If the response body (any status code) carries
+                an ``"error"`` key.
+            httpx.HTTPError: On transport failures, or a non-2xx status
+                whose body isn't the CO-OPS error-envelope shape.
         """
         query = {**params, "format": "json", "application": APPLICATION_NAME}
         client = await self._get_client()
         response = await client.get(COOPS_API_URL, params=query)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
+
+        try:
+            data = response.json()
+        except ValueError:
+            response.raise_for_status()
+            raise
+
+        if isinstance(data, dict) and "error" in data:
             message = data["error"].get("message", "Unknown CO-OPS API error")
             raise CoopsAPIError(message.strip())
+
+        response.raise_for_status()
         return data
 
     async def close(self) -> None:

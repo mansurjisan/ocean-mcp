@@ -9,7 +9,12 @@ from alert_mcp.alert_manager import (
     AlertError,
     AlertManager,
 )
-from alert_mcp.client import COOPS_API_URL, AlertHTTPClient, RetryTransport
+from alert_mcp.client import (
+    COOPS_API_URL,
+    AlertHTTPClient,
+    CoopsAPIError,
+    RetryTransport,
+)
 from alert_mcp.tools.alerts import (
     coral_check_alerts,
     coral_create_alert,
@@ -91,6 +96,89 @@ class TestCreateAlert:
         assert alert["product"] == "currents"
 
 
+class TestProductAllowlistRegressionFixes:
+    """Regression coverage for the product allowlist itself.
+
+    'one_minute_water_level' and 'ofs_water_level' worked fine before this
+    product allowlist existed and are real, live CO-OPS products (verified
+    live: both return a normal {"data": [{"v": ...}]} shape via
+    date=latest, same as water_level) — they belong back in the allowlist.
+
+    'hourly_height' and 'high_low' are archived/verified-data-only products:
+    verified live, querying either with date=latest returns CO-OPS's error
+    envelope at every station, always — check_alert hardcodes date=latest,
+    so an alert on either product could never pass the create-time probe.
+    They're correctly left out of the allowlist.
+
+    'daily_mean' is also a real CO-OPS product, but live verification shows
+    it has the SAME date=latest problem as hourly_height/high_low: it only
+    returns data for date ranges roughly a month or more in the past, and
+    returns CO-OPS's error envelope for date=latest/today/recent or any
+    date range within the last ~3-4 weeks, at every Great Lakes station
+    tried. Restoring it (as a literal reading of "previously worked" might
+    suggest) would just reintroduce the same advertise-but-unreachable
+    problem being fixed for hourly_height/high_low, so it is deliberately
+    NOT restored.
+    """
+
+    def test_one_minute_water_level_accepted(self, manager: AlertManager):
+        alert = manager.create_alert(
+            station_id="8518750",
+            product="one_minute_water_level",
+            operator=">",
+            threshold=1.0,
+            interval_seconds=300,
+        )
+        assert alert["product"] == "one_minute_water_level"
+
+    def test_ofs_water_level_accepted(self, manager: AlertManager):
+        alert = manager.create_alert(
+            station_id="8518750",
+            product="ofs_water_level",
+            operator=">",
+            threshold=1.0,
+            interval_seconds=300,
+        )
+        assert alert["product"] == "ofs_water_level"
+
+    def test_hourly_height_rejected(self, manager: AlertManager):
+        """Structurally unreachable given check_alert's hardcoded
+        date=latest (verified live); not offered as a product."""
+        with pytest.raises(AlertError, match="Invalid product"):
+            manager.create_alert(
+                station_id="8518750",
+                product="hourly_height",
+                operator=">",
+                threshold=1.0,
+                interval_seconds=300,
+            )
+
+    def test_high_low_rejected(self, manager: AlertManager):
+        """Structurally unreachable given check_alert's hardcoded
+        date=latest (verified live); not offered as a product."""
+        with pytest.raises(AlertError, match="Invalid product"):
+            manager.create_alert(
+                station_id="8518750",
+                product="high_low",
+                operator=">",
+                threshold=1.0,
+                interval_seconds=300,
+            )
+
+    def test_daily_mean_rejected(self, manager: AlertManager):
+        """Not restored despite being a real CO-OPS product: live
+        verification shows it has the same date=latest unreachability
+        problem as hourly_height/high_low (see class docstring)."""
+        with pytest.raises(AlertError, match="Invalid product"):
+            manager.create_alert(
+                station_id="9063020",
+                product="daily_mean",
+                operator=">",
+                threshold=1.0,
+                interval_seconds=300,
+            )
+
+
 class TestListAlerts:
     def test_list_alerts_empty(self, manager: AlertManager):
         assert manager.list_alerts() == []
@@ -132,12 +220,22 @@ class TestPauseResume:
 #
 # Shapes below are copied from live requests against
 # https://api.tidesandcurrents.noaa.gov/api/prod/datagetter (verified
-# 2026-07-27), not guessed:
+# 2026-07-28), not guessed:
 #   water_level   -> {"data": [{"v": ..., "s": ..., "f": ..., "q": ...}]}
 #   predictions   -> {"predictions": [{"t": ..., "v": ...}]}  (no "data" key)
 #   currents      -> {"data": [{"t": ..., "s": ..., "d": ..., "b": ...}]}
 #                    (speed is "s"; there is no "v" key on currents records)
-#   error (HTTP 200) -> {"error": {"message": "..."}}
+#   one_minute_water_level / ofs_water_level ->
+#       {"metadata": {...}, "data": [{"t": ..., "v": ...}]}
+#   error, product genuinely not offered at this station right now
+#     (e.g. product=air_gap/salinity/conductivity at a station lacking that
+#     sensor) -> HTTP 200, {"error": {"message": "No data was found. This
+#     product may not be offered at this station..."}}
+#   error, malformed/invalid request (bad station id, unsupported datum, or
+#     a product/station combo CO-OPS rejects outright rather than reports
+#     "not available") -> HTTP 400, SAME {"error": {"message": "..."}} body
+#     shape, e.g. "Wrong Station ID: Please submit a valid station ID" or
+#     "There is no MLLW for the station: 9999999".
 # ---------------------------------------------------------------------------
 
 
@@ -170,7 +268,11 @@ def _make_currents_response(speed: str) -> dict:
 
 
 def _make_error_response(message: str) -> dict:
-    """Build a CO-OPS error envelope — returned with HTTP status 200."""
+    """Build a CO-OPS error envelope.
+
+    CO-OPS returns this same body shape on both HTTP 200 (product not
+    currently offered at this station) and HTTP 400 (malformed/invalid
+    request) — the caller picks the status code to wrap it in."""
     return {"error": {"message": message}}
 
 
@@ -350,19 +452,86 @@ class TestCurrentsProduct:
         assert result["triggered"] is True
 
 
-class TestCoopsErrorEnvelope:
-    """Regression test: CO-OPS returns HTTP 200 with an {"error": {...}}
-    body for a bad station_id or an unsupported product/station combo.
-    raise_for_status() never catches this; it must be surfaced, not
-    swallowed into a generic 'no data' message forever."""
+class TestOneMinuteAndOfsWaterLevelProducts:
+    """Regression test: 'one_minute_water_level' and 'ofs_water_level' were
+    dropped from the product allowlist by mistake even though both worked
+    fine before the allowlist existed. Verified live: both return the same
+    {"data": [{"v": ...}]} shape as 'water_level'."""
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_error_envelope_surfaced(self, manager: AlertManager):
-        alert = manager.create_alert("9999999", "water_level", ">", 1.0, 300)
+    async def test_one_minute_water_level_uses_data_v(self, manager: AlertManager):
+        alert = manager.create_alert("8518750", "one_minute_water_level", ">", 1.0, 300)
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(200, json=_make_coops_response("1.318"))
+        )
+
+        result = await manager.check_alert(alert["id"])
+
+        assert result["status"] == "ok"
+        assert result["value"] == 1.318
+        assert result["triggered"] is True
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_ofs_water_level_uses_data_v(self, manager: AlertManager):
+        alert = manager.create_alert("8518750", "ofs_water_level", ">", 1.0, 300)
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(200, json=_make_coops_response("1.264"))
+        )
+
+        result = await manager.check_alert(alert["id"])
+
+        assert result["status"] == "ok"
+        assert result["value"] == 1.264
+        assert result["triggered"] is True
+
+
+class TestCoopsErrorEnvelope:
+    """Regression test: CO-OPS returns an {"error": {...}} body for a bad
+    station_id or an unsupported product/station combo, on either HTTP 200
+    or HTTP 400 depending on which — a plain raise_for_status()-then-check
+    approach only ever sees the 200 case. It must be surfaced (with the
+    real NOAA message), not swallowed into a generic message forever."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_error_envelope_surfaced_on_http_200(self, manager: AlertManager):
+        """A structurally valid request for a product this station doesn't
+        currently offer is CO-OPS's HTTP 200 error-envelope case (verified
+        live, e.g. product=salinity/conductivity/air_gap at a station
+        lacking that sensor)."""
+        alert = manager.create_alert("8518750", "salinity", ">", 1.0, 300)
         respx.get(COOPS_API_URL).mock(
             return_value=httpx.Response(
                 200,
+                json=_make_error_response(
+                    "No data was found. This product may not be offered "
+                    "at this station at the requested time."
+                ),
+            )
+        )
+
+        result = await manager.check_alert(alert["id"])
+
+        assert result["status"] == "coops_error"
+        assert result["value"] is None
+        assert result["triggered"] is False
+        assert "No data was found" in result["message"]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_error_envelope_surfaced_on_http_400(self, manager: AlertManager):
+        """A bad station_id is CO-OPS's HTTP 400 error-envelope case
+        (verified live against a nonexistent station: 9999999 with
+        product=water_level/datum=MLLW returns HTTP 400 with this exact
+        message). This is the case a plain raise_for_status()-first
+        implementation would misreport as a generic 'http_error' and lose
+        the real NOAA message entirely."""
+        alert = manager.create_alert("9999999", "water_level", ">", 1.0, 300)
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(
+                400,
                 json=_make_error_response("There is no MLLW for the station: 9999999"),
             )
         )
@@ -379,10 +548,13 @@ class TestCoopsErrorEnvelope:
     async def test_error_envelope_wrong_station_for_product(
         self, manager: AlertManager
     ):
+        """Requesting 'currents' at a station id CO-OPS doesn't recognize
+        for that product returns this exact message at HTTP 400 (verified
+        live), not HTTP 200."""
         alert = manager.create_alert("8518750", "currents", ">", 1.0, 300)
         respx.get(COOPS_API_URL).mock(
             return_value=httpx.Response(
-                200,
+                400,
                 json=_make_error_response(
                     "Wrong Station ID: Please submit a valid station ID"
                 ),
@@ -504,6 +676,73 @@ class TestRetryTransportWiring:
         assert data["data"][0]["v"] == "1.0"
 
 
+class TestClientErrorEnvelopeStatusCodes:
+    """Direct unit tests on AlertHTTPClient.fetch() for the core fix: the
+    body must be checked for CO-OPS's {"error": {...}} envelope
+    independent of status code, since CO-OPS puts it on both HTTP 200 and
+    HTTP 400 (verified live against
+    https://api.tidesandcurrents.noaa.gov/api/prod/datagetter)."""
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_fetch_raises_coops_api_error_on_http_200_envelope(self):
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json=_make_error_response(
+                    "No data was found. This product may not be offered "
+                    "at this station at the requested time."
+                ),
+            )
+        )
+        c = AlertHTTPClient(backoff_factor=0)
+        try:
+            with pytest.raises(CoopsAPIError, match="No data was found"):
+                await c.fetch({"station": "8518750", "product": "air_gap"})
+        finally:
+            await c.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_fetch_raises_coops_api_error_on_http_400_envelope(self):
+        """The regression this fix addresses: a plain
+        raise_for_status()-then-check-body implementation would raise a
+        generic httpx.HTTPStatusError here instead, discarding this real
+        NOAA message. Verified live: a bad station id returns exactly this
+        body at HTTP 400, not 200."""
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(
+                400,
+                json=_make_error_response(
+                    "Wrong Station ID: Please submit a valid station ID"
+                ),
+            )
+        )
+        c = AlertHTTPClient(backoff_factor=0)
+        try:
+            with pytest.raises(CoopsAPIError, match="Wrong Station ID"):
+                await c.fetch({"station": "bad", "product": "water_level"})
+        finally:
+            await c.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_fetch_raises_http_status_error_on_non_envelope_failure(self):
+        """A non-2xx response whose body isn't the CO-OPS error-envelope
+        shape (e.g. an upstream gateway error page) still surfaces as the
+        standard httpx.HTTPStatusError rather than being misreported as a
+        CoopsAPIError."""
+        respx.get(COOPS_API_URL).mock(
+            return_value=httpx.Response(502, text="<html>Bad Gateway</html>")
+        )
+        c = AlertHTTPClient(backoff_factor=0, max_retries=0)
+        try:
+            with pytest.raises(httpx.HTTPStatusError):
+                await c.fetch({"station": "8518750", "product": "water_level"})
+        finally:
+            await c.close()
+
+
 # ---------------------------------------------------------------------------
 # MCP tool integration tests (via mock context)
 # ---------------------------------------------------------------------------
@@ -551,11 +790,12 @@ class TestToolCreateAlert:
     @pytest.mark.asyncio
     @respx.mock
     async def test_tool_create_alert_rejects_coops_error(self, mock_ctx, manager):
-        """A station/product combination CO-OPS itself rejects is caught by
-        the immediate live probe and never left dangling as a live alert."""
+        """A station/product combination CO-OPS itself rejects outright
+        (HTTP 400, verified live) is caught by the immediate live probe and
+        never left dangling as a live alert."""
         respx.get(COOPS_API_URL).mock(
             return_value=httpx.Response(
-                200,
+                400,
                 json=_make_error_response(
                     "Wrong Station ID: Please submit a valid station ID"
                 ),
@@ -572,6 +812,24 @@ class TestToolCreateAlert:
 
         assert "Error" in result
         assert "Wrong Station ID" in result
+        assert manager.list_alerts() == []
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_tool_create_alert_rejects_http_error(self, mock_ctx, manager):
+        """A persistent transport failure during the create-time probe also
+        blocks creation, not just a coops_error status — the probe gate
+        rejects on any non-'ok' result."""
+        respx.get(COOPS_API_URL).mock(side_effect=httpx.ConnectError("refused"))
+
+        result = await coral_create_alert(
+            mock_ctx,
+            station_id="8518750",
+            operator=">",
+            threshold=1.5,
+        )
+
+        assert "Error" in result
         assert manager.list_alerts() == []
 
 

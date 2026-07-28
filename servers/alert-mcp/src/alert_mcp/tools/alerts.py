@@ -40,10 +40,10 @@ async def coral_create_alert(
         operator: Comparison operator — one of >, <, >=, <=.
         threshold: Numeric threshold value (metric units, MLLW datum).
         product: CO-OPS data product to monitor (default: 'water_level').
-            One of: water_level, hourly_height, high_low, predictions,
-            air_gap, air_pressure, air_temperature, water_temperature,
-            humidity, conductivity, salinity, visibility, wind, currents,
-            currents_predictions.
+            One of: water_level, predictions, air_gap, air_pressure,
+            air_temperature, water_temperature, humidity, conductivity,
+            salinity, visibility, wind, currents, currents_predictions,
+            one_minute_water_level, ofs_water_level.
         interval_minutes: Check interval in minutes (default: 5).
     """
     manager = _get_manager(ctx)
@@ -58,11 +58,12 @@ async def coral_create_alert(
     except AlertError as e:
         return f"**Error:** {e}"
 
-    # Probe once immediately so a bad station/product combination is caught
+    # Probe once immediately so a bad station/product combination (or any
+    # other non-"ok" outcome, e.g. a persistent transport failure) is caught
     # up front rather than discovered later by silent, endlessly-repeating
     # polling.
     probe = await manager.check_alert(alert["id"])
-    if probe["status"] == "coops_error":
+    if probe["status"] != "ok":
         manager.delete_alert(alert["id"])
         return f"**Error:** {probe['message']}"
 
