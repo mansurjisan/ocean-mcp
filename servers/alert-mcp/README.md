@@ -10,6 +10,7 @@ MCP server for CORAL threshold alerting. Monitors NOAA CO-OPS stations and trigg
 | `coral_list_alerts` | List all active and paused alerts |
 | `coral_check_alerts` | Manually trigger a check cycle on all active alerts |
 | `coral_pause_alert` | Pause an alert |
+| `coral_resume_alert` | Resume a paused alert |
 | `coral_delete_alert` | Delete an alert |
 | `coral_get_alert_history` | Show trigger history for an alert |
 

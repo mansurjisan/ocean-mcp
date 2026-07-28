@@ -9,11 +9,97 @@ from typing import Any
 
 import httpx
 
-COOPS_API_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+from .client import AlertHTTPClient, CoopsAPIError
 
 VALID_OPERATORS = {">", "<", ">=", "<="}
 
+# Cap on how many trigger events an alert retains. This process holds alert
+# state in memory for its entire lifetime with no eviction otherwise, so an
+# alert left running for weeks/months would otherwise grow its history
+# unbounded; 500 keeps a generous recent window without letting a
+# long-running server's memory grow without limit.
+MAX_TRIGGER_HISTORY = 500
+
 _STATION_RE = re.compile(r"^[a-zA-Z0-9]+$")
+
+# Per-product location of the record list and the field holding the
+# comparable scalar within a CO-OPS datagetter JSON response. CO-OPS uses a
+# different top-level key and per-record field depending on product — this
+# was verified live against
+# https://api.tidesandcurrents.noaa.gov/api/prod/datagetter and mirrors the
+# same shape resolution coops_mcp.utils.format_json_response performs for
+# the same upstream API:
+#   water_level / most met products -> {"data": [{"v": ...}, ...]}
+#   predictions (tide predictions)  -> {"predictions": [{"v": ...}, ...]}
+#   wind / currents                 -> {"data": [{"s": ...}, ...]} (speed;
+#                                       there is no "v" key on these records)
+#   currents_predictions            -> {"current_predictions":
+#                                        {"cp": [{"Velocity_Major": ...}]}}
+#   one_minute_water_level / ofs_water_level -> {"data": [{"v": ...}, ...]}
+#                                       (same shape as water_level, verified
+#                                       live)
+#
+# check_alert always queries with "date": "latest" (see below), which rules
+# out CO-OPS's archived/verified-data-only products regardless of their
+# response shape: querying them with date=latest returns CO-OPS's HTTP-200
+# error envelope ("No data was found...") at every station, every time, so
+# an alert on one of them would always fail the create-time probe (or, pre
+# this fix pass, silently never fire). Confirmed live for both
+# "hourly_height" and "high_low" (across multiple stations) and for
+# "daily_mean" (across multiple Great Lakes stations, and every date within
+# roughly the last month — it only has data for older, fully-verified date
+# ranges). All three are therefore deliberately left out of this map (as is
+# "datums", which also isn't a single comparable time series in the same
+# way). "air_gap" was
+# checked the same way and does NOT have this problem — it returns live data
+# via date=latest at any station that actually carries an air-gap sensor
+# (e.g. station 8517986); it only errors at stations without the sensor,
+# which is the correct, intended validation behavior.
+_PRODUCT_VALUE_PATH: dict[str, tuple[tuple[str, ...], str]] = {
+    "water_level": (("data",), "v"),
+    "predictions": (("predictions",), "v"),
+    "air_gap": (("data",), "v"),
+    "air_pressure": (("data",), "v"),
+    "air_temperature": (("data",), "v"),
+    "water_temperature": (("data",), "v"),
+    "humidity": (("data",), "v"),
+    "conductivity": (("data",), "v"),
+    "salinity": (("data",), "v"),
+    "visibility": (("data",), "v"),
+    "wind": (("data",), "s"),
+    "currents": (("data",), "s"),
+    "currents_predictions": (("current_predictions", "cp"), "Velocity_Major"),
+    "one_minute_water_level": (("data",), "v"),
+    "ofs_water_level": (("data",), "v"),
+}
+
+VALID_PRODUCTS = frozenset(_PRODUCT_VALUE_PATH)
+
+
+def _get_records(data: dict, product: str) -> list:
+    """Return the record list for ``product`` within a datagetter response."""
+    path, _ = _PRODUCT_VALUE_PATH[product]
+    node: Any = data
+    for key in path:
+        if not isinstance(node, dict):
+            return []
+        node = node.get(key)
+    return node if isinstance(node, list) else []
+
+
+def _extract_value(data: dict, product: str) -> float:
+    """Extract the latest comparable scalar for ``product`` from a response.
+
+    Raises:
+        IndexError: If there are no records at all.
+        KeyError: If the last record is missing the expected field.
+        ValueError: If the field can't be converted to ``float``.
+    """
+    records = _get_records(data, product)
+    if not records:
+        raise IndexError("no records in CO-OPS response")
+    _, value_key = _PRODUCT_VALUE_PATH[product]
+    return float(records[-1][value_key])
 
 
 def _compare(value: float, operator: str, threshold: float) -> bool:
@@ -36,8 +122,13 @@ class AlertError(Exception):
 class AlertManager:
     """Manages in-memory threshold alerts for NOAA CO-OPS stations."""
 
-    def __init__(self) -> None:
+    def __init__(self, client: AlertHTTPClient | None = None) -> None:
         self._alerts: dict[str, dict[str, Any]] = {}
+        self._client = client or AlertHTTPClient()
+
+    async def close(self) -> None:
+        """Close the shared HTTP client. Call once at server shutdown."""
+        await self._client.close()
 
     def create_alert(
         self,
@@ -70,6 +161,11 @@ class AlertManager:
             raise AlertError(
                 f"Invalid station_id '{station_id}'. Must be alphanumeric."
             )
+        if product not in VALID_PRODUCTS:
+            raise AlertError(
+                f"Invalid product '{product}'. Must be one of: "
+                f"{', '.join(sorted(VALID_PRODUCTS))}"
+            )
 
         alert_id = uuid.uuid4().hex[:8]
         now = datetime.now(timezone.utc).isoformat()
@@ -99,7 +195,19 @@ class AlertManager:
         """Check a single alert by fetching the latest value from CO-OPS.
 
         Returns:
-            A result dict with alert_id, value, triggered, and message.
+            A result dict with ``alert_id``, ``value``, ``triggered``,
+            ``status``, and ``message``. ``status`` is one of:
+
+            - ``"ok"``: a value was fetched and compared successfully.
+            - ``"coops_error"``: CO-OPS returned its ``{"error": {...}}``
+              envelope, on either HTTP 200 (e.g. a product this station
+              doesn't currently support) or HTTP 400 (e.g. a bad
+              station_id, or a product/station combination CO-OPS rejects
+              outright) — the alert's configuration likely needs fixing.
+            - ``"http_error"``: a transport failure, or a non-2xx HTTP
+              status whose body wasn't CO-OPS's error-envelope shape.
+            - ``"no_data"``: the request succeeded but returned no records.
+            - ``"parse_error"``: a record was present but malformed.
 
         Raises:
             AlertError: If the alert does not exist.
@@ -110,47 +218,56 @@ class AlertManager:
 
         now = datetime.now(timezone.utc).isoformat()
         alert["last_checked"] = now
+        product = alert["product"]
 
         params = {
             "station": alert["station_id"],
-            "product": alert["product"],
+            "product": product,
             "datum": "MLLW",
             "units": "metric",
             "time_zone": "gmt",
             "date": "latest",
-            "format": "json",
-            "application": "coral_alert",
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(COOPS_API_URL, params=params)
-                resp.raise_for_status()
-                data = resp.json()
+            data = await self._client.fetch(params)
+        except CoopsAPIError as exc:
+            return {
+                "alert_id": alert_id,
+                "value": None,
+                "triggered": False,
+                "status": "coops_error",
+                "message": (
+                    f"CO-OPS API error: {exc}. This alert's station_id/product "
+                    "combination may be invalid — verify the station supports "
+                    "this product, or delete and recreate the alert."
+                ),
+            }
         except httpx.HTTPError as exc:
             return {
                 "alert_id": alert_id,
                 "value": None,
                 "triggered": False,
+                "status": "http_error",
                 "message": f"HTTP error fetching data: {exc}",
             }
 
-        # Parse value from CO-OPS response
         try:
-            records = data.get("data", [])
-            if not records:
-                return {
-                    "alert_id": alert_id,
-                    "value": None,
-                    "triggered": False,
-                    "message": "No data returned from CO-OPS API.",
-                }
-            value = float(records[-1]["v"])
-        except (KeyError, ValueError, IndexError) as exc:
+            value = _extract_value(data, product)
+        except IndexError:
             return {
                 "alert_id": alert_id,
                 "value": None,
                 "triggered": False,
+                "status": "no_data",
+                "message": "No data returned from CO-OPS API.",
+            }
+        except (KeyError, ValueError, TypeError) as exc:
+            return {
+                "alert_id": alert_id,
+                "value": None,
+                "triggered": False,
+                "status": "parse_error",
                 "message": f"Failed to parse CO-OPS response: {exc}",
             }
 
@@ -159,12 +276,16 @@ class AlertManager:
         alert["triggered"] = triggered
 
         if triggered:
-            alert["trigger_history"].append({"timestamp": now, "value": value})
+            history = alert["trigger_history"]
+            history.append({"timestamp": now, "value": value})
+            if len(history) > MAX_TRIGGER_HISTORY:
+                del history[: len(history) - MAX_TRIGGER_HISTORY]
 
         return {
             "alert_id": alert_id,
             "value": value,
             "triggered": triggered,
+            "status": "ok",
             "message": (
                 f"TRIGGERED: {value} {alert['operator']} {alert['threshold']}"
                 if triggered
@@ -173,12 +294,23 @@ class AlertManager:
         }
 
     async def check_all_alerts(self) -> list[dict[str, Any]]:
-        """Check all active alerts and return results."""
+        """Check all active alerts and return results.
+
+        Iterates over a snapshot (``list(...)``) rather than the live dict:
+        each check awaits an HTTP call, and a concurrent
+        create/delete/pause tool call can otherwise mutate ``self._alerts``
+        mid-iteration, raising "dictionary changed size during iteration".
+        An alert deleted after the snapshot was taken (and thus missing by
+        the time its turn comes up) is skipped rather than raising.
+        """
         results = []
-        for alert_id, alert in self._alerts.items():
+        for alert_id, alert in list(self._alerts.items()):
             if not alert["active"]:
                 continue
-            result = await self.check_alert(alert_id)
+            try:
+                result = await self.check_alert(alert_id)
+            except AlertError:
+                continue
             results.append(result)
         return results
 
