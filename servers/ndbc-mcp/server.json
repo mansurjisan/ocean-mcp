@@ -3,7 +3,7 @@
   "name": "io.github.mansurjisan/ndbc-mcp",
   "title": "NOAA NDBC MCP Server",
   "description": "NOAA National Data Buoy Center buoy observations: waves, SST, wind, pressure from 1,300+ offshore stations",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/mansurjisan/ocean-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "ndbc-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
