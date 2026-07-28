@@ -3,7 +3,7 @@
   "name": "io.github.mansurjisan/vdatum-mcp",
   "title": "VDatum MCP Server",
   "description": "MCP server for vertical datum conversions using coastalmodeling-vdatum",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/mansurjisan/ocean-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "vdatum-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

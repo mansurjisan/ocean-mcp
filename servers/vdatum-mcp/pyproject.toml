@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vdatum-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for vertical datum conversions using coastalmodeling-vdatum"
 readme = "README.md"
 license = "MIT"
@@ -25,8 +25,8 @@ keywords = [
 ]
 dependencies = [
     "mcp[cli]>=1.0.0,<2",
-    "coastalmodeling-vdatum @ git+https://github.com/oceanmodeling/coastalmodeling-vdatum.git@0d63b2bbc0b0634e20a0ec55023a53354fab1b47",
     "numpy>=1.26,<3",
+    "pyproj>=3.7,<4",
 ]
 
 [project.urls]
@@ -35,15 +35,6 @@ Repository = "https://github.com/mansurjisan/ocean-mcp"
 
 [project.scripts]
 vdatum-mcp = "vdatum_mcp.server:main"
-
-[tool.hatch.metadata]
-# coastalmodeling-vdatum is a NOAA library not published to PyPI, so it is a
-# git direct reference, pinned to a commit SHA so builds are reproducible and
-# a force-push / new commit upstream can't silently change what we ship.
-# Hatchling rejects direct references in project.dependencies unless this is
-# set, which made `uv sync`/`uv build` (and therefore any CI coverage) fail
-# outright.
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vdatum_mcp"]

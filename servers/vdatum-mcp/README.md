@@ -6,6 +6,11 @@ MCP server for vertical datum conversions using [coastalmodeling-vdatum](https:/
 
 Converts elevations between NAVD88, MLLW, MLW, MHW, MHHW, LMSL, xGEOID20b, IGLD85, and LWD.
 
+`coastalmodeling-vdatum` isn't published to PyPI, so the small amount of its
+code this server actually calls is vendored directly (CC0-licensed; see
+`src/vdatum_mcp/_vendor/coastalmodeling_vdatum/VENDORED.md` for the exact
+commit and attribution) rather than installed as an external dependency.
+
 ## Tools
 
 | Tool | Description |
