@@ -59,6 +59,9 @@ packages = ["src/nhc_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit live NHC APIs (deselect with '-m \"not integration\"')",
+]
 
 [dependency-groups]
 dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0", "respx>=0.22.0"]

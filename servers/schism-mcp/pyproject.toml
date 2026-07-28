@@ -24,6 +24,9 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit real SCHISM documentation (deselect with '-m \"not integration\"')",
+]
 
 [dependency-groups]
 dev = [

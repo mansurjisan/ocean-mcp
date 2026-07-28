@@ -62,6 +62,9 @@ packages = ["src/stofs_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit live NOAA STOFS servers (deselect with '-m \"not integration\"')",
+]
 
 [dependency-groups]
 dev = [
