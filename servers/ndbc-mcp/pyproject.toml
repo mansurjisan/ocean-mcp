@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ndbc-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "MCP server providing access to NOAA NDBC buoy observations: waves, SST, wind, pressure from 1,300+ stations"
 readme = "README.md"
 license = "MIT"
