@@ -118,6 +118,28 @@ class TestQuotaTools:
         assert "**Total**: unknown" in result
         assert "**Total**: ..." not in result
 
+    @pytest.mark.asyncio
+    async def test_storage_usage_truncated_output_drops_possibly_cutoff_row(
+        self, mock_ctx, mock_executor, monkeypatch
+    ):
+        """The executor's char cap can land mid-line: the row immediately
+        before the '... (truncated)' marker can be a path sliced off
+        mid-name (e.g. 'subdirectory_w' instead of the real, longer name)
+        yet still parse as an ordinary two-column row — indistinguishable
+        from a real entry. When truncated, that last row must be dropped,
+        not rendered as if it were complete."""
+        monkeypatch.setattr(os.path, "isdir", lambda path: True)
+        mock_executor.run.return_value = (
+            "504K\t/scratch5/user/a\n"
+            "2.0M\t/scratch5/user/b\n"
+            "404K\t/scratch5/user/subdirectory_w\n"
+            "... (truncated)"
+        )
+        result = await hpc_storage_usage(mock_ctx, directory="/scratch5/user")
+        assert "subdirectory_w" not in result
+        assert "504K" in result
+        assert "2.0M" in result
+
 
 class TestAllocationTools:
     @pytest.mark.asyncio

@@ -188,6 +188,15 @@ async def hpc_storage_usage(
         size_str, path = parts
         rows.append((_du_size_to_bytes(size_str), size_str, path))
 
+    # When the raw output was cut at the executor's char cap, the cut can
+    # land mid-line: the marker line itself is already dropped above, but
+    # the row immediately before it can be a path sliced off mid-name (e.g.
+    # "404K\t/.../subdirectory_w") that still parses as a perfectly normal
+    # two-column row. Indistinguishable from a real entry, so drop it too
+    # rather than risk rendering a fabricated-looking path as real data.
+    if was_truncated and rows:
+        rows = rows[:-1]
+
     # `du` always prints the queried directory's own total last — but only
     # trust that when the output wasn't cut off, since a truncated tail
     # could be a partial number rather than the real total.

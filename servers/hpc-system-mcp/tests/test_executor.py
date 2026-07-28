@@ -1,7 +1,8 @@
 """Tests for the command executor."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+import signal
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -146,58 +147,147 @@ class TestCommandExecutor:
 
 
 class TestTimeoutOrphanCleanup:
-    """A command that times out must not leave an orphaned subprocess.
-
-    ``asyncio.wait_for`` only cancels our *await* on ``communicate()`` — the
-    child process itself keeps running in the background unless explicitly
-    killed and reaped. Both timeout sites (run, run_module) must do this.
+    """A command that times out (or whose task is cancelled) must not leave
+    an orphaned subprocess — and reaping it must never itself hang, even if
+    the killed process (a D-state child stuck on a hung network filesystem,
+    or a grandchild that inherited the pipes) never actually exits.
     """
 
     @staticmethod
-    def _mock_slow_proc() -> MagicMock:
+    def _mock_proc(wait_hangs: bool = False) -> MagicMock:
         mock_proc = MagicMock()
-        mock_proc.kill = MagicMock()
-        mock_proc.wait = AsyncMock(return_value=-9)
+        mock_proc.pid = 424242  # a real int; getpgid/killpg are mocked below
+
+        if wait_hangs:
+
+            async def _wait():
+                await asyncio.sleep(3600)
+                return -9
+        else:
+
+            async def _wait():
+                return -9
+
+        mock_proc.wait = _wait
+
+        started = asyncio.Event()
 
         async def _slow_communicate():
+            started.set()
             await asyncio.sleep(10)
             return b"", b""
 
         mock_proc.communicate = _slow_communicate
+        mock_proc._started = started
         return mock_proc
 
-    @pytest.mark.asyncio
-    async def test_run_kills_and_reaps_on_timeout(self, executor, monkeypatch):
-        mock_proc = self._mock_slow_proc()
+    @staticmethod
+    def _patch_subprocess_and_pg(monkeypatch, mock_proc):
+        """Fake subprocess creation, and the os.getpgid/killpg calls
+        _kill_and_reap uses to signal the whole process group."""
 
         async def _fake_create_subprocess_exec(*args, **kwargs):
             return mock_proc
 
+        killpg_calls: list[tuple[int, int]] = []
         monkeypatch.setattr(
             "hpc_system_mcp.executor.asyncio.create_subprocess_exec",
             _fake_create_subprocess_exec,
         )
+        monkeypatch.setattr("hpc_system_mcp.executor.os.getpgid", lambda pid: pid)
+        monkeypatch.setattr(
+            "hpc_system_mcp.executor.os.killpg",
+            lambda pgid, sig: killpg_calls.append((pgid, sig)),
+        )
+        return killpg_calls
+
+    @pytest.mark.asyncio
+    async def test_run_kills_process_group_and_reaps_on_timeout(
+        self, executor, monkeypatch
+    ):
+        mock_proc = self._mock_proc()
+        killpg_calls = self._patch_subprocess_and_pg(monkeypatch, mock_proc)
 
         with pytest.raises(ExecutorError, match="timed out"):
             await executor.run(["id"], timeout=0.05)
 
-        mock_proc.kill.assert_called_once()
-        mock_proc.wait.assert_awaited_once()
+        assert killpg_calls == [(mock_proc.pid, signal.SIGKILL)]
 
     @pytest.mark.asyncio
-    async def test_run_module_kills_and_reaps_on_timeout(self, executor, monkeypatch):
-        mock_proc = self._mock_slow_proc()
-
-        async def _fake_create_subprocess_exec(*args, **kwargs):
-            return mock_proc
-
-        monkeypatch.setattr(
-            "hpc_system_mcp.executor.asyncio.create_subprocess_exec",
-            _fake_create_subprocess_exec,
-        )
+    async def test_run_module_kills_process_group_and_reaps_on_timeout(
+        self, executor, monkeypatch
+    ):
+        mock_proc = self._mock_proc()
+        killpg_calls = self._patch_subprocess_and_pg(monkeypatch, mock_proc)
 
         with pytest.raises(ExecutorError, match="Module command timed out"):
             await executor.run_module("list", timeout=0.05)
 
-        mock_proc.kill.assert_called_once()
-        mock_proc.wait.assert_awaited_once()
+        assert killpg_calls == [(mock_proc.pid, signal.SIGKILL)]
+
+    @pytest.mark.asyncio
+    async def test_reap_does_not_hang_when_killed_process_never_exits(
+        self, executor, monkeypatch
+    ):
+        """The regression this fix targets: a naive ``kill(); await
+        proc.wait()`` reap can itself hang indefinitely if the killed
+        process never actually exits (D-state on a hung network filesystem
+        read, or a grandchild still holding the pipes open) — turning a
+        bounded tool timeout into no timeout at all. Bounding the reap with
+        its own short timeout must make the call return the original
+        timeout error instead. The outer ``asyncio.wait_for`` is a test
+        safety net so a real regression fails fast instead of hanging the
+        suite.
+        """
+        mock_proc = self._mock_proc(wait_hangs=True)
+        self._patch_subprocess_and_pg(monkeypatch, mock_proc)
+        monkeypatch.setattr("hpc_system_mcp.executor._REAP_TIMEOUT", 0.05)
+
+        with pytest.raises(ExecutorError, match="timed out"):
+            await asyncio.wait_for(executor.run(["id"], timeout=0.05), timeout=3)
+
+    @pytest.mark.asyncio
+    async def test_run_module_reap_does_not_hang_when_process_never_exits(
+        self, executor, monkeypatch
+    ):
+        """Same regression as above, on the run_module timeout site (the
+        Lmod `module spider` codepath the review calls out)."""
+        mock_proc = self._mock_proc(wait_hangs=True)
+        self._patch_subprocess_and_pg(monkeypatch, mock_proc)
+        monkeypatch.setattr("hpc_system_mcp.executor._REAP_TIMEOUT", 0.05)
+
+        with pytest.raises(ExecutorError, match="Module command timed out"):
+            await asyncio.wait_for(executor.run_module("list", timeout=0.05), timeout=3)
+
+    @pytest.mark.asyncio
+    async def test_run_kills_process_group_on_cancellation(self, executor, monkeypatch):
+        """Task cancellation (e.g. an MCP client disconnecting mid-call),
+        not just a timeout, must also clean up the child — and must not be
+        swallowed."""
+        mock_proc = self._mock_proc()
+        killpg_calls = self._patch_subprocess_and_pg(monkeypatch, mock_proc)
+
+        task = asyncio.ensure_future(executor.run(["id"], timeout=30))
+        await asyncio.wait_for(mock_proc._started.wait(), timeout=1)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert killpg_calls == [(mock_proc.pid, signal.SIGKILL)]
+
+    @pytest.mark.asyncio
+    async def test_run_module_kills_process_group_on_cancellation(
+        self, executor, monkeypatch
+    ):
+        mock_proc = self._mock_proc()
+        killpg_calls = self._patch_subprocess_and_pg(monkeypatch, mock_proc)
+
+        task = asyncio.ensure_future(executor.run_module("list", timeout=30))
+        await asyncio.wait_for(mock_proc._started.wait(), timeout=1)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert killpg_calls == [(mock_proc.pid, signal.SIGKILL)]
