@@ -227,7 +227,20 @@ async def schism_parse_bctides(
         lines = ["## bctides.in Summary"]
         if file_path:
             lines.append(f"*Source: {file_path}*\n")
+        lines.append(
+            f"- **Earth tidal potential terms (ntip)**: {parsed.get('ntip', 0)}"
+        )
+        if parsed.get("tip_dp") is not None:
+            lines.append(
+                f"- **Tidal potential cutoff depth (tip_dp)**: {parsed['tip_dp']}"
+            )
         lines.append(f"- **Tidal frequencies (nbfr)**: {parsed.get('nbfr', 0)}")
+
+        if parsed.get("tidal_potential"):
+            lines.append("\n### Tidal Potential Terms")
+            for t in parsed["tidal_potential"]:
+                freq = t.get("frequency", "?")
+                lines.append(f"- **{t['name']}**: frequency={freq}")
 
         if parsed.get("constituents"):
             lines.append("\n### Tidal Constituents")

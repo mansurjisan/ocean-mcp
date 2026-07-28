@@ -7,7 +7,8 @@ from typing import Any
 
 import httpx
 
-SCHISM_DOCS_BASE = "https://schism-dev.github.io/schism"
+from .models import SCHISM_DOCS_BASE
+
 SCHISM_REPO_URL = "https://raw.githubusercontent.com/schism-dev/schism/master"
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
@@ -66,6 +67,103 @@ class SchismClientError(Exception):
     """Custom exception for SCHISM client errors."""
 
     pass
+
+
+# Verified live against https://schism-dev.github.io/schism/master/ (2026-07):
+# the docs site restructured under /master/ and dropped or renamed several
+# pages the old paths pointed to. Where no dedicated page exists anymore
+# (e.g. a "getting started overview" or a standalone "SCHOUT"/output-control
+# page), each entry below points to the real page that now documents that
+# topic, found by fetching https://schism-dev.github.io/schism/master/ and
+# following its nav. Module-level so tests (incl. a live one that walks every
+# entry) can exercise it directly, not just through search_docs.
+KNOWN_PAGES: list[dict[str, str]] = [
+    {
+        "title": "Getting Started",
+        "path": "index.html",
+        "description": "SCHISM manual home page — overview and quick start guide",
+    },
+    {
+        "title": "Input Files",
+        "path": "input-output/overview.html",
+        "description": "All SCHISM input files reference",
+    },
+    {
+        "title": "param.nml",
+        "path": "input-output/param.html",
+        "description": "Main parameter namelist reference",
+    },
+    {
+        "title": "hgrid.gr3",
+        "path": "input-output/hgrid.html",
+        "description": "Horizontal grid format",
+    },
+    {
+        "title": "vgrid.in",
+        "path": "input-output/vgrid.html",
+        "description": "Vertical grid format",
+    },
+    {
+        "title": "bctides.in",
+        "path": "input-output/bctides.html",
+        "description": "Tidal boundary condition file",
+    },
+    {
+        "title": "Output Files",
+        "path": "input-output/outputs.html",
+        "description": "Output file descriptions",
+    },
+    {
+        "title": "Troubleshooting",
+        "path": "known_issues.html",
+        "description": "Known issues and troubleshooting tips for common problems",
+    },
+    {
+        "title": "SCHOUT",
+        "path": "input-output/param.html",
+        "description": "SCHISM output control — the &SCHOUT block of param.nml",
+    },
+    {
+        "title": "WWM",
+        "path": "modules/wwm.html",
+        "description": "Wind Wave Model coupling",
+    },
+    {
+        "title": "2D Sediment Model",
+        "path": "modules/sed2d.html",
+        "description": "2D sediment transport module",
+    },
+    {
+        "title": "3D Sediment Model",
+        "path": "modules/sed3d.html",
+        "description": "3D sediment transport module",
+    },
+    {
+        "title": "ICM",
+        "path": "modules/icm.html",
+        "description": "Water quality module",
+    },
+    {
+        "title": "Vertical Grid",
+        "path": "input-output/vgrid.html",
+        "description": "Vertical grid generation and format (vgrid.in)",
+    },
+    {
+        "title": "Horizontal Grid",
+        "path": "input-output/hgrid.html",
+        "description": "Mesh generation guide and horizontal grid format (hgrid.gr3)",
+    },
+    {
+        "title": "Pre-processing",
+        "path": "getting-started/pre-processing.html",
+        "description": "Pre-processing tools",
+    },
+    {
+        "title": "Hotstart",
+        "path": "input-output/optional-inputs.html",
+        "description": "Hot start (hotstart.nc) and other optional input files",
+    },
+]
 
 
 class SchismClient:
@@ -127,91 +225,9 @@ class SchismClient:
         Since SCHISM docs are static (GitHub Pages), we search known page titles.
         """
         query_lower = query.lower()
-        known_pages = [
-            {
-                "title": "Getting Started",
-                "path": "getting-started/overview.html",
-                "description": "Overview and quick start guide",
-            },
-            {
-                "title": "Input Files",
-                "path": "input-output/input-files.html",
-                "description": "All SCHISM input files reference",
-            },
-            {
-                "title": "param.nml",
-                "path": "input-output/param.nml.html",
-                "description": "Main parameter namelist reference",
-            },
-            {
-                "title": "hgrid.gr3",
-                "path": "input-output/hgrid.html",
-                "description": "Horizontal grid format",
-            },
-            {
-                "title": "vgrid.in",
-                "path": "input-output/vgrid.html",
-                "description": "Vertical grid format",
-            },
-            {
-                "title": "bctides.in",
-                "path": "input-output/bctides.html",
-                "description": "Tidal boundary condition file",
-            },
-            {
-                "title": "Output Files",
-                "path": "input-output/output-files.html",
-                "description": "Output file descriptions",
-            },
-            {
-                "title": "Troubleshooting",
-                "path": "getting-started/troubleshooting.html",
-                "description": "Common issues and solutions",
-            },
-            {
-                "title": "SCHOUT",
-                "path": "input-output/schout.html",
-                "description": "SCHISM output control",
-            },
-            {
-                "title": "WWM",
-                "path": "modules/wwm.html",
-                "description": "Wind Wave Model coupling",
-            },
-            {
-                "title": "SED",
-                "path": "modules/sed.html",
-                "description": "Sediment transport module",
-            },
-            {
-                "title": "ICM",
-                "path": "modules/icm.html",
-                "description": "Water quality module",
-            },
-            {
-                "title": "Vertical Grid",
-                "path": "mesh-generation/vertical-grid.html",
-                "description": "Vertical grid generation",
-            },
-            {
-                "title": "Horizontal Grid",
-                "path": "mesh-generation/horizontal-grid.html",
-                "description": "Mesh generation guide",
-            },
-            {
-                "title": "Pre-processing",
-                "path": "getting-started/pre-processing.html",
-                "description": "Pre-processing tools",
-            },
-            {
-                "title": "Hotstart",
-                "path": "input-output/hotstart.html",
-                "description": "Hot start and restart",
-            },
-        ]
 
         results = []
-        for page in known_pages:
+        for page in KNOWN_PAGES:
             score = 0
             for word in query_lower.split():
                 if word in page["title"].lower():

@@ -29,7 +29,7 @@ async def schism_fetch_docs(
     Retrieves page content as plain text.
 
     Args:
-        topic: Documentation path or topic (e.g., 'input-output/param.nml.html', 'getting-started/troubleshooting.html').
+        topic: Documentation path or topic (e.g., 'input-output/param.html', 'known_issues.html').
     """
     try:
         client = _get_client(ctx)

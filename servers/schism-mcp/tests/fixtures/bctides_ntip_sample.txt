@@ -1,0 +1,7 @@
+01/01/2024 00:00:00 UTC
+1  20.0   ! ntip tip_dp
+M2
+2 0.242334 0.00014051890 1.000000 0.000000
+0          ! number of boundary forcing freqs
+1          ! number of open boundaries
+23 4 0 0 0 0 ! type of b.c.
