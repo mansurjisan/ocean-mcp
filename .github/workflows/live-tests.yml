@@ -10,6 +10,15 @@ permissions:
   contents: read
   issues: write
 
+# Guard against overlapping runs (e.g. a manual workflow_dispatch firing while
+# the weekly schedule is still running) racing on the same per-server drift
+# issue. Never cancel-in-progress here: this isn't a per-PR workflow (no
+# "superseded" run to supersede), and cutting a live-test run off mid-flight
+# would risk an inconsistent partial drift report.
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: false
+
 jobs:
   live-test:
     runs-on: ubuntu-latest

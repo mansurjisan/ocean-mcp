@@ -1,5 +1,7 @@
 # ndbc-mcp
 
+<!-- mcp-name: io.github.mansurjisan/ndbc-mcp -->
+
 MCP server providing access to NOAA National Data Buoy Center (NDBC) observations from 1,300+ offshore stations.
 
 ## Features
