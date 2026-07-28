@@ -269,7 +269,11 @@ def parse_bctides(text: str) -> dict:
             amig(k) ff(k) face(k)  - angular frequency, nodal factor, earth
                                       equilibrium argument
         nope    - # of open boundary segments
-        nope blocks: boundary header + optional per-type tidal data (below)
+        nope blocks, each:
+            nond iettype ifltype itetype isatype [itrtype ...] - node count
+                              and B.C. type codes for this boundary segment
+            a data payload whose shape depends on each type code above
+                              (see _bctides_payload_line_count)
 
     A previous version of this parser treated line 2 as nbfr directly,
     skipping ntip/tip_dp entirely. That happened to produce the right nbfr
@@ -277,6 +281,13 @@ def parse_bctides(text: str) -> dict:
     the real nbfr line to reach nope, so num_open_boundaries came out wrong
     for every file — including the real sample above (ntip=0, nbfr=0,
     nope=1; the old code reported num_open_boundaries=0).
+
+    A later version fixed that but still didn't skip each boundary
+    segment's data payload correctly for every type code (see
+    _bctides_payload_line_count's docstring) — it crashed on the
+    canonical sample_inputs/bctides.in from the SCHISM repo, which uses
+    ifltype=2 and isatype=1/2 and needs those payloads skipped to reach
+    the next boundary header.
 
     Returns tidal-potential terms, tidal boundary-forcing constituents,
     boundary segment types, and node counts.
@@ -369,7 +380,7 @@ def parse_bctides(text: str) -> dict:
         if i >= len(lines):
             break
         boundary: dict = {}
-        # Boundary header: nond iettype ifltype itetype isatype
+        # Boundary header: nond iettype ifltype itetype isatype [itrtype ...]
         parts = lines[i].strip().split()
         i += 1
         if len(parts) >= 1:
@@ -383,30 +394,91 @@ def parse_bctides(text: str) -> dict:
         if len(parts) >= 5:
             boundary["salinity_type"] = int(parts[4])
 
-        # Skip constituent amplitude/phase data for each boundary
-        # For tidal BCs, there are nbfr lines of amplitude/phase per boundary
-        for bc_type_key in (
-            "elevation_type",
-            "flux_type",
-            "temperature_type",
-            "salinity_type",
-        ):
-            bc_type = boundary.get(bc_type_key, 0)
-            if bc_type in (3, 5):
-                # Tidal BC - skip nbfr constituent data lines
-                for _ in range(nbfr):
-                    if i >= len(lines):
-                        break
-                    # Constituent name
-                    i += 1
-                    # Amplitude/phase per node
-                    for _ in range(boundary.get("num_nodes", 0)):
-                        if i < len(lines):
-                            i += 1
+        nond = boundary.get("num_nodes", 0)
 
+        # Skip the data payload (if any) that follows this boundary's
+        # header before the next boundary header, per the pseudo-code on
+        # https://schism-dev.github.io/schism/master/input-output/bctides.html
+        # (verified live 2026-07). The payload for each of the four B.C.
+        # types depends on that type's own code, not a single shared rule
+        # for "tidal" boundaries — a previous version of this parser
+        # applied the elevation/velocity tidal skip (nbfr constituent
+        # blocks) uniformly to all four type keys, which is wrong for
+        # temperature/salinity type 3 (a single tobc nudging-factor line,
+        # not nbfr blocks) and didn't skip anything at all for iettype=2,
+        # ifltype=2/-4/-1, or itetype/isatype=1/2/4 — so on a real file
+        # using any of those (e.g. the canonical sample_inputs/bctides.in,
+        # which uses ifltype=2 and isatype=1/2) it would read a payload
+        # line as the next boundary's header and crash.
+        for bc_family, type_code in (
+            ("elevation", boundary.get("elevation_type", 0)),
+            ("velocity", boundary.get("flux_type", 0)),
+            ("temperature", boundary.get("temperature_type", 0)),
+            ("salinity", boundary.get("salinity_type", 0)),
+        ):
+            skip = _bctides_payload_line_count(bc_family, type_code, nond, nbfr)
+            i = min(i + skip, len(lines))
+
+        # NOTE: if additional tracer-module flags (GEN, AGE, SED3D,
+        # EcoSim, ICM, CoSiNE, FIB, TIMOR) are present after isatype on
+        # the header line, their payloads are NOT skipped here. The docs
+        # describe that structure only in prose ("similar to temperature
+        # ... for all classes in 1 row") rather than as precise
+        # pseudo-code, and the number of tracer modules/classes invoked
+        # is determined by param.nml, not by bctides.in itself — so it
+        # can't be derived from this file alone. Files with tracer-module
+        # boundary data will still mis-skip past this point.
         result["boundaries"].append(boundary)
 
     return result
+
+
+def _bctides_payload_line_count(
+    bc_family: str, type_code: int, nond: int, nbfr: int
+) -> int:
+    """Return the number of bctides.in lines that follow an open boundary
+    header for one B.C. family's type code.
+
+    Per the pseudo-code on
+    https://schism-dev.github.io/schism/master/input-output/bctides.html
+    (verified live 2026-07):
+
+    Elevation (iettype) / velocity (ifltype) share the same "tidal" shape
+    for type 3/5: nbfr blocks, each an `alpha(k)` name line followed by
+    `nond` lines of per-node amplitude/phase data (2 values/line for
+    elevation, 4 for velocity — the line *count* is the same either way).
+    Type 2 is one constant line (ethconst/vthconst). Types 0/1/4 need no
+    payload (unspecified, or read from a separate .th/.th.nc file).
+    Velocity additionally has:
+      - ifltype == -4: one line of two relaxation constants (rel1 rel2).
+      - ifltype == -1 (Flather): two per-node blocks with no header line
+        of their own — `nond` lines of eta_m0(i), then `nond` lines of
+        qthcon(1:Nz,i,j). (The docs show 'eta_mean'/'vn_mean' next to
+        these blocks, but the page explicitly marks them "comment only",
+        not literal data lines.)
+
+    Temperature (itetype) and salinity (isatype) share one structure (the
+    docs state salinity is "similar to temperature above"): type 0 needs
+    nothing; types 1/3/4 need one nudging-factor line (tobc); type 2 needs
+    a constant line (tthconst/sthconst) followed by the tobc line.
+    """
+    if bc_family in ("elevation", "velocity"):
+        if type_code == 2:
+            return 1
+        if type_code in (3, 5):
+            return nbfr * (1 + nond)
+        if bc_family == "velocity":
+            if type_code == -4:
+                return 1
+            if type_code == -1:
+                return 2 * nond
+        return 0
+    # temperature / salinity
+    if type_code == 2:
+        return 2
+    if type_code in (1, 3, 4):
+        return 1
+    return 0
 
 
 def validate_param_nml(

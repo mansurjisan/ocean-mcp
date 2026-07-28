@@ -261,6 +261,96 @@ class TestParseBctides:
         assert result["num_open_boundaries"] == 1
         assert result["boundaries"][0]["num_nodes"] == 23
 
+    def test_parse_canonical_sample_bctides(self) -> None:
+        """Parse the canonical bctides.in from the SCHISM repo itself
+        (sample_inputs/bctides.in on GitHub) — ground truth for the
+        general case of ntip>0, nbfr>0, and multiple open boundaries with
+        non-zero (payload-bearing) B.C. type codes.
+
+        A previous version of this parser only skipped the nbfr-block
+        "tidal" payload shape (iettype/ifltype in (3, 5)) and applied it
+        uniformly to all four B.C. type keys. It didn't skip anything for
+        ifltype==2 (vthconst) or isatype in (1, 2) (tobc / sthconst+tobc),
+        which this file actually uses on all three of its boundaries. As
+        a result it read a payload line ("0.") as the next boundary's
+        header and crashed with "invalid literal for int() with base 10:
+        '0.'" instead of returning nope=3 boundaries.
+
+        Per https://schism-dev.github.io/schism/master/input-output/bctides.html
+        (verified live), boundary 1's header "2 0 1 0 2" is nond=2,
+        iettype=0 (no payload), ifltype=1 (no payload; flux.th), itetype=0
+        (no payload), isatype=2 (2-line payload: sthconst then tobc — "0."
+        then "1."). Boundary 2's header "8 0 2 0 0" is ifltype=2 (1-line
+        payload: vthconst — "0."), all else no-payload. Boundary 3's
+        header "68 1 0 0 1" is iettype=1 (no payload; elev.th) and
+        isatype=1 (1-line payload: tobc — "1.").
+        """
+        text = _load_fixture("bctides_canonical_sample.txt")
+        result = parse_bctides(text)
+
+        assert "error" not in result
+        assert result["ntip"] == 8
+        assert result["tip_dp"] == 40.0
+        assert len(result["tidal_potential"]) == 8
+        assert result["nbfr"] == 8
+        assert len(result["constituents"]) == 8
+        assert result["num_open_boundaries"] == 3
+        assert len(result["boundaries"]) == 3
+
+        b1, b2, b3 = result["boundaries"]
+        assert b1 == {
+            "num_nodes": 2,
+            "elevation_type": 0,
+            "flux_type": 1,
+            "temperature_type": 0,
+            "salinity_type": 2,
+        }
+        assert b2 == {
+            "num_nodes": 8,
+            "elevation_type": 0,
+            "flux_type": 2,
+            "temperature_type": 0,
+            "salinity_type": 0,
+        }
+        assert b3 == {
+            "num_nodes": 68,
+            "elevation_type": 1,
+            "flux_type": 0,
+            "temperature_type": 0,
+            "salinity_type": 1,
+        }
+
+    def test_parse_bctides_iettype_constant_elevation_payload(self) -> None:
+        """A boundary with iettype=2 must skip exactly one payload line
+        (ethconst) before the next boundary header.
+
+        The canonical sample_inputs/bctides.in doesn't happen to use
+        iettype=2 on any of its 3 boundaries (see
+        test_parse_canonical_sample_bctides), so this synthetic two-
+        boundary fixture exercises that specific code path directly. Per
+        the docs' pseudo-code: "else if (iettype(j) == 2) ... ethconst
+        !constant elevation value for this segment". If the payload isn't
+        skipped, the second boundary's header line ("3.5") is read as the
+        first token of a boundary header and fails int() conversion.
+        """
+        text = (
+            "01/01/2024 00:00:00 UTC\n"
+            "0  0.000   ! ntip tip_dp\n"
+            "0          ! nbfr\n"
+            "2          ! nope\n"
+            "5 2 0 0 0  ! iettype=2: constant elevation\n"
+            "3.5        ! ethconst\n"
+            "4 0 0 0 0  ! all-zero: no payload\n"
+        )
+        result = parse_bctides(text)
+
+        assert "error" not in result
+        assert result["num_open_boundaries"] == 2
+        assert len(result["boundaries"]) == 2
+        assert result["boundaries"][0]["num_nodes"] == 5
+        assert result["boundaries"][0]["elevation_type"] == 2
+        assert result["boundaries"][1]["num_nodes"] == 4
+
 
 class TestValidateParamNml:
     """Tests for param.nml validation."""
