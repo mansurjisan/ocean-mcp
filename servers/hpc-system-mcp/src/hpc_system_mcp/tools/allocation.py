@@ -168,8 +168,13 @@ async def hpc_account_info(
     Args:
         user: Username to query. Defaults to current user.
     """
+    import re
+
     executor = _get_executor(ctx)
     target_user = user or os.environ.get("USER", "unknown")
+
+    if re.search(r"[;&|`$(){}]", target_user):
+        return f"Error: Unsafe characters in username: '{target_user}'"
 
     try:
         output = await executor.run(

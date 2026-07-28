@@ -1,8 +1,14 @@
 """Tests for MCP tool functions using mocked executor."""
 
+import os
+
 import pytest
 
-from hpc_system_mcp.tools.quota import hpc_disk_quota, hpc_df  # noqa: F401
+from hpc_system_mcp.tools.quota import (  # noqa: F401
+    hpc_disk_quota,
+    hpc_df,
+    hpc_storage_usage,
+)
 from hpc_system_mcp.tools.allocation import (
     hpc_fairshare,
     hpc_account_info,
@@ -49,6 +55,91 @@ class TestQuotaTools:
         result = await hpc_df(mock_ctx, filesystem="/tmp; rm -rf /")
         assert "Error" in result
 
+    @pytest.mark.asyncio
+    async def test_storage_usage_sorted_with_total(
+        self, mock_ctx, mock_executor, monkeypatch
+    ):
+        """Details are sorted largest-first and the grand total (du's last
+        line) is reported correctly."""
+        monkeypatch.setattr(os.path, "isdir", lambda path: True)
+        mock_executor.run.return_value = (
+            "504K\t/scratch5/user/a\n"
+            "2.0M\t/scratch5/user/b\n"
+            "104K\t/scratch5/user/c\n"
+            "2.6M\t/scratch5/user"
+        )
+        result = await hpc_storage_usage(mock_ctx, directory="/scratch5/user")
+        assert "**Total**: 2.6M" in result
+        # Largest subdirectory (2.0M) must be listed before the smaller ones.
+        assert result.index("2.0M") < result.index("504K") < result.index("104K")
+        # The total (2.6M) must appear only in the Total line, not duplicated
+        # as one of the sorted detail rows.
+        assert result.count("2.6M") == 1
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_unsafe_path(self, mock_ctx):
+        result = await hpc_storage_usage(mock_ctx, directory="/tmp; rm -rf /")
+        assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_missing_directory(self, mock_ctx, monkeypatch):
+        monkeypatch.setattr(os.path, "isdir", lambda path: False)
+        result = await hpc_storage_usage(mock_ctx, directory="/no/such/dir")
+        assert "does not exist" in result
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_du_command_has_no_conflicting_flags(
+        self, mock_ctx, mock_executor, monkeypatch
+    ):
+        """--summarize and --max-depth are mutually exclusive in GNU du; the
+        primary command must not combine them. Previously this always
+        failed and silently fell back, paying for two full directory
+        traversals on every call."""
+        monkeypatch.setattr(os.path, "isdir", lambda path: True)
+        mock_executor.run.return_value = "1.0G\t/scratch5/user"
+        await hpc_storage_usage(mock_ctx, directory="/scratch5/user")
+        assert mock_executor.run.call_count == 1
+        cmd = mock_executor.run.call_args.args[0]
+        assert "--summarize" not in cmd
+        assert "du" in cmd[0]
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_truncated_output_does_not_corrupt_total(
+        self, mock_ctx, mock_executor, monkeypatch
+    ):
+        """A truncated `du` output must never render '**Total**: ...' — the
+        tool should report the total as unknown rather than mis-parsing the
+        truncation marker as a size."""
+        monkeypatch.setattr(os.path, "isdir", lambda path: True)
+        mock_executor.run.return_value = (
+            "504K\t/scratch5/user/a\n2.0M\t/scratch5/user/b\n... (truncated)"
+        )
+        result = await hpc_storage_usage(mock_ctx, directory="/scratch5/user")
+        assert "**Total**: unknown" in result
+        assert "**Total**: ..." not in result
+
+    @pytest.mark.asyncio
+    async def test_storage_usage_truncated_output_drops_possibly_cutoff_row(
+        self, mock_ctx, mock_executor, monkeypatch
+    ):
+        """The executor's char cap can land mid-line: the row immediately
+        before the '... (truncated)' marker can be a path sliced off
+        mid-name (e.g. 'subdirectory_w' instead of the real, longer name)
+        yet still parse as an ordinary two-column row — indistinguishable
+        from a real entry. When truncated, that last row must be dropped,
+        not rendered as if it were complete."""
+        monkeypatch.setattr(os.path, "isdir", lambda path: True)
+        mock_executor.run.return_value = (
+            "504K\t/scratch5/user/a\n"
+            "2.0M\t/scratch5/user/b\n"
+            "404K\t/scratch5/user/subdirectory_w\n"
+            "... (truncated)"
+        )
+        result = await hpc_storage_usage(mock_ctx, directory="/scratch5/user")
+        assert "subdirectory_w" not in result
+        assert "504K" in result
+        assert "2.0M" in result
+
 
 class TestAllocationTools:
     @pytest.mark.asyncio
@@ -70,6 +161,11 @@ class TestAllocationTools:
         result = await hpc_account_info(mock_ctx)
         assert "Slurm Accounts" in result
         assert "coastal-act" in result
+
+    @pytest.mark.asyncio
+    async def test_account_info_unsafe_user(self, mock_ctx):
+        result = await hpc_account_info(mock_ctx, user="test; whoami")
+        assert "Error" in result
 
     @pytest.mark.asyncio
     async def test_job_priority_invalid_id(self, mock_ctx):

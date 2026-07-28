@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
 import shutil
+import signal
 
 
 class ExecutorError(Exception):
@@ -34,8 +36,6 @@ _ALLOWED_COMMANDS = {
     "groups",
     # PBS / WCOSS2
     "qstat",
-    "qsub",
-    "qdel",
     "qselect",
     "pbsnodes",
 }
@@ -87,6 +87,54 @@ def _validate_command(cmd: list[str]) -> str | None:
     return None
 
 
+# Bound on the reap itself: how long we'll wait for a killed process (group)
+# to actually exit and close its pipes before giving up. Without this bound,
+# reaping a timed-out subprocess can itself hang indefinitely (see
+# _kill_and_reap docstring), turning a bounded timeout into no timeout at all.
+_REAP_TIMEOUT = 5
+
+
+async def _kill_and_reap(proc: asyncio.subprocess.Process) -> None:
+    """Best-effort cleanup of a subprocess after its await timed out (or the
+    task awaiting it was cancelled).
+
+    ``asyncio.wait_for`` only cancels our *await* on ``communicate()`` — the
+    child process itself keeps running in the background (e.g. a `du`
+    walking a large Lustre tree can run for minutes after the tool call
+    already returned an error), and its pipes stay open. Kill and reap it
+    so nothing is orphaned.
+
+    Two things make a naive kill()+wait() insufficient here, both hit in
+    practice on this server's own tools:
+
+    1. A child blocked in uninterruptible (D) state on a hung network
+       filesystem read (e.g. `du` against a stalled Lustre/NFS mount, see
+       hpc_storage_usage) does not respond to SIGKILL until the kernel
+       unblocks it — a plain ``await proc.wait()`` can then block far
+       longer than the timeout that triggered the kill.
+    2. A grandchild that inherited the child's stdout/stderr pipes (e.g.
+       run_module's `bash -c` spawning Lmod's lua/tcl helper for `module
+       spider` on a large module tree) keeps those pipes open even after
+       the direct child is killed, so ``proc.wait()`` — which waits for
+       pipe EOF, not just process exit — can hang forever even though the
+       direct child is already dead.
+
+    Both call sites launch their subprocess with ``start_new_session=True``
+    so the child is its own process group leader; killing the whole group
+    (rather than just the direct child) reaches case-2 grandchildren too.
+    And the reap itself is bounded by ``_REAP_TIMEOUT`` so case-1 can never
+    turn a bounded tool timeout into an indefinite hang — at worst we give
+    up on the reap and return, leaking the D-state process until the
+    filesystem unblocks it, which is the best any caller can do.
+    """
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # process (group) already exited
+    with contextlib.suppress(asyncio.TimeoutError):
+        await asyncio.wait_for(proc.wait(), timeout=_REAP_TIMEOUT)
+
+
 class CommandExecutor:
     """Runs whitelisted HPC commands and returns their output."""
 
@@ -121,15 +169,24 @@ class CommandExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                start_new_session=True,  # own process group; see _kill_and_reap
             )
+        except FileNotFoundError:
+            raise ExecutorError(f"Command not found: {cmd[0]}")
+
+        try:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
+            await _kill_and_reap(proc)
             raise ExecutorError(f"Command timed out after {timeout}s: {' '.join(cmd)}")
-        except FileNotFoundError:
-            raise ExecutorError(f"Command not found: {cmd[0]}")
+        except asyncio.CancelledError:
+            # e.g. an MCP client disconnecting mid-call. Clean up the child
+            # before letting cancellation propagate — don't swallow it.
+            await _kill_and_reap(proc)
+            raise
 
         if proc.returncode != 0:
             err_msg = stderr.decode(errors="replace").strip()
@@ -175,22 +232,31 @@ class CommandExecutor:
             f'source /etc/profile.d/modules.sh 2>/dev/null; module {action} "$@" 2>&1'
         )
 
+        proc = await asyncio.create_subprocess_exec(
+            "bash",
+            "-c",
+            script,
+            "bash",  # $0
+            *args,  # $1.. — never shell-parsed
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,  # own process group; see _kill_and_reap
+        )
+
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "bash",
-                "-c",
-                script,
-                "bash",  # $0
-                *args,  # $1.. — never shell-parsed
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
+            await _kill_and_reap(proc)
             raise ExecutorError(f"Module command timed out: module {action}")
+        except asyncio.CancelledError:
+            # e.g. an MCP client disconnecting mid-call. Clean up the child
+            # (and, per _kill_and_reap, its Lmod grandchildren) before
+            # letting cancellation propagate — don't swallow it.
+            await _kill_and_reap(proc)
+            raise
 
         # module list/avail write to stderr
         output = stdout.decode(errors="replace").strip()
