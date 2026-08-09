@@ -5,7 +5,7 @@
   "description": "MCP server for NOAA RDHPCS HPC system management — quotas, allocations, modules",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "url": "https://github.com/oceanmodeling/ocean-mcp",
     "source": "github"
   },
   "packages": [

@@ -5,7 +5,7 @@
   "description": "GOES-18/19 satellite imagery — visible, infrared, water vapor, and composites via NOAA",
   "version": "0.1.2",
   "repository": {
-    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "url": "https://github.com/oceanmodeling/ocean-mcp",
     "source": "github"
   },
   "packages": [

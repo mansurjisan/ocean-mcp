@@ -48,7 +48,7 @@ MCP server providing AI assistants with access to NOAA's Storm Tide Operational 
 ## Quick Start
 
 ```bash
-git clone https://github.com/mansurjisan/ocean-mcp.git
+git clone https://github.com/oceanmodeling/ocean-mcp.git
 cd ocean-mcp/servers/stofs-mcp
 uv sync
 ```

@@ -3,7 +3,7 @@
 A monorepo of independently installable MCP servers for ocean and coastal data workflows.
 
 [![PyPI](https://img.shields.io/pypi/v/coops-mcp)](https://pypi.org/project/coops-mcp/)
-[![CI](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mansurjisan/ocean-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/oceanmodeling/ocean-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/oceanmodeling/ocean-mcp/actions/workflows/ci.yml)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-listed-blue)](https://registry.modelcontextprotocol.io/?q=mansurjisan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -52,7 +52,7 @@ Replace `coops-mcp` with any published server: `erddap-mcp`, `nhc-mcp`, `recon-m
 ### Install from source
 
 ```bash
-git clone https://github.com/mansurjisan/ocean-mcp.git
+git clone https://github.com/oceanmodeling/ocean-mcp.git
 cd ocean-mcp/servers/coops-mcp  # or any other server directory under servers/
 uv sync
 ```
@@ -235,7 +235,7 @@ If you use this project in your research or work, please cite:
   author    = {Jisan, Mansur Ali},
   title     = {Ocean MCP: Real-Time Marine Data, MCP-Native},
   year      = {2025},
-  url       = {https://github.com/mansurjisan/ocean-mcp},
+  url       = {https://github.com/oceanmodeling/ocean-mcp},
   note      = {MCP servers for NOAA CO-OPS, ERDDAP, NHC, Recon, STOFS, OFS, RTOFS, WW3, NDBC, USGS, winds, GOES, ADCIRC, and SCHISM data}
 }
 ```

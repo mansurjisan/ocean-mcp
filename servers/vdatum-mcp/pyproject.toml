@@ -30,8 +30,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mansurjisan/ocean-mcp"
-Repository = "https://github.com/mansurjisan/ocean-mcp"
+Homepage = "https://github.com/oceanmodeling/ocean-mcp"
+Repository = "https://github.com/oceanmodeling/ocean-mcp"
 
 [project.scripts]
 vdatum-mcp = "vdatum_mcp.server:main"

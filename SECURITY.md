@@ -9,7 +9,7 @@ actually exists.
 Please report suspected vulnerabilities privately using GitHub's private
 vulnerability reporting, rather than filing a public issue:
 
-**https://github.com/mansurjisan/ocean-mcp/security/advisories/new**
+**https://github.com/oceanmodeling/ocean-mcp/security/advisories/new**
 
 There is no dedicated security email for this project — use the link
 above. Include the affected server(s), a description of the issue, and

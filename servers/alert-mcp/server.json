@@ -5,7 +5,7 @@
   "description": "MCP server for CORAL threshold alerting on NOAA CO-OPS stations",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "url": "https://github.com/oceanmodeling/ocean-mcp",
     "source": "github"
   },
   "packages": [

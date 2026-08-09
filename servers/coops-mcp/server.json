@@ -5,7 +5,7 @@
   "description": "NOAA CO-OPS tides, water levels, currents, and meteorological data",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "url": "https://github.com/oceanmodeling/ocean-mcp",
     "source": "github"
   },
   "packages": [

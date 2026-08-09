@@ -15,7 +15,7 @@ NWS_API_BASE = "https://api.weather.gov"
 IEM_BASE = "https://mesonet.agron.iastate.edu"
 
 # User-Agent required by NWS API
-USER_AGENT = "winds-mcp/0.1.0 (https://github.com/mansurjisan/ocean-mcp)"
+USER_AGENT = "winds-mcp/0.1.0 (https://github.com/oceanmodeling/ocean-mcp)"
 
 # US state codes for validation
 US_STATES = {
