@@ -5,7 +5,7 @@
   "description": "MCP server for vertical datum conversions using coastalmodeling-vdatum",
   "version": "0.1.1",
   "repository": {
-    "url": "https://github.com/mansurjisan/ocean-mcp",
+    "url": "https://github.com/oceanmodeling/ocean-mcp",
     "source": "github"
   },
   "packages": [

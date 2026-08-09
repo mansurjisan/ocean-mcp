@@ -6,7 +6,7 @@ USGS_PEAK_URL = "https://nwis.waterdata.usgs.gov/nwis/peak"
 # site number directly and returns official flood-stage thresholds.
 NWPS_GAUGE_URL = "https://api.water.noaa.gov/nwps/v1/gauges"
 
-USER_AGENT = "usgs-mcp/0.1.0 (https://github.com/mansurjisan/ocean-mcp)"
+USER_AGENT = "usgs-mcp/0.1.0 (https://github.com/oceanmodeling/ocean-mcp)"
 
 # Well-known USGS parameter codes
 PARAMETER_CODES: dict[str, dict] = {

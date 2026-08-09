@@ -20,7 +20,7 @@ MCP server providing AI assistants with access to NOAA CO-OPS water levels, tide
 ### Install with uv
 
 ```bash
-git clone https://github.com/mansurjisan/ocean-mcp.git
+git clone https://github.com/oceanmodeling/ocean-mcp.git
 cd ocean-mcp/servers/coops-mcp
 uv sync
 ```

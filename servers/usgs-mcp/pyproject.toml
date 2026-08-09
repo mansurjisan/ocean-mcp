@@ -45,11 +45,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mansurjisan/ocean-mcp"
-Repository = "https://github.com/mansurjisan/ocean-mcp"
-"Bug Tracker" = "https://github.com/mansurjisan/ocean-mcp/issues"
-Documentation = "https://github.com/mansurjisan/ocean-mcp/tree/main/servers/usgs-mcp"
-Changelog = "https://github.com/mansurjisan/ocean-mcp/releases"
+Homepage = "https://github.com/oceanmodeling/ocean-mcp"
+Repository = "https://github.com/oceanmodeling/ocean-mcp"
+"Bug Tracker" = "https://github.com/oceanmodeling/ocean-mcp/issues"
+Documentation = "https://github.com/oceanmodeling/ocean-mcp/tree/main/servers/usgs-mcp"
+Changelog = "https://github.com/oceanmodeling/ocean-mcp/releases"
 
 [project.scripts]
 usgs-mcp = "usgs_mcp.server:main"

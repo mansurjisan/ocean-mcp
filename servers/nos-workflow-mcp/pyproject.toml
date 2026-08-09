@@ -32,8 +32,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mansurjisan/ocean-mcp"
-Repository = "https://github.com/mansurjisan/ocean-mcp"
+Homepage = "https://github.com/oceanmodeling/ocean-mcp"
+Repository = "https://github.com/oceanmodeling/ocean-mcp"
 
 [project.scripts]
 nos-workflow-mcp = "nos_workflow_mcp.server:main"
