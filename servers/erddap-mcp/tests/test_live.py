@@ -4,6 +4,8 @@ Run manually: uv run pytest tests/test_live.py -v -s
 These tests make actual HTTP requests to public ERDDAP servers.
 """
 
+from datetime import datetime, timedelta
+
 import pytest
 
 from erddap_mcp.client import ERDDAPClient
@@ -56,9 +58,24 @@ async def test_get_info_sst(client):
 @pytest.mark.asyncio
 async def test_get_tabledap_buoy(client):
     """Get tabledap data from a PacIOOS water quality buoy — should return rows."""
-    # Rolling 2-day window so the query keeps returning data indefinitely,
-    # rather than pinning to a fixed historical date.
-    query = "time,temperature&time>=now-2days&time<=now"
+    # Anchor the 2-day window to the dataset's own last timestamp instead of
+    # `now`. wqb_04 stopped reporting on 2026-08-13 (weekly drift issue #121)
+    # and a `now-2days` window against an offline buoy is ERDDAP's usual
+    # "no matching results" 404 -- a sensor outage, not API drift. Reading
+    # maxTime from allDatasets keeps this test about the tabledap API and
+    # still exercises a string constraint plus two time constraints.
+    meta = await client.get_all_datasets(
+        PACIOOS_URL, 'datasetID,maxTime&datasetID="wqb_04"'
+    )
+    meta_rows = parse_erddap_json(meta)
+    assert meta_rows, "wqb_04 is no longer listed on PacIOOS; pick another dataset"
+    max_time = meta_rows[0]["maxTime"]
+    assert max_time, "wqb_04 has no maxTime in allDatasets"
+
+    end = datetime.fromisoformat(max_time.replace("Z", "+00:00"))
+    start = end - timedelta(days=2)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    query = f"time,temperature&time>={start.strftime(fmt)}&time<={end.strftime(fmt)}"
     data = await client.get_tabledap(PACIOOS_URL, "wqb_04", query)
     rows = parse_erddap_json(data)
     assert len(rows) > 0, "Expected tabledap rows"
