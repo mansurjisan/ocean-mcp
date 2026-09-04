@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/recon-mcp",
+  "name": "io.github.oceanmodeling/recon-mcp",
   "title": "NOAA Recon MCP Server",
   "description": "Hurricane reconnaissance data — HDOB flight observations, Vortex Data Messages, SFMR, and ATCF fixes",
   "version": "0.1.1",

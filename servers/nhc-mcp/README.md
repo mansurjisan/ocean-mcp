@@ -1,6 +1,6 @@
 # NHC MCP Server
 
-<!-- mcp-name: io.github.mansurjisan/nhc-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/nhc-mcp -->
 
 MCP server providing AI assistants with access to National Hurricane Center (NHC) storm tracks, advisories, and best track data.
 

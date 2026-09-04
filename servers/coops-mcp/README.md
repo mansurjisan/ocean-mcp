@@ -1,6 +1,6 @@
 # CO-OPS MCP Server
 
-<!-- mcp-name: io.github.mansurjisan/coops-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/coops-mcp -->
 
 MCP server providing AI assistants with access to NOAA CO-OPS water levels, tides, currents, and coastal oceanographic data.
 

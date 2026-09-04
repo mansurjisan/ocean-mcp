@@ -1,6 +1,6 @@
 # UFS Runner MCP
 
-<!-- mcp-name: io.github.mansurjisan/ufs-runner-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/ufs-runner-mcp -->
 
 MCP server for setting up, validating, submitting, and monitoring UFS-Coastal experiments on NOAA HPC.
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/schism-mcp",
+  "name": "io.github.oceanmodeling/schism-mcp",
   "title": "SCHISM Model Setup MCP Server",
   "description": "SCHISM model configuration debugging, parameter lookup, and validation",
   "version": "0.1.0",

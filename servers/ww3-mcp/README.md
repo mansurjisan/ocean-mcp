@@ -90,4 +90,4 @@ uv run pytest tests/ --ignore=tests/test_live.py --ignore=tests/test_mcp_protoco
 
 MIT
 
-<!-- mcp-name: io.github.mansurjisan/ww3-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/ww3-mcp -->

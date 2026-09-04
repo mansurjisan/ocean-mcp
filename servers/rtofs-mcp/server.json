@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/rtofs-mcp",
+  "name": "io.github.oceanmodeling/rtofs-mcp",
   "title": "NOAA RTOFS MCP Server",
   "description": "NOAA RTOFS global ocean forecast — SST, salinity, currents, depth profiles via CoastWatch ERDDAP",
   "version": "0.1.2",

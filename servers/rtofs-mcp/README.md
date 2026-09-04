@@ -1,6 +1,6 @@
 # RTOFS MCP Server
 
-<!-- mcp-name: io.github.mansurjisan/rtofs-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/rtofs-mcp -->
 
 MCP server for accessing **NOAA RTOFS** (Real-Time Ocean Forecast System) global ocean forecast data. Provides SST, salinity, ocean currents, and sea surface height from the operational HYCOM/ESPC model via the HYCOM THREDDS Data Server.
 

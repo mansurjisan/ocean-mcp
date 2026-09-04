@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/ofs-mcp",
+  "name": "io.github.oceanmodeling/ofs-mcp",
   "title": "NOAA OFS MCP Server",
   "description": "NOAA OFS regional ocean model forecasts — water level, temperature, salinity",
   "version": "0.1.0",

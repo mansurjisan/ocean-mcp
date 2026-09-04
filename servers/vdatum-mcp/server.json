@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/vdatum-mcp",
+  "name": "io.github.oceanmodeling/vdatum-mcp",
   "title": "VDatum MCP Server",
   "description": "MCP server for vertical datum conversions using coastalmodeling-vdatum",
   "version": "0.1.1",

@@ -1,6 +1,6 @@
 # hpc-system-mcp
 
-<!-- mcp-name: io.github.mansurjisan/hpc-system-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/hpc-system-mcp -->
 
 MCP server for NOAA RDHPCS HPC system management. Provides tools for checking disk quotas, allocation usage, FairShare status, loaded modules, and storage information across NOAA HPC systems (Ursa, Hercules, Hera, Orion).
 

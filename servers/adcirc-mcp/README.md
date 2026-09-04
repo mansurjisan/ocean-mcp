@@ -1,6 +1,6 @@
 # adcirc-mcp
 
-<!-- mcp-name: io.github.mansurjisan/adcirc-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/adcirc-mcp -->
 
 MCP server for ADCIRC model setup debugging, parameter lookup, and configuration validation.
 
