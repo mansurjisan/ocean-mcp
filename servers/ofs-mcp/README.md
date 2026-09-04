@@ -1,6 +1,6 @@
 # OFS MCP Server
 
-<!-- mcp-name: io.github.mansurjisan/ofs-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/ofs-mcp -->
 
 MCP server for NOAA's Operational Forecast System (OFS) — regional hydrodynamic ocean models covering US coastal waters.
 

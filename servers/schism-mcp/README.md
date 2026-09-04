@@ -1,6 +1,6 @@
 # schism-mcp
 
-<!-- mcp-name: io.github.mansurjisan/schism-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/schism-mcp -->
 
 MCP server for SCHISM model setup debugging, parameter lookup, and configuration validation.
 

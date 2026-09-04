@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/usgs-mcp",
+  "name": "io.github.oceanmodeling/usgs-mcp",
   "title": "USGS Water Services MCP Server",
   "description": "USGS Water Services streamflow, flood stages, and peak events via waterservices.usgs.gov",
   "version": "0.1.0",

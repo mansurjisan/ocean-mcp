@@ -1,6 +1,6 @@
 # vdatum-mcp
 
-<!-- mcp-name: io.github.mansurjisan/vdatum-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/vdatum-mcp -->
 
 MCP server for vertical datum conversions using [coastalmodeling-vdatum](https://github.com/oceanmodeling/coastalmodeling-vdatum).
 

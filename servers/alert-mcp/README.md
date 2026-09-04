@@ -1,6 +1,6 @@
 # alert-mcp
 
-<!-- mcp-name: io.github.mansurjisan/alert-mcp -->
+<!-- mcp-name: io.github.oceanmodeling/alert-mcp -->
 
 MCP server for CORAL threshold alerting. Monitors NOAA CO-OPS stations and triggers alerts when observed values cross user-defined thresholds.
 

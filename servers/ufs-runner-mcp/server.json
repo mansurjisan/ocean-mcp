@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/ufs-runner-mcp",
+  "name": "io.github.oceanmodeling/ufs-runner-mcp",
   "title": "UFS-Coastal Experiment Runner",
   "description": "MCP server for setting up, submitting, and monitoring UFS-Coastal experiments on NOAA HPC",
   "version": "0.1.0",

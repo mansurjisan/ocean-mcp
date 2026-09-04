@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.mansurjisan/erddap-mcp",
+  "name": "io.github.oceanmodeling/erddap-mcp",
   "title": "ERDDAP MCP Server",
   "description": "Access ocean data from 80+ ERDDAP servers worldwide",
   "version": "0.1.0",
