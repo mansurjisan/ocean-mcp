@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "coops-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server providing access to NOAA CO-OPS tides, water levels, currents, and meteorological data"
 readme = "README.md"
 license = "MIT"
